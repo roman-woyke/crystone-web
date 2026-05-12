@@ -8,8 +8,8 @@ require_once __DIR__ . "/includes/header.php";
     <h1>Internship Application Leaderboard</h1>
 
     <p>
-        <a href="/basti/dashboard.php">Dashboard</a> |
-        <a href="/basti/logout.php">Logout</a>
+        <a href="/ben/dashboard.php">Dashboard</a> |
+        <a href="/ben/logout.php">Logout</a>
     </p>
     
 <?php 

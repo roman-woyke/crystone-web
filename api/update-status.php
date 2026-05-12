@@ -46,5 +46,5 @@ if ($stmt->rowCount() > 0) {
     $historyStmt->execute([$userId, $applicationId, $newStatus]);
 }
 
-header("Location: /roman/dashboard.php#app-" . urlencode($applicationId));
+header("Location: /ben/dashboard.php#app-" . urlencode($applicationId));
 exit;

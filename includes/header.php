@@ -16,8 +16,8 @@
 
 <nav class="navbar">
     <div class="nav-left">
-        <a href="/basti/dashboard.php">Dashboard</a>
-        <a href="/basti/leaderboard.php">Leaderboard</a>
+        <a href="/ben/dashboard.php">Dashboard</a>
+        <a href="/ben/leaderboard.php">Leaderboard</a>
     </div>
 
     <div class="nav-right">
@@ -27,7 +27,7 @@
             </span>
         <?php endif; ?>
 
-        <a href="/basti/logout.php">Logout</a>
+        <a href="/ben/logout.php">Logout</a>
     </div>
 </nav>
 
