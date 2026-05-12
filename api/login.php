@@ -28,5 +28,5 @@ if (!$user || !password_verify($password, $user["password_hash"])) {
 $_SESSION["user_id"] = $user["id"];
 $_SESSION["username"] = $user["username"];
 
-header("Location: /roman/dashboard.php");
+header("Location: /basti/dashboard.php");
 exit;

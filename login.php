@@ -3,7 +3,7 @@
 require_once __DIR__ . "/includes/start-session.php";
 
 if (isset($_SESSION["user_id"])) {
-    header("Location: /roman/dashboard.php");
+    header("Location: /basti/dashboard.php");
     exit;
 }
 
@@ -13,7 +13,7 @@ require_once __DIR__ . "/includes/header.php";
 <body>
     <h1>Login</h1>
 
-    <form action="/roman/api/login.php" method="POST">
+    <form action="/basti/api/login.php" method="POST">
         <div>
             <label>Username</label>
             <input type="text" name="username" required>
@@ -29,7 +29,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <p>
         No account yet?
-        <a href="/roman/register.php">Register</a>
+        <a href="/basti/register.php">Register</a>
     </p>
 </body>
 </html>

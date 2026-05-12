@@ -76,13 +76,13 @@ require_once __DIR__ . "/includes/header.php";
     </p>
 
     <p>
-        <a href="/roman/leaderboard.php">View leaderboard</a> |
-        <a href="/roman/logout.php">Logout</a>
+        <a href="/basti/leaderboard.php">View leaderboard</a> |
+        <a href="/basti/logout.php">Logout</a>
     </p>
 
     <h2>Add application</h2>
 
-    <form action="/roman/api/create-application.php" method="POST">
+    <form action="/basti/api/create-application.php" method="POST">
         <div>
             <label>Company name *</label>
             <input type="text" name="company_name" required>
@@ -267,7 +267,7 @@ document.querySelectorAll(".save-btn").forEach(btn => {
         body.append("application_id", id);
         body.append(field, value);
 
-        fetch("/roman/api/patch-application.php", { method: "POST", body })
+        fetch("/basti/api/patch-application.php", { method: "POST", body })
             .then(r => {
                 if (!r.ok) throw new Error("Save failed.");
                 btn.style.display = "none";
@@ -325,7 +325,7 @@ modalSave.addEventListener("click", () => {
     body.append("application_id", modalId);
     body.append(modalField, value);
 
-    fetch("/roman/api/patch-application.php", { method: "POST", body })
+    fetch("/basti/api/patch-application.php", { method: "POST", body })
         .then(r => {
             if (!r.ok) throw new Error("Save failed.");
 
@@ -382,7 +382,7 @@ document.querySelectorAll(".delete-btn").forEach(btn => {
         const body = new FormData();
         body.append("application_id", id);
 
-        fetch("/roman/api/delete-application.php", { method: "POST", body })
+        fetch("/basti/api/delete-application.php", { method: "POST", body })
             .then(r => {
                 if (!r.ok) throw new Error("Delete failed.");
                 document.getElementById(`app-${id}`).remove();

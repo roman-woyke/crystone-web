@@ -5,7 +5,7 @@ require_once __DIR__ . "/../includes/start-session.php";
 require_once __DIR__ . "/config.php";
 
 if (!isset($_SESSION["user_id"])) {
-    header("Location: /roman/login.php");
+    header("Location: /basti/login.php");
     exit;
 }
 
@@ -65,5 +65,5 @@ $historyStmt = $pdo->prepare("
 
 $historyStmt->execute([$userId, $newApplicationId]);
 
-header("Location: /roman/dashboard.php");
+header("Location: /basti/dashboard.php");
 exit;

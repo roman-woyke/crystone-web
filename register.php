@@ -2,7 +2,7 @@
 session_start();
 
 if (isset($_SESSION["user_id"])) {
-    header("Location: /roman/dashboard.php");
+    header("Location: /basti/dashboard.php");
     exit;
 }
 
@@ -10,7 +10,7 @@ require_once __DIR__ . "/includes/header.php";
 ?>
     <h1>Create account</h1>
 
-    <form action="/roman/api/register.php" method="POST">
+    <form action="/basti/api/register.php" method="POST">
         <div>
             <label>Username</label>
             <input type="text" name="username" required>
@@ -31,7 +31,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <p>
         Already have an account?
-        <a href="/roman/login.php">Login</a>
+        <a href="/basti/login.php">Login</a>
     </p>
 </body>
 </html>
