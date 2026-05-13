@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . "/includes/session.php";
-require_once __DIR__ . "/api/config.php";
+require_once __DIR__ . "/../config.php";
 
 $userId = $_SESSION["user_id"];
 
