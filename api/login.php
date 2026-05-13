@@ -2,7 +2,7 @@
 
 require_once __DIR__ . "/../includes/start-session.php";
 
-require_once __DIR__ . "/config.php";
+require_once __DIR__ . "/../../config.php";
 
 $username = trim($_POST["username"] ?? "");
 $password = $_POST["password"] ?? "";
