@@ -21,7 +21,7 @@
     </table>
 
     <script>
-        fetch("/basti/api/get-leaderboard.php")
+        fetch("/ben/api/get-leaderboard.php")
             .then(response => {
                 if (!response.ok) {
                     throw new Error("Failed to load leaderboard.");

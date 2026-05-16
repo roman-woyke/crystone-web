@@ -217,8 +217,8 @@
     // ── Main ─────────────────────────────────────────────────────────
 
     Promise.all([
-        fetch("/basti/api/get-score-history.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
-        fetch("/basti/api/get-raw-events.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
+        fetch("/ben/api/get-score-history.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
+        fetch("/ben/api/get-raw-events.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
     ])
         .then(([scoreHistory, rawEvents]) => {
             if (scoreHistory.length === 0) {

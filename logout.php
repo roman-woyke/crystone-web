@@ -20,5 +20,5 @@ if (ini_get("session.use_cookies")) {
 
 session_destroy();
 
-header("Location: /basti/login.php");
+header("Location: /ben/login.php");
 exit;
