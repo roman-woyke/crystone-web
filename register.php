@@ -19,7 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         die("Username and password are required.");
     }
 
-    if ($inviteCode !== "internship2026") {
+    if ($inviteCode !== INVITE_CODE) {
         die("Invalid invite code.");
     }
 
