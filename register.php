@@ -1,4 +1,5 @@
 <?php
+
 require_once __DIR__ . "/includes/start-session.php";
 
 if (isset($_SESSION["user_id"])) {
@@ -6,11 +7,54 @@ if (isset($_SESSION["user_id"])) {
     exit;
 }
 
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    require_once __DIR__ . "/../config.php";
+
+    //die("Registration disabled.");
+
+    $username   = trim($_POST["username"]    ?? "");
+    $password   = $_POST["password"]         ?? "";
+    $inviteCode = trim($_POST["invite_code"] ?? "");
+
+    if ($username === "" || $password === "") {
+        die("Username and password are required.");
+    }
+
+    if ($inviteCode !== "internship2026") {
+        die("Invalid invite code.");
+    }
+
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO users (username, password_hash)
+            VALUES (?, ?)
+        ");
+
+        $stmt->execute([$username, $passwordHash]);
+
+        $_SESSION["user_id"]  = $pdo->lastInsertId();
+        $_SESSION["username"] = $username;
+
+        header("Location: /roman/dashboard.php");
+        exit;
+
+    } catch (PDOException $e) {
+        if ($e->getCode() === "23000") {
+            die("Username already exists.");
+        }
+
+        die("Registration failed.");
+    }
+}
+
 require_once __DIR__ . "/includes/header.php";
 ?>
+
     <h1>Create account</h1>
 
-    <form action="/roman/api/register.php" method="POST">
+    <form action="/roman/register.php" method="POST">
         <div>
             <label>Username</label>
             <input type="text" name="username" required>
@@ -20,7 +64,7 @@ require_once __DIR__ . "/includes/header.php";
             <label>Password</label>
             <input type="password" name="password" required>
         </div>
-        
+
         <div>
             <label>Invite code</label>
             <input type="text" name="invite_code" required>
@@ -33,5 +77,5 @@ require_once __DIR__ . "/includes/header.php";
         Already have an account?
         <a href="/roman/login.php">Login</a>
     </p>
-</body>
-</html>
+
+<?php require_once __DIR__ . "/includes/footer.php"; ?>

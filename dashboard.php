@@ -6,6 +6,50 @@ require_once __DIR__ . "/../config.php";
 
 $userId = $_SESSION["user_id"];
 
+// ── Handle application creation ───────────────────────────────────────
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $companyName = trim($_POST["company_name"] ?? "");
+    $jobTitle    = trim($_POST["job_title"]    ?? "");
+    $jobLink     = trim($_POST["job_link"]     ?? "");
+    $location    = trim($_POST["location"]     ?? "");
+    $notes       = trim($_POST["notes"]        ?? "");
+    $tag         = trim($_POST["tag"]          ?? "");
+
+    if ($companyName === "") {
+        die("Company name is required.");
+    }
+
+    $jobTitle = $jobTitle === "" ? null : $jobTitle;
+    $jobLink  = $jobLink  === "" ? null : $jobLink;
+    $location = $location === "" ? null : $location;
+    $notes    = $notes    === "" ? null : $notes;
+
+    $allowedTags = ["MAYBE", "PROBABLY", "FOR SURE", "ABSOLUTE CINEMA"];
+    $tag         = in_array($tag, $allowedTags, true) ? $tag : null;
+
+    $stmt = $pdo->prepare("
+        INSERT INTO applications (
+            user_id, company_name, job_title, job_link, location, notes, tag, status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+    ");
+
+    $stmt->execute([$userId, $companyName, $jobTitle, $jobLink, $location, $notes, $tag]);
+
+    $newApplicationId = $pdo->lastInsertId();
+
+    $historyStmt = $pdo->prepare("
+        INSERT INTO application_status_history (user_id, application_id, status)
+        VALUES (?, ?, 'PENDING')
+    ");
+
+    $historyStmt->execute([$userId, $newApplicationId]);
+
+    header("Location: /roman/dashboard.php");
+    exit;
+}
+
+// ── Fetch applications ────────────────────────────────────────────────
 $stmt = $pdo->prepare("
     SELECT
         a.id,
@@ -46,7 +90,6 @@ function tagBadge(?string $tag): string {
 require_once __DIR__ . "/includes/header.php";
 ?>
 
-<body>
     <h1>Dashboard</h1>
 
     <p>
@@ -61,7 +104,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <h2>Add application</h2>
 
-    <form action="/roman/api/create-application.php" method="POST">
+    <form action="/roman/dashboard.php" method="POST">
         <div>
             <label>Company name *</label>
             <input type="text" name="company_name" required>
@@ -312,10 +355,10 @@ modalSave.addEventListener("click", () => {
                 const displayEl = document.querySelector(`.link-display-${modalId}`);
                 if (value) {
                     const a = document.createElement("a");
-                    a.href      = value;
-                    a.target    = "_blank";
+                    a.href        = value;
+                    a.target      = "_blank";
                     a.textContent = "Open";
-                    a.className = `link-display-${modalId}`;
+                    a.className   = `link-display-${modalId}`;
                     displayEl.replaceWith(a);
                     document.querySelector(`.edit-link-btn[data-id="${modalId}"]`).dataset.current = value;
                 } else {
@@ -371,6 +414,4 @@ document.querySelectorAll(".delete-btn").forEach(btn => {
 });
 </script>
 
-<?php
-require_once __DIR__ . "/includes/footer.php";
-?>
+<?php require_once __DIR__ . "/includes/footer.php"; ?>
