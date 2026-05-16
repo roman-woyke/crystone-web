@@ -8,18 +8,18 @@ $baseWeights = [
 
 $tagWeights = [
     "INTERVIEW" => [
-        "MAYBE"           => 5,
-        "PROBABLY"        => 7,
-        "FOR SURE"        => 10,
-        "ABSOLUTE CINEMA" => 15,
-        ""                => 10,
+        "MAYBE"           => 5  - 2, // -2 because PENDING points are already counted
+        "PROBABLY"        => 7  - 2,
+        "FOR SURE"        => 10 - 2,
+        "ABSOLUTE CINEMA" => 15 - 2,
+        ""                => 10 - 2,
     ],
     "OFFER" => [
-        "MAYBE"           => 10,
-        "PROBABLY"        => 14,
-        "FOR SURE"        => 20,
-        "ABSOLUTE CINEMA" => 30,
-        ""                => 20,
+        "MAYBE"           => 10 - 2, // -2 because PENDING points are already counted
+        "PROBABLY"        => 14 - 2,
+        "FOR SURE"        => 20 - 2,
+        "ABSOLUTE CINEMA" => 30 - 2,
+        ""                => 20 - 2,
     ],
 ];
 
