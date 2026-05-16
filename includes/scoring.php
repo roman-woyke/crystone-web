@@ -29,3 +29,26 @@ function scorePoints(string $status, ?string $tag): int {
     $tag = $tag ?? "";
     return $tagWeights[$status][$tag] ?? $tagWeights[$status][""];
 }
+
+// Returns the SQL expression for the highest-priority status ever reached by an
+// application. Requires a LEFT JOIN on application_status_history aliased as h.
+// Priority: OFFER > INTERVIEW > PENDING > GHOSTED > REJECTED
+function peakStatusSql(): string {
+    return "CASE MAX(
+            CASE h.status
+                WHEN 'OFFER'     THEN 5
+                WHEN 'INTERVIEW' THEN 4
+                WHEN 'PENDING'   THEN 3
+                WHEN 'GHOSTED'   THEN 2
+                WHEN 'REJECTED'  THEN 1
+                ELSE 0
+            END
+        )
+            WHEN 5 THEN 'OFFER'
+            WHEN 4 THEN 'INTERVIEW'
+            WHEN 3 THEN 'PENDING'
+            WHEN 2 THEN 'GHOSTED'
+            WHEN 1 THEN 'REJECTED'
+            ELSE NULL
+        END AS peak_status";
+}

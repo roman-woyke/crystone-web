@@ -78,24 +78,7 @@ $appStmt = $pdo->query("
         a.created_at,
         a.updated_at,
 
-        -- Peak status: highest priority status ever logged in history
-        CASE MAX(
-            CASE h.status
-                WHEN 'OFFER'     THEN 5
-                WHEN 'INTERVIEW' THEN 4
-                WHEN 'PENDING'   THEN 3
-                WHEN 'GHOSTED'   THEN 2
-                WHEN 'REJECTED'  THEN 1
-                ELSE 0
-            END
-        )
-            WHEN 5 THEN 'OFFER'
-            WHEN 4 THEN 'INTERVIEW'
-            WHEN 3 THEN 'PENDING'
-            WHEN 2 THEN 'GHOSTED'
-            WHEN 1 THEN 'REJECTED'
-            ELSE NULL
-        END AS peak_status
+        " . peakStatusSql() . "
 
     FROM applications a
     LEFT JOIN application_status_history h

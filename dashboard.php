@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . "/includes/session.php";
+require_once __DIR__ . "/includes/scoring.php";
 require_once __DIR__ . "/../config.php";
 
 $userId = $_SESSION["user_id"];
@@ -17,23 +18,7 @@ $stmt = $pdo->prepare("
         a.tag,
         a.created_at,
 
-        CASE MAX(
-            CASE h.status
-                WHEN 'OFFER'     THEN 5
-                WHEN 'INTERVIEW' THEN 4
-                WHEN 'PENDING'   THEN 3
-                WHEN 'GHOSTED'   THEN 2
-                WHEN 'REJECTED'  THEN 1
-                ELSE 0
-            END
-        )
-            WHEN 5 THEN 'OFFER'
-            WHEN 4 THEN 'INTERVIEW'
-            WHEN 3 THEN 'PENDING'
-            WHEN 2 THEN 'GHOSTED'
-            WHEN 1 THEN 'REJECTED'
-            ELSE NULL
-        END AS peak_status
+        " . peakStatusSql() . "
 
     FROM applications a
     LEFT JOIN application_status_history h
@@ -53,15 +38,9 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 function tagBadge(?string $tag): string {
     if (empty($tag)) return "";
-    $styles = [
-        "MAYBE"           => 'color:#fde047; border-color:#ca8a04; background:#422006;',
-        "PROBABLY"        => 'color:#4ade80; border-color:#16a34a; background:#052e16;',
-        "FOR SURE"        => 'color:#93c5fd; border-color:#2563eb; background:#0f1f3d;',
-        "ABSOLUTE CINEMA" => 'color:#d8b4fe; border-color:#9333ea; background:#2e1065;',
-    ];
-    $style = $styles[$tag] ?? "";
+    $slug  = strtolower(str_replace(' ', '-', $tag));
     $label = htmlspecialchars($tag);
-    return '<span style="display:inline-block; padding:2px 8px; border:1px solid; border-radius:4px; font-size:0.8em; letter-spacing:0.03em; text-align:center; ' . $style . '">' . $label . '</span>';
+    return '<span class="tag-badge tag-badge-' . $slug . '">' . $label . '</span>';
 }
 
 require_once __DIR__ . "/includes/header.php";
