@@ -1,15 +1,14 @@
 <?php
 
 require_once __DIR__ . "/includes/start-session.php";
+require_once __DIR__ . "/../config.php";
 
 if (isset($_SESSION["user_id"])) {
-    header("Location: /roman/dashboard.php");
+    header("Location: " . BASE_PATH . "/dashboard.php");
     exit;
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    require_once __DIR__ . "/../config.php";
-
     $username = trim($_POST["username"] ?? "");
     $password = $_POST["password"]     ?? "";
 
@@ -34,7 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $_SESSION["user_id"]  = $user["id"];
     $_SESSION["username"] = $user["username"];
 
-    header("Location: /roman/dashboard.php");
+    header("Location: " . BASE_PATH . "/dashboard.php");
     exit;
 }
 
@@ -43,7 +42,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <h1>Login</h1>
 
-    <form action="/roman/login.php" method="POST">
+    <form action="<?= BASE_PATH ?>/login.php" method="POST">
         <div>
             <label>Username</label>
             <input type="text" name="username" required>
@@ -59,7 +58,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <p>
         No account yet?
-        <a href="/roman/register.php">Register</a>
+        <a href="<?= BASE_PATH ?>/register.php">Register</a>
     </p>
 
 <?php require_once __DIR__ . "/includes/footer.php"; ?>

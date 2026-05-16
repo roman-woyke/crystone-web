@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . "/includes/start-session.php";
+require_once __DIR__ . "/../config.php";
 
 $_SESSION = [];
 
@@ -20,5 +21,5 @@ if (ini_get("session.use_cookies")) {
 
 session_destroy();
 
-header("Location: /roman/login.php");
+header("Location: " . BASE_PATH . "/login.php");
 exit;

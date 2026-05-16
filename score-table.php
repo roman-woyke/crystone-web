@@ -21,7 +21,7 @@
     </table>
 
     <script>
-        fetch("/roman/api/get-leaderboard.php")
+        fetch("<?= BASE_PATH ?>/api/get-leaderboard.php")
             .then(response => {
                 if (!response.ok) {
                     throw new Error("Failed to load leaderboard.");

@@ -1,15 +1,14 @@
 <?php
 
 require_once __DIR__ . "/includes/start-session.php";
+require_once __DIR__ . "/../config.php";
 
 if (isset($_SESSION["user_id"])) {
-    header("Location: /roman/dashboard.php");
+    header("Location: " . BASE_PATH . "/dashboard.php");
     exit;
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    require_once __DIR__ . "/../config.php";
-
     //die("Registration disabled.");
 
     $username   = trim($_POST["username"]    ?? "");
@@ -37,7 +36,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $_SESSION["user_id"]  = $pdo->lastInsertId();
         $_SESSION["username"] = $username;
 
-        header("Location: /roman/dashboard.php");
+        header("Location: " . BASE_PATH . "/dashboard.php");
         exit;
 
     } catch (PDOException $e) {
@@ -54,7 +53,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <h1>Create account</h1>
 
-    <form action="/roman/register.php" method="POST">
+    <form action="<?= BASE_PATH ?>/register.php" method="POST">
         <div>
             <label>Username</label>
             <input type="text" name="username" required>
@@ -75,7 +74,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <p>
         Already have an account?
-        <a href="/roman/login.php">Login</a>
+        <a href="<?= BASE_PATH ?>/login.php">Login</a>
     </p>
 
 <?php require_once __DIR__ . "/includes/footer.php"; ?>

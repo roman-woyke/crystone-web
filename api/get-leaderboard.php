@@ -60,10 +60,6 @@ usort($users, fn($a, $b) =>
 );
 
 // 3. Get all applications with their peak status from history
-//
-// Peak status is the highest-ranked status ever reached by an application,
-// regardless of what it currently is.
-// Priority: OFFER > INTERVIEW > PENDING > GHOSTED > REJECTED
 $appStmt = $pdo->query("
     SELECT
         a.user_id,

@@ -217,8 +217,8 @@
     // ── Main ─────────────────────────────────────────────────────────
 
     Promise.all([
-        fetch("/roman/api/get-score-history.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
-        fetch("/roman/api/get-raw-events.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
+        fetch("<?= BASE_PATH ?>/api/get-score-history.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
+        fetch("<?= BASE_PATH ?>/api/get-raw-events.php").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
     ])
         .then(([scoreHistory, rawEvents]) => {
             if (scoreHistory.length === 0) {
