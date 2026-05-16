@@ -124,6 +124,21 @@ button:hover {
     background: #1d4ed8;
 }
 
+.tag-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+    text-align: center;
+}
+
+.tag-badge-maybe           { color: #fde047; border-color: #ca8a04; background: #422006; }
+.tag-badge-probably        { color: #4ade80; border-color: #16a34a; background: #052e16; }
+.tag-badge-for-sure        { color: #93c5fd; border-color: #2563eb; background: #0f1f3d; }
+.tag-badge-absolute-cinema { color: #d8b4fe; border-color: #9333ea; background: #2e1065; }
+
 .status-buttons {
     display: flex;
     gap: 6px;
