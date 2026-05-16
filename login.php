@@ -7,13 +7,43 @@ if (isset($_SESSION["user_id"])) {
     exit;
 }
 
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    require_once __DIR__ . "/../config.php";
+
+    $username = trim($_POST["username"] ?? "");
+    $password = $_POST["password"]     ?? "";
+
+    if ($username === "" || $password === "") {
+        die("Username and password are required.");
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, username, password_hash
+        FROM users
+        WHERE username = ?
+        LIMIT 1
+    ");
+
+    $stmt->execute([$username]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$user || !password_verify($password, $user["password_hash"])) {
+        die("Invalid username or password.");
+    }
+
+    $_SESSION["user_id"]  = $user["id"];
+    $_SESSION["username"] = $user["username"];
+
+    header("Location: /ben/dashboard.php");
+    exit;
+}
+
 require_once __DIR__ . "/includes/header.php";
 ?>
 
-<body>
     <h1>Login</h1>
 
-    <form action="/ben/api/login.php" method="POST">
+    <form action="/ben/login.php" method="POST">
         <div>
             <label>Username</label>
             <input type="text" name="username" required>
@@ -31,5 +61,5 @@ require_once __DIR__ . "/includes/header.php";
         No account yet?
         <a href="/ben/register.php">Register</a>
     </p>
-</body>
-</html>
+
+<?php require_once __DIR__ . "/includes/footer.php"; ?>

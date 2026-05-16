@@ -12,13 +12,11 @@ require_once __DIR__ . "/includes/header.php";
         <a href="/ben/logout.php">Logout</a>
     </p>
     
-<?php 
+<?php
 require_once __DIR__ . "/score-table.php";
 require_once __DIR__ . "/score-chart.php";
 ?>
 
-<body>
-    
-<?php 
+<?php
 require_once __DIR__ . "/includes/footer.php";
 ?>

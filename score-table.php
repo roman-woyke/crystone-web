@@ -7,8 +7,8 @@
                 <th>Pending (2p)</th>
                 <th>Rejected (1p)</th>
                 <th>Ghosted (1p)</th>
-                <th>Interviews (10p)</th>
-                <th>Offers (20p)</th>
+                <th>Interviews (5-7-10-15p)</th>
+                <th>Offers (10-14-20-30p)</th>
                 <th>Score</th>
             </tr>
         </thead>
@@ -127,7 +127,7 @@
                         <td>
                             ${
                                 app.job_link
-                                    ? `<a href="${escapeAttribute(app.job_link)}" target="_blank" onclick="event.stopPropagation()">Open</a>`
+                                    ? `<a href="${escapeHtml(app.job_link)}" target="_blank" onclick="event.stopPropagation()">Open</a>`
                                     : ""
                             }
                         </td>
@@ -148,15 +148,8 @@
 
         function tagBadge(tag) {
             if (!tag) return "";
-            const styles = {
-                "MAYBE":           "color:#fde047; border-color:#ca8a04; background:#422006;",
-                "PROBABLY":        "color:#4ade80; border-color:#16a34a; background:#052e16;",
-                "FOR SURE":        "color:#93c5fd; border-color:#2563eb; background:#0f1f3d;",
-                "ABSOLUTE CINEMA": "color:#d8b4fe; border-color:#9333ea; background:#2e1065;",
-            };
-            const style = styles[tag] ?? "";
-            const display = tag === "ABSOLUTE CINEMA" ? "ABSOLUTE<br>CINEMA" : escapeHtml(tag);
-            return `<span style="display:inline-block; padding:2px 8px; border:1px solid; border-radius:4px; font-size:0.8em; letter-spacing:0.03em; text-align:center; ${style}">${display}</span>`;
+            const slug = tag.toLowerCase().replace(/ /g, '-');
+            return `<span class="tag-badge tag-badge-${slug}">${escapeHtml(tag)}</span>`;
         }
 
         function escapeHtml(value) {
@@ -166,9 +159,5 @@
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
-        }
-
-        function escapeAttribute(value) {
-            return escapeHtml(value);
         }
     </script>

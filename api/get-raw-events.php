@@ -42,38 +42,7 @@ foreach ($tagStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
 // We also track the previous status of each application so we can
 // compute the score delta for each individual event.
 
-$baseWeights = [
-    "PENDING"  => 2,
-    "REJECTED" => 1,
-    "GHOSTED"  => 1,
-];
-
-$tagWeights = [
-    "INTERVIEW" => [
-        "MAYBE"           => 5,
-        "PROBABLY"        => 7,
-        "FOR SURE"        => 10,
-        "ABSOLUTE CINEMA" => 15,
-        ""                => 10,
-    ],
-    "OFFER" => [
-        "MAYBE"           => 10,
-        "PROBABLY"        => 14,
-        "FOR SURE"        => 20,
-        "ABSOLUTE CINEMA" => 30,
-        ""                => 20,
-    ],
-];
-
-function scorePoints(string $status, ?string $tag): int {
-    global $baseWeights, $tagWeights;
-    if (isset($baseWeights[$status])) return $baseWeights[$status];
-    $tag = $tag ?? "";
-    return $tagWeights[$status][$tag] ?? $tagWeights[$status][""];
-}
-
-// $trackedStatus[user_id][application_id] = last known status
-$trackedStatus = [];
+require_once __DIR__ . "/../includes/scoring.php";
 
 // $userEvents[user_id] = [ { date, status, score_delta }, ... ]
 $userEvents = [];
@@ -85,18 +54,14 @@ foreach ($historyRows as $row) {
     $date      = $row["event_date"];
     $tag       = $appTags[$appId] ?? null;
 
-    $oldStatus = $trackedStatus[$uid][$appId] ?? null;
-    $oldPoints = $oldStatus !== null ? scorePoints($oldStatus, $tag) : 0;
-    $newPoints = scorePoints($newStatus, $tag);
-    $delta     = $newPoints - $oldPoints;
+    // Additive model: each event independently contributes its own points
+    $delta = scorePoints($newStatus, $tag);
 
     $userEvents[$uid][] = [
         "date"        => $date,
         "status"      => $newStatus,
         "score_delta" => $delta,
     ];
-
-    $trackedStatus[$uid][$appId] = $newStatus;
 }
 
 // ── 4. Build response ────────────────────────────────────────────────

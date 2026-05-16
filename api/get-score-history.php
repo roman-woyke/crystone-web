@@ -8,37 +8,7 @@ if (!isset($_SESSION["user_id"])) {
     exit("Not logged in.");
 }
 
-// Base score points per status (PENDING/REJECTED/GHOSTED unaffected by tag)
-$baseWeights = [
-    "PENDING"  => 2,
-    "REJECTED" => 1,
-    "GHOSTED"  => 1,
-];
-
-// Tag-dependent weights for INTERVIEW and OFFER
-$tagWeights = [
-    "INTERVIEW" => [
-        "MAYBE"           => 5,
-        "PROBABLY"        => 7,
-        "FOR SURE"        => 10,
-        "ABSOLUTE CINEMA" => 15,
-        ""                => 10,
-    ],
-    "OFFER" => [
-        "MAYBE"           => 10,
-        "PROBABLY"        => 14,
-        "FOR SURE"        => 20,
-        "ABSOLUTE CINEMA" => 30,
-        ""                => 20,
-    ],
-];
-
-function scorePoints(string $status, ?string $tag): int {
-    global $baseWeights, $tagWeights;
-    if (isset($baseWeights[$status])) return $baseWeights[$status];
-    $tag = $tag ?? "";
-    return $tagWeights[$status][$tag] ?? $tagWeights[$status][""];
-}
+require_once __DIR__ . "/../includes/scoring.php";
 
 // ── 1. Get all users ─────────────────────────────────────────────────
 $usersStmt = $pdo->query("SELECT id, username FROM users ORDER BY id ASC");
@@ -69,9 +39,6 @@ $historyRows = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 // When status changes, compute the score delta (new points - old points).
 // Accumulate deltas per day.
 
-// $trackedStatus[user_id][application_id] = last known status
-$trackedStatus = [];
-
 // $dailyDeltas[user_id][date] = net score change on that date
 $dailyDeltas = [];
 
@@ -82,14 +49,10 @@ foreach ($historyRows as $row) {
     $date   = $row["event_date"];
     $tag    = $appTags[$appId] ?? null;
 
-    $oldStatus = $trackedStatus[$uid][$appId] ?? null;
-    $oldPoints = $oldStatus !== null ? scorePoints($oldStatus, $tag) : 0;
-    $newPoints = scorePoints($status, $tag);
-    $delta     = $newPoints - $oldPoints;
+    // Additive model: each event independently contributes its own points
+    $delta = scorePoints($status, $tag);
 
     $dailyDeltas[$uid][$date] = ($dailyDeltas[$uid][$date] ?? 0) + $delta;
-
-    $trackedStatus[$uid][$appId] = $status;
 }
 
 // ── 4. Build the response ─────────────────────────────────────────────

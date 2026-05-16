@@ -1,10 +1,55 @@
 <?php
 
 require_once __DIR__ . "/includes/session.php";
+require_once __DIR__ . "/includes/scoring.php";
 require_once __DIR__ . "/../config.php";
 
 $userId = $_SESSION["user_id"];
 
+// ── Handle application creation ───────────────────────────────────────
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $companyName = trim($_POST["company_name"] ?? "");
+    $jobTitle    = trim($_POST["job_title"]    ?? "");
+    $jobLink     = trim($_POST["job_link"]     ?? "");
+    $location    = trim($_POST["location"]     ?? "");
+    $notes       = trim($_POST["notes"]        ?? "");
+    $tag         = trim($_POST["tag"]          ?? "");
+
+    if ($companyName === "") {
+        die("Company name is required.");
+    }
+
+    $jobTitle = $jobTitle === "" ? null : $jobTitle;
+    $jobLink  = $jobLink  === "" ? null : $jobLink;
+    $location = $location === "" ? null : $location;
+    $notes    = $notes    === "" ? null : $notes;
+
+    $allowedTags = ["MAYBE", "PROBABLY", "FOR SURE", "ABSOLUTE CINEMA"];
+    $tag         = in_array($tag, $allowedTags, true) ? $tag : null;
+
+    $stmt = $pdo->prepare("
+        INSERT INTO applications (
+            user_id, company_name, job_title, job_link, location, notes, tag, status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+    ");
+
+    $stmt->execute([$userId, $companyName, $jobTitle, $jobLink, $location, $notes, $tag]);
+
+    $newApplicationId = $pdo->lastInsertId();
+
+    $historyStmt = $pdo->prepare("
+        INSERT INTO application_status_history (user_id, application_id, status)
+        VALUES (?, ?, 'PENDING')
+    ");
+
+    $historyStmt->execute([$userId, $newApplicationId]);
+
+    header("Location: /ben/dashboard.php");
+    exit;
+}
+
+// ── Fetch applications ────────────────────────────────────────────────
 $stmt = $pdo->prepare("
     SELECT
         a.id,
@@ -17,23 +62,7 @@ $stmt = $pdo->prepare("
         a.tag,
         a.created_at,
 
-        CASE MAX(
-            CASE h.status
-                WHEN 'OFFER'     THEN 5
-                WHEN 'INTERVIEW' THEN 4
-                WHEN 'PENDING'   THEN 3
-                WHEN 'GHOSTED'   THEN 2
-                WHEN 'REJECTED'  THEN 1
-                ELSE 0
-            END
-        )
-            WHEN 5 THEN 'OFFER'
-            WHEN 4 THEN 'INTERVIEW'
-            WHEN 3 THEN 'PENDING'
-            WHEN 2 THEN 'GHOSTED'
-            WHEN 1 THEN 'REJECTED'
-            ELSE NULL
-        END AS peak_status
+        " . peakStatusSql() . "
 
     FROM applications a
     LEFT JOIN application_status_history h
@@ -53,21 +82,14 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 function tagBadge(?string $tag): string {
     if (empty($tag)) return "";
-    $styles = [
-        "MAYBE"           => 'color:#fde047; border-color:#ca8a04; background:#422006;',
-        "PROBABLY"        => 'color:#4ade80; border-color:#16a34a; background:#052e16;',
-        "FOR SURE"        => 'color:#93c5fd; border-color:#2563eb; background:#0f1f3d;',
-        "ABSOLUTE CINEMA" => 'color:#d8b4fe; border-color:#9333ea; background:#2e1065;',
-    ];
-    $style = $styles[$tag] ?? "";
+    $slug  = strtolower(str_replace(' ', '-', $tag));
     $label = htmlspecialchars($tag);
-    return '<span style="display:inline-block; padding:2px 8px; border:1px solid; border-radius:4px; font-size:0.8em; letter-spacing:0.03em; text-align:center; ' . $style . '">' . $label . '</span>';
+    return '<span class="tag-badge tag-badge-' . $slug . '">' . $label . '</span>';
 }
 
 require_once __DIR__ . "/includes/header.php";
 ?>
 
-<body>
     <h1>Dashboard</h1>
 
     <p>
@@ -82,7 +104,7 @@ require_once __DIR__ . "/includes/header.php";
 
     <h2>Add application</h2>
 
-    <form action="/ben/api/create-application.php" method="POST">
+    <form action="/ben/dashboard.php" method="POST">
         <div>
             <label>Company name *</label>
             <input type="text" name="company_name" required>
@@ -333,10 +355,10 @@ modalSave.addEventListener("click", () => {
                 const displayEl = document.querySelector(`.link-display-${modalId}`);
                 if (value) {
                     const a = document.createElement("a");
-                    a.href      = value;
-                    a.target    = "_blank";
+                    a.href        = value;
+                    a.target      = "_blank";
                     a.textContent = "Open";
-                    a.className = `link-display-${modalId}`;
+                    a.className   = `link-display-${modalId}`;
                     displayEl.replaceWith(a);
                     document.querySelector(`.edit-link-btn[data-id="${modalId}"]`).dataset.current = value;
                 } else {
@@ -392,6 +414,4 @@ document.querySelectorAll(".delete-btn").forEach(btn => {
 });
 </script>
 
-<?php
-require_once __DIR__ . "/includes/footer.php";
-?>
+<?php require_once __DIR__ . "/includes/footer.php"; ?>
