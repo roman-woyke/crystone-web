@@ -153,9 +153,9 @@ button:hover {
 .site-footer {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 
-    padding: 16px 24px;
+    padding: 20px 24px;
 
     background: #1f2937;
     border-top: 1px solid #374151;
@@ -165,4 +165,27 @@ button:hover {
 
 .footer-label {
     color: #9ca3af;
+    margin-right: 4px;
+}
+
+.site-footer a {
+    padding: 8px 20px;
+
+    background: #374151;
+    color: #f3f4f6;
+
+    border: 1px solid #4b5563;
+    border-radius: 8px;
+
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.site-footer a:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+    text-decoration: none;
 }
