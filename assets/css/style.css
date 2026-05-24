@@ -149,3 +149,20 @@ button:hover {
     margin: 0;
     width: auto;
 }
+
+.site-footer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    padding: 16px 24px;
+
+    background: #1f2937;
+    border-top: 1px solid #374151;
+
+    font-size: 0.9rem;
+}
+
+.footer-label {
+    color: #9ca3af;
+}
