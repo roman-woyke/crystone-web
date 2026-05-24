@@ -14,15 +14,15 @@ The repository has three long-lived branches. Each is independently deployed to 
 | `basti` | `/basti/`          | `/basti/`  |
 | `ben`  | `/ben/`             | `/ben/`    |
 
-All three branches contain the same application code. The only thing that differs per deployment is the **database credentials**, which are stored in a shared `config.php` file that lives **outside the repo** at the server root.
+All three branches contain the same application code. The only thing that differs per deployment is the **database credentials**, which are stored in a shared `config.php` file that lives **outside the repo, one level above the web root** (so it cannot be served over HTTP).
 
 ---
 
 ## Files outside the repo (managed manually on the server)
 
-Two files live at the server root, one level above the subfolders. They are not tracked by Git and must be managed directly on the server (e.g. via Hostinger's File Manager or SFTP).
+Two files are managed directly on the server (e.g. via Hostinger's File Manager or SFTP) and not tracked by Git. `config.php` lives **one level above the web root** so it is never served over HTTP; `index.php` lives at the web root.
 
-### `/config.php`
+### `config.php` (one level above web root)
 
 Detects which subfolder is being served from `$_SERVER["SCRIPT_NAME"]` and connects to the corresponding database. It also defines `BASE_PATH` (used by all pages for links and redirects) and `INVITE_CODE` (required to register an account — keep this secret since the repo is public).
 
@@ -68,7 +68,7 @@ $pdo = new PDO(
 );
 ```
 
-### `/index.php`
+### `/index.php` (at web root)
 
 Redirects visitors who land at the root to Roman's instance. Edit this if you want the root to point elsewhere.
 
@@ -149,12 +149,13 @@ Interview/Offer points shown above are the net gain (the +2 from the initial PEN
 ## File structure
 
 ```
-/                          ← server root (not in repo)
-├── config.php             ← shared DB config + BASE_PATH (not in repo)
-├── index.php              ← root redirect (not in repo)
-├── roman/                 ← main branch deployment
-├── basti/                 ← basti branch deployment
-└── ben/                   ← ben branch deployment
+/                          ← one level above web root (not in repo)
+├── config.php             ← shared DB config + BASE_PATH (above web root, not served over HTTP)
+└── public_html/           ← web root
+    ├── index.php          ← root redirect (not in repo)
+    ├── roman/             ← main branch deployment
+    ├── basti/             ← basti branch deployment
+    └── ben/               ← ben branch deployment
 
 internship-leaderboard/    ← this repo (inside each subfolder)
 ├── api/                   ← JSON endpoints (called by JS fetch)
