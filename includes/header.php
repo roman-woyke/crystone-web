@@ -18,6 +18,7 @@
     <div class="nav-left">
         <a href="<?= BASE_PATH ?>/dashboard.php">Dashboard</a>
         <a href="<?= BASE_PATH ?>/leaderboard.php">Leaderboard</a>
+        <a href="<?= BASE_PATH ?>/calendar.php">Calendar</a>
     </div>
 
     <div class="nav-right">
