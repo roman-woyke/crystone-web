@@ -1,14 +1,3 @@
-<style>
-/* Center all cell content in both the outer leaderboard and the inner applications tables */
-#leaderboard-body td,
-#leaderboard-body th,
-#leaderboard-body table td,
-#leaderboard-body table th {
-    text-align: center;
-    vertical-align: middle;
-}
-</style>
-
 <table border="1" cellpadding="10" width="100%">
         <thead>
             <tr>
@@ -127,12 +116,12 @@
                         <td>${escapeHtml(app.job_title ?? "")}</td>
                         <td>${
                                 (app.peak_status && app.peak_status !== app.status && (app.peak_status === 'INTERVIEW' || app.peak_status === 'OFFER'))
-                                    ? `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-                                            <span>${escapeHtml(app.peak_status)}</span>
-                                            <span style="opacity:0.4; font-size:0.8em;">↓</span>
-                                            <span>${escapeHtml(app.status)}</span>
+                                    ? `<div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                                            ${statusBadge(app.peak_status)}
+                                            <span style="opacity:0.5; font-size:0.9em;">↓</span>
+                                            ${statusBadge(app.status)}
                                        </div>`
-                                    : escapeHtml(app.status)
+                                    : statusBadge(app.status)
                             }</td>
                         <td>${escapeHtml(app.location ?? "")}</td>
                         <td>
@@ -144,7 +133,7 @@
                         </td>
                         <td>${escapeHtml(app.notes ?? "")}</td>
                         <td>${escapeHtml(relativeDays(app.created_at))}</td>
-                        <td>${escapeHtml(relativeDays(app.last_status_change ?? app.updated_at))}</td>
+                        <td>${lastStatusBadge(app.last_status_change ?? app.updated_at, app.peak_status, app.status)}</td>
                     </tr>
                 `;
             });
@@ -161,6 +150,35 @@
             if (!tag) return "";
             const slug = tag.toLowerCase().replace(/ /g, '-');
             return `<span class="tag-badge tag-badge-${slug}">${escapeHtml(tag)}</span>`;
+        }
+
+        function statusBadge(status) {
+            if (!status) return "";
+            const slug = status.toLowerCase();
+            return `<span class="status-badge status-badge-${slug}">${escapeHtml(status)}</span>`;
+        }
+
+        // Returns days elapsed since a UTC timestamp string, or null.
+        function daysSince(timestamp) {
+            if (!timestamp) return null;
+            const iso = String(timestamp).includes("T") ? timestamp : String(timestamp).replace(" ", "T") + "Z";
+            const then = new Date(iso);
+            if (isNaN(then)) return null;
+            return Math.floor((Date.now() - then.getTime()) / 86400000);
+        }
+
+        function lastStatusBadge(timestamp, peakStatus, status) {
+            const days = daysSince(timestamp);
+            if (days === null) return "—";
+            const label = days <= 0 ? "today" : `${days}d ago`;
+
+            // Skip coloring when the app reached interview/offer or is already rejected.
+            if (peakStatus === "INTERVIEW" || peakStatus === "OFFER" || status === "REJECTED") {
+                return escapeHtml(label);
+            }
+
+            const color = days <= 7 ? "green" : days <= 14 ? "orange" : "red";
+            return `<span class="date-badge date-badge-${color}">${escapeHtml(label)}</span>`;
         }
 
         function relativeDays(timestamp) {

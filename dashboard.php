@@ -60,6 +60,7 @@ $stmt = $pdo->prepare("
         a.notes,
         a.tag,
         a.created_at,
+        MAX(h.changed_at) AS last_status_change,
 
         " . peakStatusSql() . "
 
@@ -86,8 +87,28 @@ function tagBadge(?string $tag): string {
     return '<span class="tag-badge tag-badge-' . $slug . '">' . $label . '</span>';
 }
 
+function daysSince(?string $ts): ?int {
+    if (empty($ts)) return null;
+    $then = new DateTime($ts, new DateTimeZone("UTC"));
+    $now  = new DateTime("now", new DateTimeZone("UTC"));
+    return (int) floor(($now->getTimestamp() - $then->getTimestamp()) / 86400);
+}
+
+function relativeDaysLabel(?int $days): string {
+    if ($days === null) return "—";
+    if ($days <= 0) return "today";
+    return $days . "d ago";
+}
+
 require_once __DIR__ . "/includes/header.php";
 ?>
+
+<style>
+/* Match leaderboard width */
+main.container {
+    max-width: 1600px;
+}
+</style>
 
     <h1>Dashboard</h1>
 
@@ -153,6 +174,7 @@ require_once __DIR__ . "/includes/header.php";
                     <th>Link</th>
                     <th>Notes</th>
                     <th>Created</th>
+                    <th>Last status update</th>
                     <th>Delete</th>
                 </tr>
             </thead>
@@ -218,7 +240,10 @@ require_once __DIR__ . "/includes/header.php";
                         </td>
 
                         <!-- Created -->
-                        <td><?= htmlspecialchars($app["created_at"]) ?></td>
+                        <td><?= htmlspecialchars(relativeDaysLabel(daysSince($app["created_at"]))) ?></td>
+
+                        <!-- Last status update -->
+                        <td><?= htmlspecialchars(relativeDaysLabel(daysSince($app["last_status_change"] ?? null))) ?></td>
 
                         <!-- Delete -->
                         <td>
