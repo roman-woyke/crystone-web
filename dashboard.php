@@ -108,6 +108,13 @@ require_once __DIR__ . "/includes/header.php";
 main.container {
     max-width: 1600px;
 }
+
+/* Keep the add-application form readable inside the wider container */
+form {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
 </style>
 
     <h1>Dashboard</h1>
@@ -184,8 +191,8 @@ main.container {
                     <tr id="app-<?= $id ?>">
 
                         <!-- Tag -->
-                        <td style="vertical-align:top;">
-                            <div style="display:flex; flex-direction:column; gap:4px;">
+                        <td>
+                            <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
                             <select class="tag-select" data-id="<?= $id ?>" style="width:100%; min-width:67px;">
                                 <option value="">— none —</option>
                                 <?php foreach (["MAYBE", "PROBABLY", "FOR SURE", "ABSOLUTE CINEMA"] as $t): ?>
@@ -222,8 +229,8 @@ main.container {
                         </td>
 
                         <!-- Link -->
-                        <td style="vertical-align:top;">
-                            <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+                        <td>
+                            <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
                             <?php if (!empty($app["job_link"])): ?>
                                 <a href="<?= htmlspecialchars($app["job_link"]) ?>" target="_blank" class="link-display-<?= $id ?>">Open</a>
                             <?php else: ?>
@@ -235,8 +242,10 @@ main.container {
 
                         <!-- Notes -->
                         <td>
-                            <span class="notes-display-<?= $id ?>"><?= htmlspecialchars(mb_strimwidth($app["notes"] ?? "", 0, 40, "…")) ?></span>
-                            <button class="edit-notes-btn" data-id="<?= $id ?>" data-current="<?= htmlspecialchars($app['notes'] ?? '') ?>" style="margin-left:4px;">✏️</button>
+                            <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                                <span class="notes-display-<?= $id ?>"><?= htmlspecialchars(mb_strimwidth($app["notes"] ?? "", 0, 40, "…")) ?></span>
+                                <button class="edit-notes-btn" data-id="<?= $id ?>" data-current="<?= htmlspecialchars($app['notes'] ?? '') ?>" style="width:auto;">✏️</button>
+                            </div>
                         </td>
 
                         <!-- Created -->

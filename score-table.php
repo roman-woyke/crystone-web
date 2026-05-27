@@ -132,7 +132,7 @@
                             }
                         </td>
                         <td>${escapeHtml(app.notes ?? "")}</td>
-                        <td>${escapeHtml(relativeDays(app.created_at))}</td>
+                        <td>${neutralDateBadge(relativeDays(app.created_at))}</td>
                         <td>${lastStatusBadge(app.last_status_change ?? app.updated_at, app.peak_status, app.status)}</td>
                     </tr>
                 `;
@@ -167,6 +167,11 @@
             return Math.floor((Date.now() - then.getTime()) / 86400000);
         }
 
+        function neutralDateBadge(label) {
+            if (!label || label === "—") return "—";
+            return `<span class="date-badge date-badge-neutral">${escapeHtml(label)}</span>`;
+        }
+
         function lastStatusBadge(timestamp, peakStatus, status) {
             const days = daysSince(timestamp);
             if (days === null) return "—";
@@ -174,10 +179,13 @@
 
             // Skip coloring when the app reached interview/offer or is already rejected.
             if (peakStatus === "INTERVIEW" || peakStatus === "OFFER" || status === "REJECTED") {
-                return escapeHtml(label);
+                return neutralDateBadge(label);
             }
 
-            const color = days <= 7 ? "green" : days <= 14 ? "orange" : "red";
+            const color = days <= 7 ? "green"
+                        : days <= 14 ? "yellow"
+                        : days <= 30 ? "orange"
+                        : "red";
             return `<span class="date-badge date-badge-${color}">${escapeHtml(label)}</span>`;
         }
 
