@@ -96,6 +96,7 @@ $appStmt = $pdo->query("
         a.tag,
         a.created_at,
         a.updated_at,
+        MAX(h.changed_at) AS last_status_change,
 
         " . peakStatusSql() . "
 

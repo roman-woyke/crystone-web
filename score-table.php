@@ -102,7 +102,7 @@
                             <th>Link</th>
                             <th>Notes</th>
                             <th>Created</th>
-                            <th>Updated</th>
+                            <th>Last status update</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -132,8 +132,8 @@
                             }
                         </td>
                         <td>${escapeHtml(app.notes ?? "")}</td>
-                        <td>${escapeHtml(app.created_at)}</td>
-                        <td>${escapeHtml(app.updated_at)}</td>
+                        <td>${escapeHtml(relativeDays(app.created_at))}</td>
+                        <td>${escapeHtml(relativeDays(app.last_status_change ?? app.updated_at))}</td>
                     </tr>
                 `;
             });
@@ -150,6 +150,19 @@
             if (!tag) return "";
             const slug = tag.toLowerCase().replace(/ /g, '-');
             return `<span class="tag-badge tag-badge-${slug}">${escapeHtml(tag)}</span>`;
+        }
+
+        function relativeDays(timestamp) {
+            if (!timestamp) return "—";
+            // Treat DB timestamps (no TZ suffix) as UTC so day-count math is consistent.
+            const iso = String(timestamp).includes("T") ? timestamp : String(timestamp).replace(" ", "T") + "Z";
+            const then = new Date(iso);
+            if (isNaN(then)) return "—";
+            const diffMs   = Date.now() - then.getTime();
+            const diffDays = Math.floor(diffMs / 86400000);
+            if (diffDays <= 0) return "today";
+            if (diffDays === 1) return "1 day ago";
+            return `${diffDays} days ago`;
         }
 
         function escapeHtml(value) {
