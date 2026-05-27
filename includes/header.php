@@ -10,7 +10,8 @@
 
     <title>Internship Tracker</title>
 
-    <link rel="stylesheet" href="<?= BASE_PATH ?>/assets/css/style.css">
+    <?php $cssPath = __DIR__ . "/../assets/css/style.css"; ?>
+    <link rel="stylesheet" href="<?= BASE_PATH ?>/assets/css/style.css?v=<?= file_exists($cssPath) ? filemtime($cssPath) : time() ?>">
 </head>
 <body>
 
