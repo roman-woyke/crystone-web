@@ -161,8 +161,7 @@
             const diffMs   = Date.now() - then.getTime();
             const diffDays = Math.floor(diffMs / 86400000);
             if (diffDays <= 0) return "today";
-            if (diffDays === 1) return "1 day ago";
-            return `${diffDays} days ago`;
+            return `${diffDays}d ago`;
         }
 
         function escapeHtml(value) {
