@@ -109,10 +109,10 @@ main.container {
     max-width: 1600px;
 }
 
-/* Keep the add-application form readable inside the wider container */
-form {
+/* Keep the add-application form at a readable width, anchored to the left */
+.add-application-form {
     max-width: 600px;
-    margin-left: auto;
+    margin-left: 0;
     margin-right: auto;
 }
 </style>
@@ -131,7 +131,7 @@ form {
 
     <h2>Add application</h2>
 
-    <form action="<?= BASE_PATH ?>/dashboard.php" method="POST">
+    <form action="<?= BASE_PATH ?>/dashboard.php" method="POST" class="add-application-form">
         <div>
             <label>Company name *</label>
             <input type="text" name="company_name" required>
@@ -148,7 +148,7 @@ form {
             <label>Location</label>
             <input type="text" name="location">
         </div>
-        <div>
+        <div class="form-notes">
             <label>Notes</label>
             <textarea name="notes"></textarea>
         </div>
