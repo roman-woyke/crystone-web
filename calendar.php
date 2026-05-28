@@ -54,9 +54,13 @@ require_once __DIR__ . "/includes/header.php";
 ?>
 
 <style>
-/* Let the calendar page use much more of the viewport than other pages */
+/* Let the calendar page use much more of the viewport than other pages,
+   but never shrink below a width where the 7-column grid gets squished.
+   The min-width is on the container so the whole page (header, banner,
+   calendar) stays aligned and scrolls horizontally together. */
 main.container {
     max-width: none;
+    min-width: 1200px;
     padding-left: 24px;
     padding-right: 24px;
 }
@@ -217,9 +221,8 @@ main.container {
 
 .calendar-grid {
     flex: 1;
-    min-width: 0; /* allow the grid to shrink inside the flex row instead of overflowing */
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(7, 1fr);
     gap: 8px;
 }
 
@@ -308,17 +311,6 @@ main.container {
 
 .viewing-banner strong {
     color: #f3f4f6;
-}
-
-/* On narrow screens, stack the sidebar above the calendar so neither overflows */
-@media (max-width: 900px) {
-    .calendar-layout {
-        flex-direction: column;
-    }
-
-    .exam-sidebar {
-        width: 100%;
-    }
 }
 </style>
 
