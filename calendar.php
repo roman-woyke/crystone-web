@@ -217,8 +217,9 @@ main.container {
 
 .calendar-grid {
     flex: 1;
+    min-width: 0; /* allow the grid to shrink inside the flex row instead of overflowing */
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -277,6 +278,7 @@ main.container {
 
 .exam-block .eb-title {
     display: block;
+    overflow-wrap: anywhere; /* break long German exam titles instead of overflowing */
 }
 
 .exam-block.highlighted {
@@ -306,6 +308,17 @@ main.container {
 
 .viewing-banner strong {
     color: #f3f4f6;
+}
+
+/* On narrow screens, stack the sidebar above the calendar so neither overflows */
+@media (max-width: 900px) {
+    .calendar-layout {
+        flex-direction: column;
+    }
+
+    .exam-sidebar {
+        width: 100%;
+    }
 }
 </style>
 
