@@ -1028,6 +1028,34 @@ tbody tr:hover {
     .container {
         padding: 20px 12px;
     }
+
+    /* Keep the navbar narrower than the viewport: flex children cannot
+       shrink below their content width, so trim every fixed part. */
+    .navbar {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+
+    .nav-brand {
+        margin-right: 4px;
+        gap: 8px;
+        font-size: 1rem;
+    }
+
+    .brand-mark {
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
+    }
+
+    .nav-user-chip {
+        display: none;
+    }
+
+    .navbar .btn {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
 }
 
 /* Responsive card-table technique: tables with .responsive-table collapse
