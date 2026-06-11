@@ -15,7 +15,7 @@ The repository has three long-lived branches. Each is independently deployed to 
 | `ben`  | `/ben/`             | `/ben/`    |
 
 All three branches contain the same application code. The only thing that differs per deployment is the **database credentials**, which are stored in a shared `config.php` file that lives **outside the repo, one level above the web root** (so it cannot be served over HTTP).
-
+   
 ---
 
 ## Files outside the repo (managed manually on the server)
@@ -118,7 +118,40 @@ CREATE TABLE application_status_history (
     score_delta    INT NOT NULL DEFAULT 0,
     changed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Exam calendar (keyed by username string, independent from applications)
+CREATE TABLE exams (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    title     VARCHAR(255) NOT NULL,
+    professor VARCHAR(255),
+    exam_date DATE NOT NULL,
+    exam_time TIME NOT NULL
+);
+
+CREATE TABLE user_exams (
+    username VARCHAR(50) NOT NULL,
+    exam_id  INT NOT NULL,
+    PRIMARY KEY (username, exam_id),
+    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+);
+
+-- Typing battle highscores (typing-game.php). WPM and accuracy are
+-- computed server-side in api/submit-typing-score.php.
+CREATE TABLE typing_scores (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT NOT NULL REFERENCES users(id),
+    wpm           DECIMAL(6,2) NOT NULL,
+    accuracy      DECIMAL(5,2) NOT NULL,
+    correct_chars INT NOT NULL,
+    typed_chars   INT NOT NULL,
+    duration_ms   INT NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
+
+> **Deploy note:** when merging new tables into another branch's deployment,
+> run the corresponding `CREATE TABLE` on that instance's database **before**
+> pushing the code, otherwise pages using the table will 500.
 
 ---
 
@@ -163,21 +196,28 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── get-leaderboard.php
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
-│   └── patch-application.php
+│   ├── get-typing-scores.php   ← typing battle: best WPM per user
+│   ├── patch-application.php
+│   ├── submit-typing-score.php ← typing battle: validated score submission
+│   └── toggle-user-exam.php    ← exam calendar checkbox toggle
 ├── assets/
-│   ├── css/style.css
-│   └── js/app.js
+│   ├── css/style.css      ← design tokens + shared glass components
+│   └── js/app.js          ← mobile nav toggle + countUp helper
 ├── includes/
 │   ├── footer.php
-│   ├── header.php
+│   ├── header.php         ← brand, conditional nav, fonts, background orbs
 │   ├── scoring.php        ← shared scoring logic + SQL helpers
 │   ├── session.php        ← auth guard (redirects to login if not logged in)
-│   └── start-session.php  ← session config (30-day cookie)
+│   ├── start-session.php  ← session config (30-day cookie)
+│   └── typing-sentences.php ← sentence corpus for the typing battle
+├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
+├── index.php              ← marketing landing page (per-instance root)
 ├── leaderboard.php        ← public leaderboard page
 ├── login.php
 ├── logout.php
 ├── register.php
 ├── score-chart.php        ← chart partial (included by leaderboard.php)
-└── score-table.php        ← table partial (included by leaderboard.php)
+├── score-table.php        ← table partial (included by leaderboard.php)
+└── typing-game.php        ← 60-second typing battle with highscores
 ```
