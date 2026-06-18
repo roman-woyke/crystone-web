@@ -2,7 +2,28 @@
 
 require_once __DIR__ . "/includes/session.php";
 
-$userId = $_SESSION["user_id"];
+$myUserId = (int) $_SESSION["user_id"];
+
+// ── Users you can view (everyone with an account on this instance) ─────
+$users = $pdo->query("SELECT id, username FROM users ORDER BY username")
+    ->fetchAll(PDO::FETCH_ASSOC);
+
+$userById = [];
+foreach ($users as $u) { $userById[(int) $u["id"]] = $u["username"]; }
+
+// Resolve the selected user from ?user= (username), defaulting to myself.
+$viewUserId = $myUserId;
+$requested  = trim($_GET["user"] ?? "");
+if ($requested !== "") {
+    foreach ($users as $u) {
+        if (strcasecmp($u["username"], $requested) === 0) {
+            $viewUserId = (int) $u["id"];
+            break;
+        }
+    }
+}
+$viewUsername = $userById[$viewUserId] ?? ($_SESSION["username"] ?? "");
+$canEdit      = ($viewUserId === $myUserId);
 
 // Color palette projects can be tagged with (value stored in DB)
 $palette = [
@@ -29,11 +50,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $description = $description === "" ? null : $description;
     $color       = isset($palette[$color]) ? $color : "#8b5cf6";
 
+    // You can only ever create projects for yourself.
     $stmt = $pdo->prepare("
         INSERT INTO projects (user_id, name, description, color)
         VALUES (?, ?, ?, ?)
     ");
-    $stmt->execute([$userId, $name, mb_substr($description ?? "", 0, 1000) ?: null, $color]);
+    $stmt->execute([$myUserId, $name, mb_substr($description ?? "", 0, 1000) ?: null, $color]);
 
     header("Location: " . BASE_PATH . "/projects.php");
     exit;
@@ -58,7 +80,7 @@ $stmt = $pdo->prepare("
     GROUP BY p.id, p.name, p.description, p.color, p.created_at
     ORDER BY total_seconds DESC, p.created_at DESC
 ");
-$stmt->execute([$userId]);
+$stmt->execute([$viewUserId]);
 $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ── Fetch recent time entries (grouped per project in PHP) ────────────
@@ -68,7 +90,7 @@ $entryStmt = $pdo->prepare("
     WHERE user_id = ?
     ORDER BY logged_at DESC
 ");
-$entryStmt->execute([$userId]);
+$entryStmt->execute([$viewUserId]);
 
 $entriesByProject = [];
 foreach ($entryStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -418,105 +440,64 @@ main.container {
 .standings-head h2 { margin: 0; font-size: 1.25rem; }
 .standings-sub { margin: 0; color: var(--text-3); font-size: 0.85rem; }
 
-.user-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
-    margin-top: 22px;
+/* Make the podium cards clickable links into each user's view */
+.podium-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: transform var(--t-med) var(--ease-out), box-shadow var(--t-med) var(--ease-out), border-color var(--t-med) var(--ease-out);
 }
-
-.user-panel { padding: 18px 18px 14px; }
-.user-panel.me {
+.podium-link:hover {
+    text-decoration: none;
+    transform: translateY(-4px);
     border-color: rgba(139, 92, 246, 0.45);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift), var(--glow-violet);
+}
+.podium-link.is-viewing {
+    border-color: rgba(139, 92, 246, 0.55);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-card), var(--glow-violet);
 }
 
-.up-head {
+/* ── User switcher tabs + viewing banner ────────────────────────────── */
+.user-tabs {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-.up-rank {
-    flex-shrink: 0;
-    width: 26px;
-    height: 26px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 700;
-    border-radius: 50%;
-    background: var(--glass-strong);
-    color: var(--text-2);
-}
-.up-rank.r1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #fff; }
-.up-rank.r2 { background: linear-gradient(135deg, #d1d5db, #9ca3af); color: #fff; }
-.up-rank.r3 { background: linear-gradient(135deg, #d97706, #92400e); color: #fff; }
-
-.up-name {
-    flex: 1;
-    min-width: 0;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1.05rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.up-you {
-    flex-shrink: 0;
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--violet);
-    border: 1px solid rgba(139, 92, 246, 0.45);
-    background: var(--grad-accent-soft);
-    border-radius: var(--radius-full);
-    padding: 1px 7px;
-}
-.up-total {
-    flex-shrink: 0;
-    font-family: var(--font-display);
-    font-weight: 700;
-    color: var(--text-1);
-    font-variant-numeric: tabular-nums;
-}
-
-.up-projects { display: flex; flex-direction: column; gap: 11px; }
-.up-empty { color: var(--text-3); font-size: 0.85rem; }
-
-.up-proj-top {
-    display: flex;
-    align-items: center;
     gap: 8px;
-    font-size: 0.85rem;
-    margin-bottom: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
 }
-.up-dot { flex-shrink: 0; width: 9px; height: 9px; border-radius: 3px; }
-.up-pname {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.user-tab {
+    padding: 8px 18px;
+    font-size: 0.92rem;
+    font-weight: 600;
     color: var(--text-2);
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+    text-decoration: none;
+    transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
 }
-.up-ptime { flex-shrink: 0; font-weight: 600; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.user-tab:hover {
+    color: var(--text-1);
+    border-color: rgba(255, 255, 255, 0.2);
+    text-decoration: none;
+}
+.user-tab.active {
+    color: #fff;
+    background: var(--grad-accent);
+    border-color: transparent;
+    box-shadow: var(--glow-violet);
+}
 
-.up-bar {
-    height: 6px;
-    border-radius: var(--radius-full);
-    background: rgba(255, 255, 255, 0.05);
-    overflow: hidden;
+.viewing-banner {
+    margin-bottom: 22px;
+    padding: 11px 16px;
+    font-size: 0.88rem;
+    color: var(--text-2);
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
 }
-.up-bar > span {
-    display: block;
-    height: 100%;
-    border-radius: var(--radius-full);
-    min-width: 2px;
-}
+.viewing-banner strong { color: var(--text-1); }
 
 /* Modal tweaks */
 .modal-dialog h3 { margin-top: 0; }
@@ -530,6 +511,25 @@ main.container {
         Track the hours you pour into each project. Run a live timer or log time you spent
         offline, jot down what it's about, and watch your contribution add up.
     </p>
+</div>
+
+<!-- ── User switcher ──────────────────────────────────────────────────── -->
+<div class="user-tabs">
+    <?php foreach ($users as $u): ?>
+        <a
+            class="user-tab <?= (int) $u["id"] === $viewUserId ? "active" : "" ?>"
+            href="<?= BASE_PATH ?>/projects.php?user=<?= urlencode($u["username"]) ?>"
+        ><?= htmlspecialchars($u["username"]) ?><?= (int) $u["id"] === $myUserId ? " (you)" : "" ?></a>
+    <?php endforeach; ?>
+</div>
+
+<div class="viewing-banner">
+    <?php if ($canEdit): ?>
+        Viewing <strong>your</strong> projects — log time, add projects, and edit freely.
+    <?php else: ?>
+        Viewing <strong><?= htmlspecialchars($viewUsername) ?></strong>'s projects.
+        <em>Read only — switch to your own tab to make changes.</em>
+    <?php endif; ?>
 </div>
 
 <!-- ── Page stats ─────────────────────────────────────────────────────── -->
@@ -557,6 +557,7 @@ main.container {
 </div>
 
 <!-- ── New project ────────────────────────────────────────────────────── -->
+<?php if ($canEdit): ?>
 <section class="new-project glass-card">
     <h2>New project</h2>
     <p class="np-hint">Give it a name, a colour, and a short description.</p>
@@ -583,11 +584,16 @@ main.container {
         <button type="submit" class="btn-primary np-submit">+ Add project</button>
     </form>
 </section>
+<?php endif; ?>
 
 <?php if (count($projects) === 0): ?>
     <div class="glass-card empty-state">
         <span class="es-emoji">🗂️</span>
-        No projects yet — create one above and start logging your hours.
+        <?php if ($canEdit): ?>
+            No projects yet — create one above and start logging your hours.
+        <?php else: ?>
+            <?= htmlspecialchars($viewUsername) ?> hasn't created any projects yet.
+        <?php endif; ?>
     </div>
 <?php else: ?>
     <div class="projects-grid">
@@ -602,6 +608,7 @@ main.container {
                         <span class="pc-dot"></span>
                         <h3 class="pc-name"><?= htmlspecialchars($p["name"]) ?></h3>
                     </div>
+                    <?php if ($canEdit): ?>
                     <div class="pc-actions">
                         <button
                             class="icon-btn edit-project-btn"
@@ -611,6 +618,7 @@ main.container {
                             title="Edit project">✏️</button>
                         <button class="icon-btn delete-project-btn" data-id="<?= $pid ?>" title="Delete project">🗑️</button>
                     </div>
+                    <?php endif; ?>
                 </div>
 
                 <p class="pc-desc <?= empty($p["description"]) ? "empty muted" : "muted" ?>">
@@ -628,11 +636,13 @@ main.container {
                     <span><strong><?= (int) $p["entry_count"] ?></strong> sessions</span>
                 </div>
 
+                <?php if ($canEdit): ?>
                 <div class="pc-timer" data-id="<?= $pid ?>">
                     <span class="pc-timer-display" id="timer-<?= $pid ?>">00:00:00</span>
                     <button class="btn-primary start-btn" data-id="<?= $pid ?>">▶ Start</button>
                     <button class="btn log-btn" data-id="<?= $pid ?>">+ Log</button>
                 </div>
+                <?php endif; ?>
 
                 <div class="pc-entries">
                     <?php if (count($entries) > 0): ?>
@@ -642,7 +652,9 @@ main.container {
                                 <span class="pe-secs"><?= htmlspecialchars(formatDuration((int) $e["seconds"])) ?></span>
                                 <span class="pe-note"><?= $e["note"] !== null && $e["note"] !== "" ? htmlspecialchars($e["note"]) : "—" ?></span>
                                 <span class="pe-when"><?= htmlspecialchars(relativeTime($e["logged_at"])) ?></span>
+                                <?php if ($canEdit): ?>
                                 <button class="pe-del delete-entry-btn" data-id="<?= (int) $e["id"] ?>" title="Remove session">✕</button>
+                                <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
                         <?php if (count($entries) > 4): ?>
@@ -657,58 +669,27 @@ main.container {
     </div>
 <?php endif; ?>
 
-<?php if (count($userStats) > 0): ?>
+<?php if (count($userStats) > 1): ?>
     <section class="standings">
         <div class="standings-head">
             <h2>🏆 Standings</h2>
         </div>
-        <p class="standings-sub">Total time tracked by everyone on this instance — and what they're working on.</p>
+        <p class="standings-sub">Total time tracked across all projects — tap anyone to open their view.</p>
 
         <?php $podium = array_slice($userStats, 0, 3, true); ?>
         <div class="podium">
-            <?php $rank = 0; foreach ($podium as $u): $rank++; ?>
-                <div class="podium-card glass-card rank-<?= $rank ?>">
+            <?php $rank = 0; foreach ($podium as $uid => $u): $rank++; ?>
+                <a class="podium-card glass-card rank-<?= $rank ?> podium-link <?= (int) $uid === $viewUserId ? "is-viewing" : "" ?>"
+                   href="<?= BASE_PATH ?>/projects.php?user=<?= urlencode($u["username"]) ?>">
                     <span class="podium-medal"><?= $rank ?></span>
-                    <div class="podium-name"><?= htmlspecialchars($u["username"]) ?></div>
+                    <div class="podium-name"><?= htmlspecialchars($u["username"]) ?><?= (int) $uid === $myUserId ? " (you)" : "" ?></div>
                     <div class="podium-score gradient-text"><?= htmlspecialchars(formatDuration($u["total"])) ?></div>
-                    <div class="podium-sub">total tracked</div>
-                </div>
+                    <div class="podium-sub"><?= count($u["projects"]) ?> project<?= count($u["projects"]) === 1 ? "" : "s" ?></div>
+                </a>
             <?php endforeach; ?>
         </div>
 
-        <div class="user-grid">
-            <?php $rank = 0; foreach ($userStats as $uid => $u): $rank++; $isMe = ($uid === (int) $userId); ?>
-                <div class="user-panel glass-card <?= $isMe ? "me" : "" ?>">
-                    <div class="up-head">
-                        <span class="up-rank <?= $rank <= 3 ? "r{$rank}" : "" ?>"><?= $rank ?></span>
-                        <span class="up-name"><?= htmlspecialchars($u["username"]) ?></span>
-                        <?php if ($isMe): ?><span class="up-you">you</span><?php endif; ?>
-                        <span class="up-total"><?= htmlspecialchars(formatDuration($u["total"])) ?></span>
-                    </div>
-                    <div class="up-projects">
-                        <?php
-                        $maxP = 0;
-                        foreach ($u["projects"] as $pr) { $maxP = max($maxP, $pr["total"]); }
-                        ?>
-                        <?php if (count($u["projects"]) === 0): ?>
-                            <span class="up-empty">No projects yet.</span>
-                        <?php else: foreach ($u["projects"] as $pr):
-                            $c = htmlspecialchars($pr["color"] ?: "#8b5cf6");
-                            $w = $maxP > 0 ? round($pr["total"] / $maxP * 100) : 0;
-                        ?>
-                            <div class="up-proj">
-                                <div class="up-proj-top">
-                                    <span class="up-dot" style="background:<?= $c ?>"></span>
-                                    <span class="up-pname"><?= htmlspecialchars($pr["name"]) ?></span>
-                                    <span class="up-ptime"><?= htmlspecialchars(formatDuration($pr["total"])) ?></span>
-                                </div>
-                                <div class="up-bar"><span style="width:<?= $w ?>%;background:<?= $c ?>"></span></div>
-                            </div>
-                        <?php endforeach; endif; ?>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
+        <p class="standings-sub" style="margin-top:14px;">Or pick anyone from the tabs at the top.</p>
     </section>
 <?php endif; ?>
 
