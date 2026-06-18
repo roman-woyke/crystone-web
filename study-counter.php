@@ -37,9 +37,144 @@ main.container {
 }
 
 .study-sub {
-    margin: 0 0 24px;
+    margin: 0;
     color: var(--text-2);
     max-width: 680px;
+}
+
+/* ── Top row: intro + currently-studying panel ──────────────────────────── */
+
+.study-top {
+    display: flex;
+    align-items: stretch;
+    gap: 24px;
+    margin-bottom: 28px;
+}
+
+.study-intro {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: center;
+}
+
+.studying-panel {
+    flex: 0 0 340px;
+    max-width: 340px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.studying-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.studying-head h2 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.studying-toggle {
+    width: auto;
+    margin: 0;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.studying-toggle.active {
+    background: var(--grad-accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--glow-violet);
+}
+
+.studying-toggle:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.studying-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-content: flex-start;
+}
+
+.studying-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px 7px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.studying-chip.me {
+    border-color: rgba(139, 92, 246, 0.5);
+    background: var(--grad-accent-soft);
+}
+
+.studying-chip .chip-meta {
+    font-weight: 500;
+    color: var(--text-3);
+    font-size: 0.78rem;
+}
+
+/* Pulsing presence dots */
+.studying-live-dot,
+.pulse-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+    animation: pulse-ring 1.8s ease-out infinite;
+}
+
+.pulse-dot.paused {
+    background: var(--warning);
+    box-shadow: none;
+    animation: none;
+}
+
+.pulse-dot.presence {
+    background: var(--info);
+    box-shadow: none;
+    animation: none;
+}
+
+@keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .studying-live-dot,
+    .pulse-dot { animation: none; }
+}
+
+@media (max-width: 900px) {
+    .study-top {
+        flex-direction: column;
+    }
+
+    .studying-panel {
+        flex-basis: auto;
+        max-width: none;
+    }
 }
 
 /* ── Podium + per-module toggle ─────────────────────────────────────────── */
@@ -223,7 +358,25 @@ main.container {
     line-height: 1.1;
     text-align: center;
     letter-spacing: 0.01em;
-    margin: 6px 0 16px;
+    margin: 6px 0 4px;
+}
+
+.timer-note {
+    margin: 0 0 16px;
+    min-height: 1.1em;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-3);
+}
+
+.timer-note .tn-mod {
+    color: var(--text-2);
+    font-weight: 600;
+}
+
+.timer-note .tn-live {
+    color: var(--success);
+    font-weight: 600;
 }
 
 .timer-controls {
@@ -520,11 +673,25 @@ main.container {
 }
 </style>
 
-<h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
-<p class="study-sub">
-    Time your study sessions live or log ones you did offline. Pick a module from the
-    exam calendar or add your own — custom modules join the shared list for everyone.
-</p>
+<div class="study-top">
+    <div class="study-intro">
+        <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
+        <p class="study-sub">
+            Time your study sessions live or log ones you did offline. Pick a module from the
+            exam calendar or add your own — custom modules join the shared list for everyone.
+        </p>
+    </div>
+
+    <section class="studying-panel glass-card" id="studying-panel">
+        <div class="studying-head">
+            <h2><span class="studying-live-dot"></span> Currently studying</h2>
+            <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+        </div>
+        <div class="studying-list" id="studying-list">
+            <span class="muted">Loading…</span>
+        </div>
+    </section>
+</div>
 
 <!-- ── Podium ─────────────────────────────────────────────────────────────── -->
 <div class="podium-bar">
@@ -574,6 +741,7 @@ main.container {
         <!-- Timer -->
         <div class="mode-pane active" id="pane-timer">
             <div class="timer-display" id="timer-display">00:00</div>
+            <p class="timer-note" id="timer-note">Keeps running even if you close the page.</p>
             <div class="timer-controls">
                 <button type="button" class="btn-primary" id="timer-start">Start</button>
                 <button type="button" class="btn" id="timer-reset">Reset</button>
@@ -1088,59 +1256,182 @@ main.container {
         });
     });
 
-    // ── Timer ─────────────────────────────────────────────────────────────
+    // ── Timer (server-backed & persistent) ────────────────────────────────
+    // The stopwatch lives in the `study_status` table, so closing or reloading
+    // the page never stops it — we just re-sync from the server.
     const timerDisplay = document.getElementById("timer-display");
+    const timerNote    = document.getElementById("timer-note");
     const startBtn     = document.getElementById("timer-start");
     const resetBtn     = document.getElementById("timer-reset");
     const logBtn       = document.getElementById("timer-log");
 
-    let elapsed = 0;     // seconds
-    let running = false;
-    let tickAt  = null;  // timestamp of last tick
+    // Mirrors the server's study_status row for me.
+    let myState = { active: false, mode: null, running: false, elapsed: 0, module: null };
     let ticker  = null;
 
-    function renderTimer() { timerDisplay.textContent = fmtClock(elapsed); }
+    function manageTicker() {
+        clearInterval(ticker);
+        ticker = null;
+        if (myState.running) {
+            ticker = setInterval(() => {
+                myState.elapsed += 1;
+                timerDisplay.textContent = fmtClock(myState.elapsed);
+            }, 1000);
+        }
+    }
 
-    function tick() {
-        const now = Date.now();
-        elapsed += Math.round((now - tickAt) / 1000);
-        tickAt = now;
-        renderTimer();
+    function renderTimerUI() {
+        timerDisplay.textContent = fmtClock(myState.active ? myState.elapsed : 0);
+
+        const timing = myState.active && myState.mode === "timer";
+        if (timing && myState.running) {
+            startBtn.textContent = "Pause";
+            timerNote.innerHTML = `<span class="tn-live">● Running</span> · <span class="tn-mod">${escapeHtml(myState.module || "")}</span>`;
+        } else if (timing) {
+            startBtn.textContent = "Resume";
+            timerNote.innerHTML = `Paused · <span class="tn-mod">${escapeHtml(myState.module || "")}</span>`;
+        } else {
+            startBtn.textContent = "Start";
+            timerNote.textContent = "Keeps running even if you close the page.";
+        }
+    }
+
+    // Apply the `me` object returned by any status endpoint.
+    function applyMyState(me) {
+        myState = {
+            active:  !!me.active,
+            mode:    me.mode || null,
+            running: !!me.running,
+            elapsed: me.elapsed || 0,
+            module:  me.module || null,
+        };
+        renderTimerUI();
+        manageTicker();
+        renderToggleButton();
+    }
+
+    function timerAction(action, extra) {
+        const body = new FormData();
+        body.append("action", action);
+        if (extra) {
+            if (extra.module)     body.append("module", extra.module);
+            if (extra.new_module) body.append("new_module", extra.new_module);
+        }
+        return fetch(BASE_PATH + "/api/study-timer.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Timer error."); }))
+            .then(res => {
+                // A brand-new custom module changes the shared list — reload so the
+                // dropdown, colors and legend pick it up. The timer is persistent,
+                // so it simply resumes after the reload.
+                if (res.custom_added) setTimeout(() => window.location.reload(), 400);
+                applyMyState(res.me);
+                renderStudying(res.studying);
+                return res;
+            });
     }
 
     startBtn.addEventListener("click", () => {
-        if (running) {
-            // Pause
-            tick();
-            clearInterval(ticker);
-            running = false;
-            startBtn.textContent = "Resume";
-        } else {
-            running = true;
-            tickAt = Date.now();
-            ticker = setInterval(tick, 1000);
-            startBtn.textContent = "Pause";
+        if (myState.active && myState.mode === "timer" && myState.running) {
+            timerAction("pause").catch(err => setFeedback(err.message, true));
+            return;
         }
+        // Start fresh or resume a paused timer.
+        const extra = {};
+        if (!myState.active) {
+            const mod = selectedModulePayload();
+            if (mod.error) { setFeedback(mod.error, true); return; }
+            Object.assign(extra, mod);
+        }
+        timerAction("start", extra).catch(err => setFeedback(err.message, true));
     });
 
     resetBtn.addEventListener("click", () => {
-        clearInterval(ticker);
-        running = false;
-        elapsed = 0;
-        startBtn.textContent = "Start";
-        renderTimer();
+        if (!myState.active) return;
+        timerAction("reset").catch(err => setFeedback(err.message, true));
     });
 
     logBtn.addEventListener("click", () => {
-        if (running) { tick(); clearInterval(ticker); running = false; startBtn.textContent = "Start"; }
-        const secs = elapsed;
-        submitSession(secs, null, () => {
-            elapsed = 0;
-            renderTimer();
-        });
+        if (!myState.active || myState.mode !== "timer") {
+            setFeedback("Start the timer first.", true);
+            return;
+        }
+        setFeedback("Saving…", false);
+        timerAction("log")
+            .then(res => {
+                if (res.logged) {
+                    setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
+                    loadData();
+                } else {
+                    setFeedback("Nothing to log yet.", true);
+                }
+            })
+            .catch(err => setFeedback(err.message, true));
     });
 
-    renderTimer();
+    // ── Currently studying ────────────────────────────────────────────────
+    const studyingList   = document.getElementById("studying-list");
+    const toggleStudyBtn = document.getElementById("studying-toggle");
+
+    function renderToggleButton() {
+        const timing   = myState.active && myState.mode === "timer";
+        const presence = myState.active && myState.mode === "presence";
+        toggleStudyBtn.disabled = timing; // a running timer already marks you studying
+        toggleStudyBtn.classList.toggle("active", myState.active);
+        if (timing)        toggleStudyBtn.textContent = "Timing…";
+        else if (presence) toggleStudyBtn.textContent = "Stop";
+        else               toggleStudyBtn.textContent = "I'm studying";
+    }
+
+    function renderStudying(list) {
+        if (!list || list.length === 0) {
+            studyingList.innerHTML = `<span class="muted">Nobody's studying right now.</span>`;
+            return;
+        }
+        studyingList.innerHTML = list.map(s => {
+            const isMe = s.username === MY_USERNAME;
+            let dotCls = "pulse-dot";
+            let meta;
+            if (s.mode === "timer") {
+                if (s.running) {
+                    meta = `${fmtTime(s.elapsed)}${s.module ? " · " + s.module : ""}`;
+                } else {
+                    dotCls += " paused";
+                    meta = `paused${s.module ? " · " + s.module : ""}`;
+                }
+            } else {
+                dotCls += " presence";
+                meta = "studying";
+            }
+            return `
+                <span class="studying-chip ${isMe ? "me" : ""}">
+                    <span class="${dotCls}"></span>
+                    ${escapeHtml(s.username)}
+                    <span class="chip-meta">${escapeHtml(meta)}</span>
+                </span>
+            `;
+        }).join("");
+    }
+
+    toggleStudyBtn.addEventListener("click", () => {
+        if (myState.active && myState.mode === "timer") return;
+        fetch(BASE_PATH + "/api/toggle-study-presence.php", { method: "POST" })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
+            .then(res => { applyMyState(res.me); renderStudying(res.studying); })
+            .catch(err => setFeedback(err.message, true));
+    });
+
+    function loadStatus() {
+        return fetch(BASE_PATH + "/api/get-study-status.php")
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+            .then(res => { applyMyState(res.me); renderStudying(res.studying); })
+            .catch(() => { /* keep previous state on a transient error */ });
+    }
+
+    // Keep presence + my own timer fresh (covers other tabs and other users).
+    setInterval(loadStatus, 15000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) loadStatus();
+    });
 
     // ── Manual ────────────────────────────────────────────────────────────
     const manualDate = document.getElementById("manual-date");
@@ -1156,6 +1447,7 @@ main.container {
 
     // ── Go ────────────────────────────────────────────────────────────────
     loadData();
+    loadStatus();
 }());
 </script>
 

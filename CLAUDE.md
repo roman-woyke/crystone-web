@@ -50,6 +50,9 @@ All return plain text on error (non-200 status) or their payload on success:
 | `api/get-typing-scores.php` | GET | Best WPM per user plus run counts (typing-battle highscores) |
 | `api/log-study-session.php` | POST | Log a study session (timer or manual); validates duration/date/module, creates the module if `new_module` is new; returns JSON |
 | `api/get-study-data.php` | GET | Study-counter data: module list (exam titles + custom, with `custom` flag) and sessions aggregated per user/module/day |
+| `api/study-timer.php` | POST | Drive the persistent study timer (`action` = start/pause/reset/log); state lives in `study_status`; `log` writes a `study_sessions` row server-side; returns `{me, studying}` |
+| `api/get-study-status.php` | GET | Current study presence: my timer state (`me`) + everyone currently studying (`studying`) |
+| `api/toggle-study-presence.php` | POST | Toggle the manual "I'm studying" flag (mode='presence'); no-op while a timer is active; returns `{me, studying}` |
 
 ### Ownership checks
 
@@ -84,6 +87,13 @@ All chart JS is inline in `score-chart.php`; `assets/js/app.js` carries only sit
 - `api/get-study-data.php` returns the module list and sessions aggregated per user/module/day. All chart/podium aggregation is client-side.
 - The chart is a hand-built HTML/CSS grouped+stacked bar chart (no Chart.js): one group of bars per weekday, one bar per user (outline = a per-user color), each bar stacked by module (fill = a per-module color). User and module palettes are deliberately disjoint. Week navigation is pure client-side (`weekOffset`); the "next" button is disabled at the current week.
 - Above the chart, a podium of total hours studied; a single "Per module / Overall" button crossfades between the overall podium and a per-module grid of mini-podiums.
+
+#### Persistent timer + presence
+
+The study timer is **server-backed** so it survives closing/reloading the page. All state lives in one row per user in `study_status` (helper `includes/study-status.php` builds the JSON payload):
+- `mode='timer'` — a stopwatch. `elapsed = accumulated + (started_at ? NOW() - started_at : 0)`; pause folds the running segment into `accumulated` and nulls `started_at`; resume re-sets `started_at`. `api/study-timer.php` handles start/pause/reset/log; `log` computes elapsed server-side, writes a `study_sessions` row, and deletes the status row.
+- `mode='presence'` — the manual "I'm studying" flag (no stopwatch), toggled by `api/toggle-study-presence.php`. The toggle is a no-op while a timer is active (a running timer already marks you studying).
+- A row existing at all means the user is "currently studying". The top-of-page panel (right of the heading) lists everyone with a row, polling `get-study-status.php` every 15s and on `visibilitychange`. The client ticks the timer locally each second and re-syncs to the server elapsed on every poll/action, so no drift accumulates. Starting a timer with a brand-new custom module reloads the page (the timer just resumes from the server afterward).
 
 ## Database schema
 

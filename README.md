@@ -167,6 +167,20 @@ CREATE TABLE study_sessions (
     studied_on  DATE NOT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Live "currently studying" state — at most one row per user. A persistent
+-- timer (mode='timer') survives page reloads: elapsed = accumulated +
+-- (running ? NOW() - started_at : 0). A manual flag (mode='presence') just
+-- marks the user as studying with no stopwatch. A row existing at all means
+-- the user is currently studying.
+CREATE TABLE study_status (
+    user_id     INT NOT NULL PRIMARY KEY REFERENCES users(id),
+    mode        ENUM('timer','presence') NOT NULL DEFAULT 'presence',
+    module_name VARCHAR(255) NULL,
+    started_at  DATETIME NULL,
+    accumulated INT NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 ```
 
 > **Deploy note:** when merging new tables into another branch's deployment,
@@ -217,8 +231,11 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
 │   ├── get-study-data.php      ← study counter: modules + aggregated sessions
+│   ├── get-study-status.php    ← study counter: my timer + who's studying now
 │   ├── get-typing-scores.php   ← typing battle: best WPM per user
 │   ├── log-study-session.php   ← study counter: log a session (timer/manual)
+│   ├── study-timer.php         ← study counter: persistent timer start/pause/reset/log
+│   ├── toggle-study-presence.php ← study counter: manual "I'm studying" flag
 │   ├── patch-application.php
 │   ├── submit-typing-score.php ← typing battle: validated score submission
 │   └── toggle-user-exam.php    ← exam calendar checkbox toggle
@@ -231,6 +248,7 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── scoring.php        ← shared scoring logic + SQL helpers
 │   ├── session.php        ← auth guard (redirects to login if not logged in)
 │   ├── start-session.php  ← session config (30-day cookie)
+│   ├── study-status.php   ← shared "currently studying" payload helper
 │   └── typing-sentences.php ← sentence corpus for the typing battle
 ├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
