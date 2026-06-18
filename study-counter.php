@@ -197,6 +197,7 @@ main.container {
     font-weight: 500;
     color: var(--text-3);
     font-size: 0.78rem;
+    font-variant-numeric: tabular-nums; /* keep chip width stable while ticking */
 }
 
 .studying-chip .chip-break {
@@ -433,6 +434,7 @@ main.container {
     text-align: center;
     letter-spacing: 0.01em;
     margin: 6px 0 4px;
+    font-variant-numeric: tabular-nums; /* fixed-width digits so ticking doesn't reflow */
 }
 
 .timer-note {
@@ -459,6 +461,7 @@ main.container {
     font-size: 1rem;
     font-weight: 600;
     color: var(--warning);
+    font-variant-numeric: tabular-nums;
 }
 
 .timer-break .tb-time {
