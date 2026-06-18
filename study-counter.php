@@ -1,0 +1,1162 @@
+<?php
+
+require_once __DIR__ . "/includes/session.php";
+
+// ── Module list: exam-calendar titles (defaults) + custom study modules ──
+$examTitles = $pdo->query("SELECT DISTINCT title FROM exams ORDER BY title")
+    ->fetchAll(PDO::FETCH_COLUMN);
+$customMods = $pdo->query("SELECT name FROM study_modules ORDER BY name")
+    ->fetchAll(PDO::FETCH_COLUMN);
+
+$modules = [];
+$seen = [];
+foreach ($examTitles as $t) {
+    $key = mb_strtolower($t);
+    if (isset($seen[$key])) continue;
+    $seen[$key] = true;
+    $modules[] = ["name" => $t, "custom" => false];
+}
+foreach ($customMods as $c) {
+    $key = mb_strtolower($c);
+    if (isset($seen[$key])) continue;
+    $seen[$key] = true;
+    $modules[] = ["name" => $c, "custom" => true];
+}
+
+$pageTitle = "Study Counter";
+require_once __DIR__ . "/includes/header.php";
+?>
+
+<style>
+main.container {
+    max-width: 1600px;
+}
+
+.study-head {
+    margin-bottom: 8px;
+}
+
+.study-sub {
+    margin: 0 0 24px;
+    color: var(--text-2);
+    max-width: 680px;
+}
+
+/* ── Podium + per-module toggle ─────────────────────────────────────────── */
+
+.podium-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.podium-bar h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.podium-toggle {
+    width: auto;
+    margin: 0;
+    padding: 8px 18px;
+}
+
+.podium-views {
+    position: relative;
+    margin-bottom: 36px;
+}
+
+.podium-view {
+    transition: opacity var(--t-med) var(--ease-out);
+}
+
+.podium-view.fade-out {
+    opacity: 0;
+}
+
+.podium-sub-time {
+    font-size: 0.78rem;
+    color: var(--text-3);
+}
+
+/* Per-module mini podiums */
+.module-podium-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.module-podium {
+    padding: 16px 18px;
+}
+
+.module-podium h3 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 12px;
+    font-size: 1rem;
+}
+
+.module-dot {
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+}
+
+.module-podium .mp-custom {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--violet);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    background: var(--grad-accent-soft);
+    border-radius: var(--radius-full);
+    padding: 1px 7px;
+}
+
+.mp-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mp-row:last-child { border-bottom: none; }
+
+.mp-rank {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 50%;
+}
+
+.mp-rank.r1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.mp-rank.r2 { background: linear-gradient(135deg, #d1d5db, #9ca3af); }
+.mp-rank.r3 { background: linear-gradient(135deg, #d97706, #92400e); }
+
+.mp-name { flex: 1; font-weight: 600; font-size: 0.9rem; }
+.mp-time { font-family: var(--font-display); font-weight: 700; font-size: 0.9rem; }
+
+/* ── Logging panel ──────────────────────────────────────────────────────── */
+
+.log-layout {
+    display: grid;
+    grid-template-columns: 380px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 36px;
+}
+
+@media (max-width: 980px) {
+    .log-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.log-panel {
+    padding: 22px;
+}
+
+.log-panel h2 {
+    margin: 0 0 16px;
+    font-size: 1.15rem;
+}
+
+.module-picker label {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.new-module-wrap {
+    display: none;
+    margin-top: -8px;
+}
+
+.new-module-wrap.show { display: block; }
+
+.module-hint {
+    margin: -8px 0 14px;
+    font-size: 0.78rem;
+    color: var(--text-3);
+}
+
+.mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.mode-tab {
+    flex: 1;
+    width: auto;
+    margin: 0;
+}
+
+.mode-tab.active {
+    background: var(--grad-accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--glow-violet);
+}
+
+.mode-pane { display: none; }
+.mode-pane.active { display: block; }
+
+.timer-display {
+    font-family: var(--font-display);
+    font-size: 3.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+    text-align: center;
+    letter-spacing: 0.01em;
+    margin: 6px 0 16px;
+}
+
+.timer-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.timer-controls button { margin: 0; flex: 1; }
+
+.manual-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.manual-grid .full { grid-column: 1 / -1; }
+
+.log-feedback {
+    margin: 12px 0 0;
+    font-size: 0.85rem;
+    color: var(--success);
+    min-height: 1.1em;
+}
+
+.log-feedback.error { color: var(--danger); }
+
+/* ── Chart ──────────────────────────────────────────────────────────────── */
+
+.chart-panel {
+    padding: 22px;
+}
+
+.chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.chart-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.week-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.week-nav button {
+    width: auto;
+    margin: 0;
+    padding: 6px 12px;
+    line-height: 1;
+}
+
+.week-nav button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.week-label {
+    min-width: 168px;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-2);
+}
+
+.chart-area {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 18px;
+    height: 320px;
+}
+
+.chart-yaxis {
+    position: relative;
+    width: 42px;
+    flex-shrink: 0;
+}
+
+.y-tick {
+    position: absolute;
+    right: 0;
+    transform: translateY(50%);
+    font-size: 0.68rem;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+.chart-plot {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    border-left: 1px solid var(--glass-border);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 0 4px;
+}
+
+.grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.day-col {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    height: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+}
+
+.user-bar {
+    position: relative;
+    width: 100%;
+    max-width: 30px;
+    min-height: 3px;
+    border: 2px solid var(--user-color, var(--violet));
+    border-radius: 6px 6px 4px 4px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: default;
+    transition: filter var(--t-fast);
+}
+
+.user-bar:hover { filter: brightness(1.18); }
+
+.bar-fill {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column-reverse; /* stack modules from the bottom up */
+    border-radius: 4px 4px 3px 3px;
+    overflow: hidden;
+}
+
+.module-seg {
+    width: 100%;
+    min-height: 2px;
+}
+
+.bar-total {
+    position: absolute;
+    top: -17px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--text-3);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.chart-xaxis {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.chart-xaxis .xaxis-spacer {
+    width: 42px;
+    flex-shrink: 0;
+}
+
+.chart-xaxis .xaxis-cols {
+    flex: 1;
+    display: flex;
+    gap: 6px;
+    padding: 0 4px;
+}
+
+.day-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.74rem;
+    line-height: 1.25;
+    color: var(--text-3);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.day-label.is-today {
+    color: var(--text-1);
+    font-weight: 700;
+}
+
+.chart-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+    font-size: 0.92rem;
+}
+
+/* Legends */
+.legends {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    margin-top: 22px;
+}
+
+.legend-group h4 {
+    margin: 0 0 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.83rem;
+    color: var(--text-2);
+}
+
+.legend-swatch {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.legend-swatch.outline {
+    background: transparent;
+    border: 2px solid var(--sw);
+}
+
+.legend-item.custom::after {
+    content: "custom";
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--violet);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    border-radius: var(--radius-full);
+    padding: 0 6px;
+}
+
+/* Floating tooltip */
+.chart-tooltip {
+    position: fixed;
+    z-index: 300;
+    pointer-events: none;
+    padding: 8px 11px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--text-1);
+    background: rgba(16, 16, 30, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-card);
+    opacity: 0;
+    transition: opacity var(--t-fast);
+}
+
+.chart-tooltip.show { opacity: 1; }
+
+.chart-tooltip .tt-user { font-weight: 700; }
+.chart-tooltip .tt-mod  { color: var(--text-2); }
+.chart-tooltip .tt-time { color: var(--text-1); font-weight: 600; }
+
+@media (max-width: 560px) {
+    .chart-area { height: 240px; }
+    .user-bar { border-width: 1.5px; }
+    .manual-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+<h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
+<p class="study-sub">
+    Time your study sessions live or log ones you did offline. Pick a module from the
+    exam calendar or add your own — custom modules join the shared list for everyone.
+</p>
+
+<!-- ── Podium ─────────────────────────────────────────────────────────────── -->
+<div class="podium-bar">
+    <h2>🏆 Most hours studied</h2>
+    <button type="button" class="btn podium-toggle" id="podium-toggle">Per module</button>
+</div>
+
+<div class="podium-views">
+    <div class="podium-view" id="podium-overall">
+        <div class="podium" id="overall-podium" style="display:none;"></div>
+        <p class="muted" id="overall-empty" style="display:none;">No study sessions logged yet.</p>
+    </div>
+    <div class="podium-view fade-out" id="podium-modules" style="display:none;">
+        <div class="module-podium-grid" id="module-podium-grid"></div>
+        <p class="muted" id="modules-empty" style="display:none;">No study sessions logged yet.</p>
+    </div>
+</div>
+
+<!-- ── Logging + chart ────────────────────────────────────────────────────── -->
+<div class="log-layout">
+
+    <section class="log-panel glass-card">
+        <h2>Log a session</h2>
+
+        <div class="module-picker">
+            <label for="module-select">Module</label>
+            <select id="module-select">
+                <?php foreach ($modules as $i => $m): ?>
+                    <option value="<?= htmlspecialchars($m["name"]) ?>">
+                        <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
+                    </option>
+                <?php endforeach; ?>
+                <option value="__new__">+ Add new module…</option>
+            </select>
+
+            <div class="new-module-wrap" id="new-module-wrap">
+                <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
+                <p class="module-hint">This module will join the shared list for everyone.</p>
+            </div>
+        </div>
+
+        <div class="mode-tabs">
+            <button type="button" class="btn mode-tab active" data-mode="timer">Timer</button>
+            <button type="button" class="btn mode-tab" data-mode="manual">Manual</button>
+        </div>
+
+        <!-- Timer -->
+        <div class="mode-pane active" id="pane-timer">
+            <div class="timer-display" id="timer-display">00:00</div>
+            <div class="timer-controls">
+                <button type="button" class="btn-primary" id="timer-start">Start</button>
+                <button type="button" class="btn" id="timer-reset">Reset</button>
+            </div>
+            <button type="button" class="btn-primary" id="timer-log">Log this session</button>
+        </div>
+
+        <!-- Manual -->
+        <div class="mode-pane" id="pane-manual">
+            <div class="manual-grid">
+                <div>
+                    <label for="manual-hours">Hours</label>
+                    <input type="number" id="manual-hours" min="0" max="24" step="1" value="0">
+                </div>
+                <div>
+                    <label for="manual-minutes">Minutes</label>
+                    <input type="number" id="manual-minutes" min="0" max="59" step="1" value="30">
+                </div>
+                <div class="full">
+                    <label for="manual-date">Date</label>
+                    <input type="date" id="manual-date">
+                </div>
+            </div>
+            <button type="button" class="btn-primary" id="manual-log">Log session</button>
+        </div>
+
+        <p class="log-feedback" id="log-feedback"></p>
+    </section>
+
+    <section class="chart-panel glass-card">
+        <div class="chart-head">
+            <h2>Hours per day</h2>
+            <div class="week-nav">
+                <button type="button" class="btn" id="week-prev" aria-label="Previous week">‹</button>
+                <span class="week-label" id="week-label">This week</span>
+                <button type="button" class="btn" id="week-next" aria-label="Next week">›</button>
+            </div>
+        </div>
+
+        <div class="chart-area">
+            <div class="chart-yaxis" id="chart-yaxis"></div>
+            <div class="chart-plot" id="chart-plot"></div>
+            <div class="chart-empty" id="chart-empty" style="display:none;">No study sessions this week.</div>
+        </div>
+        <div class="chart-xaxis">
+            <div class="xaxis-spacer"></div>
+            <div class="xaxis-cols" id="chart-xaxis"></div>
+        </div>
+
+        <div class="legends">
+            <div class="legend-group">
+                <h4>Users <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400;">(bar outline)</span></h4>
+                <div class="legend-items" id="legend-users"></div>
+            </div>
+            <div class="legend-group">
+                <h4>Modules <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400;">(bar fill)</span></h4>
+                <div class="legend-items" id="legend-modules"></div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<div class="chart-tooltip" id="chart-tooltip"></div>
+
+<script>
+(function () {
+    const BASE_PATH   = "<?= BASE_PATH ?>";
+    const MY_USERNAME = <?= json_encode($_SESSION["username"] ?? "") ?>;
+    const MODULES     = <?= json_encode($modules) ?>;
+
+    // Two distinct palettes: outlines for users, fills for modules.
+    const USER_COLORS = [
+        "#f472b6", "#f59e0b", "#22d3ee", "#a3e635",
+        "#fb7185", "#c084fc", "#facc15", "#2dd4bf",
+    ];
+    const MODULE_COLORS = [
+        "#8b5cf6", "#3b82f6", "#34d399", "#fbbf24",
+        "#ef4444", "#ec4899", "#14b8a6", "#f97316",
+        "#a855f7", "#06b6d4", "#84cc16", "#eab308",
+        "#6366f1", "#10b981", "#d946ef", "#f43f5e",
+    ];
+
+    // ── Date helpers (all local time) ─────────────────────────────────────
+    function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+    function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+    function toDateStr(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    }
+    function mondayOf(d) {
+        const x = startOfDay(d);
+        const dow = (x.getDay() + 6) % 7; // 0 = Monday
+        return addDays(x, -dow);
+    }
+
+    function fmtTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        if (m > 0) return `${m}m`;
+        return `${seconds}s`;
+    }
+    function fmtClock(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        const mm = String(m).padStart(2, "0");
+        const ss = String(s).padStart(2, "0");
+        return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    }
+
+    // ── Color maps ────────────────────────────────────────────────────────
+    const moduleColor = {};
+    MODULES.forEach((m, i) => { moduleColor[m.name] = MODULE_COLORS[i % MODULE_COLORS.length]; });
+    const moduleCustom = {};
+    MODULES.forEach(m => { moduleCustom[m.name] = !!m.custom; });
+
+    // User colors assigned once from all usernames seen (stable across weeks).
+    const userColor = {};
+    function assignUserColors(usernames) {
+        usernames.slice().sort().forEach((u, i) => {
+            if (!(u in userColor)) userColor[u] = USER_COLORS[Object.keys(userColor).length % USER_COLORS.length];
+        });
+    }
+
+    // ── State ─────────────────────────────────────────────────────────────
+    let SESSIONS = [];     // [{username, module, date, seconds}]
+    let weekOffset = 0;    // 0 = current week, -1 = previous, ...
+
+    const plotEl    = document.getElementById("chart-plot");
+    const yAxisEl   = document.getElementById("chart-yaxis");
+    const emptyEl   = document.getElementById("chart-empty");
+    const weekLabel = document.getElementById("week-label");
+    const tooltip   = document.getElementById("chart-tooltip");
+
+    // ── Tooltip ───────────────────────────────────────────────────────────
+    function showTooltip(html, x, y) {
+        tooltip.innerHTML = html;
+        tooltip.classList.add("show");
+        const pad = 14;
+        let left = x + pad, top = y + pad;
+        const r = tooltip.getBoundingClientRect();
+        if (left + r.width > window.innerWidth) left = x - r.width - pad;
+        if (top + r.height > window.innerHeight) top = y - r.height - pad;
+        tooltip.style.left = left + "px";
+        tooltip.style.top  = top + "px";
+    }
+    function hideTooltip() { tooltip.classList.remove("show"); }
+
+    // ── Chart render ──────────────────────────────────────────────────────
+    function renderChart() {
+        const weekStart = addDays(mondayOf(new Date()), weekOffset * 7);
+        const weekDays = [];
+        for (let i = 0; i < 7; i++) weekDays.push(addDays(weekStart, i));
+        const todayStr = toDateStr(startOfDay(new Date()));
+
+        // Week label
+        const wkEnd = weekDays[6];
+        const opts = { month: "short", day: "numeric" };
+        if (weekOffset === 0) {
+            weekLabel.textContent = "This week";
+        } else {
+            weekLabel.textContent =
+                `${weekStart.toLocaleDateString(undefined, opts)} – ${wkEnd.toLocaleDateString(undefined, opts)}`;
+        }
+        document.getElementById("week-next").disabled = weekOffset >= 0;
+
+        // Aggregate: date -> user -> { module -> seconds, total }
+        const byDay = {};
+        weekDays.forEach(d => { byDay[toDateStr(d)] = {}; });
+
+        SESSIONS.forEach(s => {
+            if (!(s.date in byDay)) return;
+            const day = byDay[s.date];
+            if (!day[s.username]) day[s.username] = { total: 0, mods: {} };
+            day[s.username].mods[s.module] = (day[s.username].mods[s.module] || 0) + s.seconds;
+            day[s.username].total += s.seconds;
+        });
+
+        // Scale: round max up to a sensible hour boundary
+        let maxTotal = 0;
+        Object.values(byDay).forEach(day =>
+            Object.values(day).forEach(u => { if (u.total > maxTotal) maxTotal = u.total; }));
+
+        const hasData = maxTotal > 0;
+        emptyEl.style.display = hasData ? "none" : "flex";
+
+        // Axis top: at least 1h, rounded up to the next hour.
+        const axisTop = Math.max(3600, Math.ceil(maxTotal / 3600) * 3600);
+
+        // Y axis ticks
+        yAxisEl.innerHTML = "";
+        plotEl.querySelectorAll(".grid-line").forEach(el => el.remove());
+        const hours = axisTop / 3600;
+        const tickStep = hours <= 6 ? 1 : Math.ceil(hours / 6);
+        for (let h = 0; h <= hours; h += tickStep) {
+            const frac = h / hours; // 0 bottom .. 1 top
+            const tick = document.createElement("div");
+            tick.className = "y-tick";
+            tick.style.bottom = (frac * 100) + "%";
+            tick.textContent = h + "h";
+            yAxisEl.appendChild(tick);
+
+            const line = document.createElement("div");
+            line.className = "grid-line";
+            line.style.bottom = (frac * 100) + "%";
+            plotEl.appendChild(line);
+        }
+
+        // Day columns
+        // Remove previous day columns (keep grid lines)
+        plotEl.querySelectorAll(".day-col").forEach(el => el.remove());
+        const xAxis = document.getElementById("chart-xaxis");
+        xAxis.innerHTML = "";
+
+        weekDays.forEach(d => {
+            const dateStr = toDateStr(d);
+            const col = document.createElement("div");
+            col.className = "day-col";
+
+            const bars = col; // bars stack directly inside the day column
+
+            const dayUsers = byDay[dateStr];
+            // Stable user order
+            Object.keys(dayUsers).sort().forEach(username => {
+                const u = dayUsers[username];
+                const bar = document.createElement("div");
+                bar.className = "user-bar";
+                bar.style.setProperty("--user-color", userColor[username] || "#8b5cf6");
+                bar.style.height = ((u.total / axisTop) * 100) + "%";
+
+                // Total label above the bar
+                const totalLabel = document.createElement("span");
+                totalLabel.className = "bar-total";
+                totalLabel.textContent = fmtTime(u.total);
+                bar.appendChild(totalLabel);
+
+                // Module segments — largest at the bottom for a stable look
+                const fill = document.createElement("div");
+                fill.className = "bar-fill";
+                const segs = Object.entries(u.mods).sort((a, b) => b[1] - a[1]);
+                segs.forEach(([mod, secs]) => {
+                    const seg = document.createElement("div");
+                    seg.className = "module-seg";
+                    seg.style.height = ((secs / u.total) * 100) + "%";
+                    seg.style.background = moduleColor[mod] || "#64748b";
+                    fill.appendChild(seg);
+                });
+                bar.appendChild(fill);
+
+                // Tooltip listeners on the bar (lists all modules)
+                bar.addEventListener("mousemove", (e) => {
+                    const rows = segs.map(([mod, secs]) =>
+                        `<div class="tt-mod"><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:${moduleColor[mod] || "#64748b"};margin-right:6px;"></span>${escapeHtml(mod)} · <span class="tt-time">${fmtTime(secs)}</span></div>`
+                    ).join("");
+                    showTooltip(
+                        `<div class="tt-user">${escapeHtml(username)} — ${fmtTime(u.total)}</div>${rows}`,
+                        e.clientX, e.clientY
+                    );
+                });
+                bar.addEventListener("mouseleave", hideTooltip);
+
+                bars.appendChild(bar);
+            });
+
+            plotEl.appendChild(col);
+
+            const label = document.createElement("div");
+            label.className = "day-label" + (dateStr === todayStr ? " is-today" : "");
+            label.innerHTML = d.toLocaleDateString(undefined, { weekday: "short" }) +
+                "<br>" + d.getDate();
+            xAxis.appendChild(label);
+        });
+    }
+
+    // ── Podiums ───────────────────────────────────────────────────────────
+    function userTotals() {
+        const totals = {};
+        SESSIONS.forEach(s => { totals[s.username] = (totals[s.username] || 0) + s.seconds; });
+        return totals;
+    }
+
+    function buildOverallPodium() {
+        const totals = userTotals();
+        const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+        const podium = document.getElementById("overall-podium");
+        const empty  = document.getElementById("overall-empty");
+
+        if (ranked.length === 0) {
+            podium.style.display = "none";
+            empty.style.display = "block";
+            return;
+        }
+        empty.style.display = "none";
+
+        const top = ranked.slice(0, 3);
+        podium.innerHTML = top.map(([username, secs], i) => {
+            const rank = i + 1;
+            return `
+                <div class="podium-card glass-card rank-${rank}">
+                    <span class="podium-medal">${rank}</span>
+                    <div class="podium-name">${escapeHtml(username)}</div>
+                    <div class="podium-score gradient-text">${fmtTime(secs)}</div>
+                    <div class="podium-sub podium-sub-time">total studied</div>
+                </div>
+            `;
+        }).join("");
+        podium.style.display = "flex";
+    }
+
+    function buildModulePodiums() {
+        // module -> user -> seconds
+        const byModule = {};
+        SESSIONS.forEach(s => {
+            if (!byModule[s.module]) byModule[s.module] = {};
+            byModule[s.module][s.username] = (byModule[s.module][s.username] || 0) + s.seconds;
+        });
+
+        const grid  = document.getElementById("module-podium-grid");
+        const empty = document.getElementById("modules-empty");
+
+        const moduleNames = Object.keys(byModule);
+        if (moduleNames.length === 0) {
+            grid.innerHTML = "";
+            empty.style.display = "block";
+            return;
+        }
+        empty.style.display = "none";
+
+        // Order modules by total time studied (desc)
+        moduleNames.sort((a, b) => {
+            const ta = Object.values(byModule[a]).reduce((x, y) => x + y, 0);
+            const tb = Object.values(byModule[b]).reduce((x, y) => x + y, 0);
+            return tb - ta;
+        });
+
+        grid.innerHTML = moduleNames.map(mod => {
+            const ranked = Object.entries(byModule[mod]).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            const color = moduleColor[mod] || "#64748b";
+            const customBadge = moduleCustom[mod] ? `<span class="mp-custom">custom</span>` : "";
+            const rows = ranked.map(([username, secs], i) => `
+                <div class="mp-row">
+                    <span class="mp-rank r${i + 1}">${i + 1}</span>
+                    <span class="mp-name">${escapeHtml(username)}</span>
+                    <span class="mp-time">${fmtTime(secs)}</span>
+                </div>
+            `).join("");
+            return `
+                <div class="module-podium glass-card">
+                    <h3><span class="module-dot" style="background:${color}"></span>${escapeHtml(mod)}${customBadge}</h3>
+                    ${rows}
+                </div>
+            `;
+        }).join("");
+    }
+
+    // ── Legends ───────────────────────────────────────────────────────────
+    function buildLegends() {
+        const usersSeen = Object.keys(userTotals()).sort();
+        const lu = document.getElementById("legend-users");
+        lu.innerHTML = usersSeen.length === 0
+            ? `<span class="muted">—</span>`
+            : usersSeen.map(u => `
+                <span class="legend-item">
+                    <span class="legend-swatch outline" style="--sw:${userColor[u] || "#8b5cf6"}"></span>
+                    ${escapeHtml(u)}
+                </span>
+            `).join("");
+
+        // Only show modules that have been studied
+        const studied = {};
+        SESSIONS.forEach(s => { studied[s.module] = true; });
+        const lm = document.getElementById("legend-modules");
+        const mods = MODULES.filter(m => studied[m.name]);
+        lm.innerHTML = mods.length === 0
+            ? `<span class="muted">—</span>`
+            : mods.map(m => `
+                <span class="legend-item ${m.custom ? "custom" : ""}">
+                    <span class="legend-swatch" style="background:${moduleColor[m.name]}"></span>
+                    ${escapeHtml(m.name)}
+                </span>
+            `).join("");
+    }
+
+    // ── Podium toggle (fade) ──────────────────────────────────────────────
+    let showingModules = false;
+    const toggleBtn   = document.getElementById("podium-toggle");
+    const viewOverall = document.getElementById("podium-overall");
+    const viewModules = document.getElementById("podium-modules");
+
+    toggleBtn.addEventListener("click", () => {
+        const current = showingModules ? viewModules : viewOverall;
+        const next    = showingModules ? viewOverall : viewModules;
+        current.classList.add("fade-out");
+        setTimeout(() => {
+            current.style.display = "none";
+            next.style.display = "block";
+            // allow layout, then fade in
+            requestAnimationFrame(() => next.classList.remove("fade-out"));
+        }, 280);
+        showingModules = !showingModules;
+        toggleBtn.textContent = showingModules ? "Overall" : "Per module";
+    });
+
+    // ── Data load + full render ───────────────────────────────────────────
+    function renderAll() {
+        assignUserColors(Object.keys(userTotals()));
+        buildOverallPodium();
+        buildModulePodiums();
+        buildLegends();
+        renderChart();
+    }
+
+    function loadData() {
+        return fetch(BASE_PATH + "/api/get-study-data.php")
+            .then(r => { if (!r.ok) throw new Error("Failed to load study data."); return r.json(); })
+            .then(data => {
+                SESSIONS = data.sessions || [];
+                renderAll();
+            })
+            .catch(() => {
+                emptyEl.textContent = "Could not load study data.";
+                emptyEl.style.display = "flex";
+            });
+    }
+
+    // ── Week navigation ───────────────────────────────────────────────────
+    document.getElementById("week-prev").addEventListener("click", () => {
+        weekOffset -= 1;
+        renderChart();
+    });
+    document.getElementById("week-next").addEventListener("click", () => {
+        if (weekOffset >= 0) return;
+        weekOffset += 1;
+        renderChart();
+    });
+
+    // ── Module picker (reveal new-module input) ───────────────────────────
+    const moduleSelect = document.getElementById("module-select");
+    const newWrap      = document.getElementById("new-module-wrap");
+    const newInput     = document.getElementById("new-module-input");
+
+    moduleSelect.addEventListener("change", () => {
+        const isNew = moduleSelect.value === "__new__";
+        newWrap.classList.toggle("show", isNew);
+        if (isNew) newInput.focus();
+    });
+
+    // No default modules yet → the only option is "+ Add new module…".
+    if (moduleSelect.value === "__new__") newWrap.classList.add("show");
+
+    function selectedModulePayload() {
+        if (moduleSelect.value === "__new__") {
+            const name = newInput.value.trim();
+            if (name === "") return { error: "Enter a name for the new module." };
+            return { new_module: name };
+        }
+        return { module: moduleSelect.value };
+    }
+
+    // ── Feedback ──────────────────────────────────────────────────────────
+    const feedback = document.getElementById("log-feedback");
+    function setFeedback(msg, isError) {
+        feedback.textContent = msg;
+        feedback.classList.toggle("error", !!isError);
+    }
+
+    function submitSession(seconds, studiedOn, onDone) {
+        const mod = selectedModulePayload();
+        if (mod.error) { setFeedback(mod.error, true); return; }
+        if (!seconds || seconds <= 0) { setFeedback("Nothing to log yet.", true); return; }
+
+        const body = new FormData();
+        body.append("seconds", seconds);
+        if (studiedOn) body.append("studied_on", studiedOn);
+        if (mod.module)     body.append("module", mod.module);
+        if (mod.new_module) body.append("new_module", mod.new_module);
+
+        setFeedback("Saving…", false);
+        fetch(BASE_PATH + "/api/log-study-session.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Save failed."); }))
+            .then(res => {
+                setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
+                if (onDone) onDone();
+                // A new custom module changes the shared list — reload to pick up
+                // colors, legend, and the dropdown entry.
+                if (res.custom && moduleSelect.value === "__new__") {
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    loadData();
+                }
+            })
+            .catch(err => setFeedback(err.message, true));
+    }
+
+    // ── Mode tabs ─────────────────────────────────────────────────────────
+    document.querySelectorAll(".mode-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".mode-tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".mode-pane").forEach(p => p.classList.remove("active"));
+            tab.classList.add("active");
+            document.getElementById("pane-" + tab.dataset.mode).classList.add("active");
+        });
+    });
+
+    // ── Timer ─────────────────────────────────────────────────────────────
+    const timerDisplay = document.getElementById("timer-display");
+    const startBtn     = document.getElementById("timer-start");
+    const resetBtn     = document.getElementById("timer-reset");
+    const logBtn       = document.getElementById("timer-log");
+
+    let elapsed = 0;     // seconds
+    let running = false;
+    let tickAt  = null;  // timestamp of last tick
+    let ticker  = null;
+
+    function renderTimer() { timerDisplay.textContent = fmtClock(elapsed); }
+
+    function tick() {
+        const now = Date.now();
+        elapsed += Math.round((now - tickAt) / 1000);
+        tickAt = now;
+        renderTimer();
+    }
+
+    startBtn.addEventListener("click", () => {
+        if (running) {
+            // Pause
+            tick();
+            clearInterval(ticker);
+            running = false;
+            startBtn.textContent = "Resume";
+        } else {
+            running = true;
+            tickAt = Date.now();
+            ticker = setInterval(tick, 1000);
+            startBtn.textContent = "Pause";
+        }
+    });
+
+    resetBtn.addEventListener("click", () => {
+        clearInterval(ticker);
+        running = false;
+        elapsed = 0;
+        startBtn.textContent = "Start";
+        renderTimer();
+    });
+
+    logBtn.addEventListener("click", () => {
+        if (running) { tick(); clearInterval(ticker); running = false; startBtn.textContent = "Start"; }
+        const secs = elapsed;
+        submitSession(secs, null, () => {
+            elapsed = 0;
+            renderTimer();
+        });
+    });
+
+    renderTimer();
+
+    // ── Manual ────────────────────────────────────────────────────────────
+    const manualDate = document.getElementById("manual-date");
+    manualDate.value = toDateStr(startOfDay(new Date()));
+    manualDate.max = manualDate.value;
+
+    document.getElementById("manual-log").addEventListener("click", () => {
+        const h = parseInt(document.getElementById("manual-hours").value, 10) || 0;
+        const m = parseInt(document.getElementById("manual-minutes").value, 10) || 0;
+        const secs = h * 3600 + m * 60;
+        submitSession(secs, manualDate.value || null);
+    });
+
+    // ── Go ────────────────────────────────────────────────────────────────
+    loadData();
+}());
+</script>
+
+<?php require_once __DIR__ . "/includes/footer.php"; ?>

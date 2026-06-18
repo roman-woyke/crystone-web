@@ -147,6 +147,26 @@ CREATE TABLE typing_scores (
     duration_ms   INT NOT NULL,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Study counter (study-counter.php). Custom modules added by users join the
+-- shared list; the default modules are the distinct exam titles from `exams`.
+CREATE TABLE study_modules (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL UNIQUE,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- One row per logged study session (timer or manual). `module_name` is a plain
+-- string so sessions are decoupled from both `exams` and `study_modules`.
+CREATE TABLE study_sessions (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id),
+    module_name VARCHAR(255) NOT NULL,
+    seconds     INT NOT NULL,
+    studied_on  DATE NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
 > **Deploy note:** when merging new tables into another branch's deployment,
@@ -196,7 +216,9 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── get-leaderboard.php
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
+│   ├── get-study-data.php      ← study counter: modules + aggregated sessions
 │   ├── get-typing-scores.php   ← typing battle: best WPM per user
+│   ├── log-study-session.php   ← study counter: log a session (timer/manual)
 │   ├── patch-application.php
 │   ├── submit-typing-score.php ← typing battle: validated score submission
 │   └── toggle-user-exam.php    ← exam calendar checkbox toggle
@@ -219,5 +241,6 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 ├── register.php
 ├── score-chart.php        ← chart partial (included by leaderboard.php)
 ├── score-table.php        ← table partial (included by leaderboard.php)
+├── study-counter.php      ← study session tracker (timer + manual, weekly chart)
 └── typing-game.php        ← 60-second typing battle with highscores
 ```
