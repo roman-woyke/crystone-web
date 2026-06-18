@@ -377,7 +377,7 @@ main.container {
 .podium-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 12px;
     margin-bottom: 4px;
