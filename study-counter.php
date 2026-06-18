@@ -74,20 +74,23 @@ main.container {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
     gap: 28px;
-    align-items: start;
+    align-items: stretch;
 }
 
 .study-main {
     min-width: 0; /* let wide children (chart) shrink instead of overflowing */
 }
 
-/* The dock sits in its own column (no overlap), then sticks while scrolling. */
+/* The dock column fills the grid row; the card inside sticks while scrolling. */
 .studying-dock {
-    position: sticky;
-    top: 78px;
+    display: flex;
+    flex-direction: column;
 }
 
 .dock-card {
+    position: sticky;
+    top: 78px;
+    flex: 1;
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
@@ -95,8 +98,8 @@ main.container {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
-    max-height: calc(100vh - 120px);
-    overflow-y: auto;
+    max-height: calc(100vh - 100px);
+    overflow: hidden;
 }
 
 .dock-divider {
@@ -114,13 +117,23 @@ main.container {
 
     .studying-dock {
         order: -1;
-        position: static;
-        top: auto;
+        display: block;
     }
 
     .dock-card {
+        position: static;
         max-height: none;
-        overflow-y: visible;
+        overflow: visible;
+        flex: none;
+    }
+
+    #dock-timeline {
+        flex: none;
+    }
+
+    .tl-body {
+        height: 240px;
+        flex: none;
     }
 }
 
@@ -153,9 +166,17 @@ main.container {
     white-space: nowrap;
 }
 
+#dock-timeline {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .tl-body {
     position: relative;
-    height: 240px;
+    flex: 1;
+    min-height: 120px;
     display: flex;
     gap: 4px;
 }
@@ -1720,8 +1741,16 @@ main.container {
     }
 
     function minsToHHMM(m) {
-        m = Math.max(0, Math.min(1439, Math.round(m)));
+        // Normalize to 0–1439 (handles extended minutes > 1440 for midnight crossings)
+        m = ((Math.round(m) % 1440) + 1440) % 1440;
         return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+    }
+
+    // Convert a session's end HH:MM to extended minutes (adds 1440 if it crosses midnight).
+    function extMins(startM, endHHMM) {
+        let e = hhmm2mins(endHHMM);
+        if (e < startM - 30) e += 1440; // end < start → midnight crossing
+        return e;
     }
 
     function renderTimeline(recap) {
@@ -1729,25 +1758,32 @@ main.container {
         const tl = document.getElementById("dock-timeline");
         if (!tl) return;
 
-        const now     = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const now        = new Date();
+        const nowMinsRaw = now.getHours() * 60 + now.getMinutes();
 
-        // Build session list: logged sessions + currently-running live blocks
-        const sessions = lastRecap.map(r => ({ ...r, live: false }));
+        // ── Build raw session list (logged + live running) ────────────────────
+        const rawSessions = lastRecap.map(r => ({ ...r, live: false }));
         studyingEntries.filter(s => s.elapsed > 30).forEach(s => {
-            const startMins = Math.max(0, nowMins - Math.floor(s.elapsed / 60));
-            sessions.push({
-                username:      s.username,
-                module:        s.module || null,
-                seconds:       s.elapsed,
-                start:         minsToHHMM(startMins),
-                end:           minsToHHMM(nowMins),
-                live:          true,
-                liveStartMins: startMins,
+            const startMins = Math.max(0, nowMinsRaw - Math.floor(s.elapsed / 60));
+            rawSessions.push({
+                username: s.username,
+                module:   s.module || null,
+                seconds:  s.elapsed,
+                start:    minsToHHMM(startMins),
+                end:      minsToHHMM(nowMinsRaw),
+                live:     true,
             });
         });
 
-        // All users visible today (running + on break + logged sessions)
+        // ── Convert to extended minutes (handles midnight crossings) ──────────
+        // e.g. start=23:40 end=00:05 → startM=1420 endM=1445
+        const sessions = rawSessions.map(s => {
+            const startM = hhmm2mins(s.start);
+            const endM   = extMins(startM, s.end);
+            return { ...s, startM, endM };
+        });
+
+        // ── All users visible today ───────────────────────────────────────────
         const userSet = new Set([
             ...studyingEntries.map(s => s.username),
             ...breakEntries.map(s => s.username),
@@ -1762,11 +1798,18 @@ main.container {
 
         assignUserColors(allUsers);
 
-        // Time range: floor earliest start to the hour, ceil end to next hour
-        const allMins    = sessions.flatMap(s => [hhmm2mins(s.start), hhmm2mins(s.end)]);
-        const earliest   = allMins.length > 0 ? Math.min(...allMins) : Math.max(0, nowMins - 60);
+        // ── nowMins in extended coordinates ───────────────────────────────────
+        // If late-night sessions exist and we're just past midnight, shift forward.
+        const maxEndM = sessions.length > 0 ? Math.max(...sessions.map(s => s.endM)) : nowMinsRaw;
+        let nowMins = nowMinsRaw;
+        if (maxEndM > 1380 && nowMinsRaw < 120) nowMins += 1440;
+
+        // ── Time range ────────────────────────────────────────────────────────
+        const allStartM = sessions.map(s => s.startM);
+        const allEndM   = sessions.map(s => s.endM);
+        const earliest  = allStartM.length > 0 ? Math.min(...allStartM) : Math.max(0, nowMins - 60);
         tlRangeStart = Math.floor(earliest / 60) * 60;
-        tlRangeEnd   = Math.ceil(Math.max(nowMins + 1, allMins.length > 0 ? Math.max(...allMins) : nowMins) / 60) * 60;
+        tlRangeEnd   = Math.ceil(Math.max(nowMins + 1, allEndM.length > 0 ? Math.max(...allEndM) : nowMins) / 60) * 60;
         if (tlRangeEnd <= tlRangeStart) tlRangeEnd = tlRangeStart + 60;
         const span = tlRangeEnd - tlRangeStart;
 
@@ -1802,13 +1845,11 @@ main.container {
                         ${allUsers.map(u => {
                             const color = userColor[u] || "#8b5cf6";
                             return `<div class="tl-col">${(byUser[u] || []).map(s => {
-                                const startM  = hhmm2mins(s.start);
-                                const endM    = hhmm2mins(s.end);
-                                const blockH  = (Math.max(endM - startM, 2) / span * 100).toFixed(2) + "%";
-                                const liveAttr = s.live ? ` data-live-start="${s.liveStartMins}"` : "";
+                                const blockH   = (Math.max(s.endM - s.startM, 2) / span * 100).toFixed(2) + "%";
+                                const liveAttr = s.live ? ` data-live-start="${s.startM}"` : "";
                                 const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds);
                                 return `<div class="tl-block ${s.live ? "live" : ""}"${liveAttr}
-                                     style="top:${pct(startM)};height:${blockH};background:${color};"
+                                     style="top:${pct(s.startM)};height:${blockH};background:${color};"
                                      title="${tip}">${s.module ? `<span class="tl-block-label">${escapeHtml(s.module)}</span>` : ""}</div>`;
                             }).join("")}</div>`;
                         }).join("")}
@@ -1821,8 +1862,10 @@ main.container {
     function tickTimeline() {
         const nowLine = document.getElementById("tl-now-line");
         if (!nowLine) return;
-        const now     = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        const now = new Date();
+        let nowMins = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        // Post-midnight: if range extends past midnight, shift nowMins into extended coords.
+        if (tlRangeEnd > 1380 && nowMins < 120) nowMins += 1440;
         if (nowMins > tlRangeEnd) { renderTimeline(lastRecap); return; }
         const span = tlRangeEnd - tlRangeStart;
         const pct  = (m) => ((m - tlRangeStart) / span * 100).toFixed(3) + "%";
