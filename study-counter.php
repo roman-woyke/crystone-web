@@ -1396,6 +1396,11 @@ main.container {
     const studyingList   = document.getElementById("studying-list");
     const toggleStudyBtn = document.getElementById("studying-toggle");
 
+    // Last list from the server + when we synced it, so chips can tick locally
+    // between polls instead of sitting frozen for 15s.
+    let studyingEntries = [];
+    let studyingSyncTs  = Date.now();
+
     function renderToggleButton() {
         const timing   = myState.active && myState.mode === "timer";
         const presence = myState.active && myState.mode === "presence";
@@ -1407,33 +1412,54 @@ main.container {
     }
 
     function renderStudying(list) {
-        if (!list || list.length === 0) {
+        studyingEntries = list || [];
+        studyingSyncTs  = Date.now();
+
+        if (studyingEntries.length === 0) {
             studyingList.innerHTML = `<span class="muted">Nobody's studying right now.</span>`;
             return;
         }
-        studyingList.innerHTML = list.map(s => {
+        studyingList.innerHTML = studyingEntries.map((s, i) => {
             const isMe = s.username === MY_USERNAME;
             let dotCls = "pulse-dot";
-            let meta;
+            let metaHtml;
             if (s.mode === "timer") {
+                const mod = s.module ? " · " + escapeHtml(s.module) : "";
                 if (s.running) {
-                    meta = `${fmtTime(s.elapsed)}${s.module ? " · " + s.module : ""}`;
+                    // .chip-time is updated live by tickStudying().
+                    metaHtml = `<span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${mod}`;
                 } else {
                     dotCls += " paused";
-                    meta = `paused${s.module ? " · " + s.module : ""}`;
+                    metaHtml = `paused${mod}`;
                 }
             } else {
                 dotCls += " presence";
-                meta = "studying";
+                metaHtml = "studying";
             }
             return `
                 <span class="studying-chip ${isMe ? "me" : ""}">
                     <span class="${dotCls}"></span>
                     ${escapeHtml(s.username)}
-                    <span class="chip-meta">${escapeHtml(meta)}</span>
+                    <span class="chip-meta">${metaHtml}</span>
                 </span>
             `;
         }).join("");
+    }
+
+    // Tick the running-timer chips every second (re-synced to the server on
+    // each poll). My own chip mirrors the main display exactly.
+    function tickStudying() {
+        if (studyingEntries.length === 0) return;
+        const delta = Math.floor((Date.now() - studyingSyncTs) / 1000);
+        studyingEntries.forEach((s, i) => {
+            if (s.mode !== "timer" || !s.running) return;
+            const el = studyingList.querySelector(`.chip-time[data-idx="${i}"]`);
+            if (!el) return;
+            const secs = (s.username === MY_USERNAME && myState.active && myState.running)
+                ? myState.elapsed
+                : s.elapsed + delta;
+            el.textContent = fmtClock(secs);
+        });
     }
 
     toggleStudyBtn.addEventListener("click", () => {
@@ -1451,7 +1477,9 @@ main.container {
             .catch(() => { /* keep previous state on a transient error */ });
     }
 
-    // Keep presence + my own timer fresh (covers other tabs and other users).
+    // Tick the studying chips locally every second; re-sync from the server
+    // every 15s (covers other tabs and other users).
+    setInterval(tickStudying, 1000);
     setInterval(loadStatus, 15000);
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) loadStatus();
