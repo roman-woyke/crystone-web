@@ -529,10 +529,6 @@ main.container {
     margin: 16px 0 8px;
 }
 
-#stop-new-module {
-    margin-bottom: 8px;
-}
-
 .mode-tabs {
     display: flex;
     gap: 8px;
@@ -1067,10 +1063,21 @@ main.container {
 <div id="stop-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card">
         <h3>Log this study session?</h3>
-        <p class="muted">You studied <strong id="stop-modal-time">0m</strong>. Choose a module to log it under, or discard it.</p>
+        <p class="muted" id="stop-modal-sub">You studied <strong id="stop-modal-time">0m</strong>. Pick a module to save it, or discard it.</p>
 
-        <select id="stop-module-sel"></select>
-        <input type="text" id="stop-new-module" placeholder="New module name" maxlength="255" style="display:none;">
+        <label for="stop-module-select">Module</label>
+        <select id="stop-module-select">
+            <?php foreach ($modules as $m): ?>
+                <option value="<?= htmlspecialchars($m["name"]) ?>">
+                    <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
+                </option>
+            <?php endforeach; ?>
+            <option value="__new__">+ Add new module…</option>
+        </select>
+        <div class="new-module-wrap" id="stop-new-module-wrap">
+            <input type="text" id="stop-new-module-input" maxlength="255" placeholder="New module name">
+            <p class="module-hint">This module will join the shared list for everyone.</p>
+        </div>
 
         <div class="modal-actions">
             <button type="button" class="btn-ghost" id="stop-cancel">Cancel</button>
@@ -1830,57 +1837,54 @@ main.container {
     });
 
     // ── Stop → "log this session?" modal (split across modules) ───────────
-    const stopModal    = document.getElementById("stop-modal");
-    const stopTimeEl   = document.getElementById("stop-modal-time");
-    const stopModSel   = document.getElementById("stop-module-sel");
-    const stopNewMod   = document.getElementById("stop-new-module");
-
-    // Populate the module dropdown with the shared catalog.
-    function populateStopModuleSelect() {
-        stopModSel.innerHTML = MODULES.map(m =>
-            `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}${m.custom ? "  (custom)" : ""}</option>`
-        ).join("") + `<option value="__new__">+ Add new module…</option>`;
-    }
-
-    stopModSel.addEventListener("change", () => {
-        const isNew = stopModSel.value === "__new__";
-        stopNewMod.style.display = isNew ? "block" : "none";
-        if (isNew) stopNewMod.focus();
-    });
+    // ── Stop → "log this session?" modal ──────────────────────────────────
+    const stopModal        = document.getElementById("stop-modal");
+    const stopModuleSelect = document.getElementById("stop-module-select");
+    const stopNewWrap      = document.getElementById("stop-new-module-wrap");
+    const stopNewInput     = document.getElementById("stop-new-module-input");
+    const stopTimeEl       = document.getElementById("stop-modal-time");
 
     function openStopModal() {
         stopTimeEl.textContent = fmtTime(myState.elapsed);
-        populateStopModuleSelect();
-        // Default to whatever module is selected in the log window.
+        // Default to the module picked in the log window, when it's a real one.
         if (moduleSelect.value && moduleSelect.value !== "__new__") {
-            stopModSel.value = moduleSelect.value;
+            stopModuleSelect.value = moduleSelect.value;
         }
-        stopNewMod.style.display = "none";
-        stopNewMod.value = "";
+        stopNewInput.value = "";
+        stopNewWrap.classList.toggle("show", stopModuleSelect.value === "__new__");
         stopModal.style.display = "flex";
     }
 
-    function closeStopModal() { stopModal.style.display = "none"; }
+    function closeStopModal() {
+        stopModal.style.display = "none";
+    }
+
+    stopModuleSelect.addEventListener("change", () => {
+        const isNew = stopModuleSelect.value === "__new__";
+        stopNewWrap.classList.toggle("show", isNew);
+        if (isNew) stopNewInput.focus();
+    });
 
     document.getElementById("stop-cancel").addEventListener("click", closeStopModal);
     stopModal.addEventListener("click", (e) => { if (e.target === stopModal) closeStopModal(); });
 
-    // Discard: stop studying without recording anything.
+    // Discard: stop studying without recording a session.
     document.getElementById("stop-discard").addEventListener("click", () => {
         closeStopModal();
         timerAction("stop").catch(err => setFeedback(err.message, true));
     });
 
-    // Log: send the chosen module, then clear the timer row.
+    // Log: record the elapsed study time against the chosen module, then clear.
     document.getElementById("stop-log").addEventListener("click", () => {
         const extra = {};
-        if (stopModSel.value === "__new__") {
-            const name = stopNewMod.value.trim();
-            if (!name) { stopNewMod.focus(); return; }
+        if (stopModuleSelect.value === "__new__") {
+            const name = stopNewInput.value.trim();
+            if (name === "") { stopNewInput.focus(); return; }
             extra.new_module = name;
-        } else if (stopModSel.value) {
-            extra.module = stopModSel.value;
+        } else if (stopModuleSelect.value) {
+            extra.module = stopModuleSelect.value;
         } else {
+            stopNewInput.focus();
             return;
         }
 
@@ -1889,7 +1893,7 @@ main.container {
         timerAction("log", extra)
             .then(res => {
                 if (res.logged) {
-                    setFeedback(`Logged ${fmtTime(res.seconds)}.`, false);
+                    setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
                     loadData();
                 } else {
                     setFeedback("Session stopped — nothing to log.", false);
