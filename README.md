@@ -181,6 +181,26 @@ CREATE TABLE study_status (
     accumulated INT NOT NULL DEFAULT 0,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+-- Project time tracker (projects.php). Per-user projects with a colour and
+-- description; each logged session is one row in project_time_entries.
+CREATE TABLE projects (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id),
+    name        VARCHAR(255) NOT NULL,
+    description TEXT,
+    color       VARCHAR(20) NOT NULL DEFAULT '#8b5cf6',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE project_time_entries (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id    INT NOT NULL REFERENCES users(id),
+    seconds    INT NOT NULL,
+    note       VARCHAR(255),
+    logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
 > **Deploy note:** when merging new tables into another branch's deployment,
@@ -227,6 +247,8 @@ Interview/Offer points shown above are the net gain (the +2 from the initial PEN
 internship-leaderboard/    ← this repo (inside each subfolder)
 ├── api/                   ← JSON endpoints (called by JS fetch)
 │   ├── delete-application.php
+│   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
+│   ├── delete-time-entry.php   ← project tracker: remove a single logged session
 │   ├── get-leaderboard.php
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
@@ -234,8 +256,10 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── get-study-status.php    ← study counter: my timer + who's studying now
 │   ├── get-typing-scores.php   ← typing battle: best WPM per user
 │   ├── log-study-session.php   ← study counter: log a session (timer/manual)
+│   ├── log-time.php            ← project tracker: log time against a project
 │   ├── study-timer.php         ← study counter: persistent timer/presence state machine
 │   ├── patch-application.php
+│   ├── patch-project.php       ← project tracker: edit name/description/colour
 │   ├── submit-typing-score.php ← typing battle: validated score submission
 │   └── toggle-user-exam.php    ← exam calendar checkbox toggle
 ├── assets/
@@ -255,6 +279,7 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 ├── leaderboard.php        ← public leaderboard page
 ├── login.php
 ├── logout.php
+├── projects.php           ← project time tracker (timer + manual, per-project totals)
 ├── register.php
 ├── score-chart.php        ← chart partial (included by leaderboard.php)
 ├── score-table.php        ← table partial (included by leaderboard.php)

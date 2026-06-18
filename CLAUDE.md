@@ -52,6 +52,10 @@ All return plain text on error (non-200 status) or their payload on success:
 | `api/get-study-data.php` | GET | Study-counter data: module list (exam titles + custom, with `custom` flag) and sessions aggregated per user/module/day |
 | `api/study-timer.php` | POST | Single state machine for `study_status` (`action` = start/presence/pause/resume/reset/stop/log); `start` needs a module, `presence` is a module-less quick stopwatch, `pause`/`resume` work on either; `log` writes a `study_sessions` row server-side (or several, when given an `allocations` split); returns `{me, studying}` |
 | `api/get-study-status.php` | GET | Current study presence: my timer state (`me`), everyone currently studying (`studying`, each with `running`/`break_elapsed`), and today's logged sessions (`recap`, each with start/end time) |
+| `api/log-time.php` | POST | Log time (`seconds`, optional `note`) against an owned project; validates duration (1–86400s) and ownership; returns `OK` |
+| `api/patch-project.php` | POST | Update `name`, `description`, or `color` on an owned project; returns `OK` |
+| `api/delete-project.php` | POST | Delete an owned project plus its time entries; returns `OK` |
+| `api/delete-time-entry.php` | POST | Delete one owned `project_time_entries` row; returns `OK` |
 
 ### Ownership checks
 
@@ -95,6 +99,13 @@ The study timer is **server-backed** so it survives closing/reloading the page. 
 - `pause`/`resume` ("I'm on break" / "Resume") are mode-agnostic and operate on the single row, so the break button in the panel pauses a log-window module timer too. `api/study-timer.php` is the only endpoint that mutates `study_status`.
 - A row existing at all means the user is "currently studying". The presence UI is a **sticky, Anki-style flip card** in its own sidebar column (`.study-layout` grid; `.studying-dock` is `position: sticky` so it reserves space at top-right then floats while scrolling; the dock height tracks its content; `.flip-inner.flipped` rotates it): the **front** splits people into **running** chips (study time live-ticking) and an **"On break"** sub-container (frozen study time + a live-ticking break timer); the **back** is a day recap — a time-sorted agenda of today's logged sessions (`recap` from `studyStatusPayload`, window derived from `created_at − seconds` … `created_at`). It polls `get-study-status.php` every 15s, on `visibilitychange`, and on bfcache `pageshow`. The client ticks locally each second and re-syncs on every poll/action, so no drift accumulates. `break_elapsed` (time since the break began) is derived server-side from `updated_at`, which is only bumped when the row is paused. The log-window big display only reflects a `mode='timer'` row (with a break-timer line while paused); a `presence` stopwatch shows only in the panel chip. Starting a timer with a brand-new custom module reloads the page (the timer just resumes from the server afterward).
 - **Initial paint is server-rendered.** `study-counter.php` embeds the status payload (`studyStatusPayload`) and the aggregated sessions as `INITIAL_STATUS` / `INITIAL_SESSIONS`, and the JS paints synchronously from them on load (`renderAll()` + `applyMyState`/`renderStudying`) — no fetch round-trip, no "Loading…" flash on each visit. `get-study-data.php`/`get-study-status.php` are only used for background refresh after that.
+
+### Project tracker
+
+`projects.php` (auth-guarded) is a **per-user** time tracker (unlike the study counter, projects are private to each user — every query is scoped by `user_id`). Each project (`projects` table) has a name, description, and one of eight accent colours; each logged session is a row in `project_time_entries` (`seconds` + optional `note`). The page renders a card per project showing the total contributed time plus today / last-7-days / session-count breakdowns, computed in one aggregate SQL query; recent sessions (latest 4) are listed per card.
+
+- Time is logged two ways: a **live timer** per card and a **manual** hours/minutes modal. Unlike the study counter's server-backed timer, the project timer is **client-only** — the start epoch is kept in `localStorage` (key `project_timer_<BASE_PATH>_<id>`) so it survives reloads, and on stop the elapsed seconds POST to `api/log-time.php`. There is no shared/presence aspect.
+- `api/log-time.php` validates duration (1–86400s, capped) and project ownership before inserting. `patch-project.php` (name/description/colour, validated against the colour palette), `delete-project.php` (deletes entries then the project), and `delete-time-entry.php` all include `AND user_id = ?` ownership checks. The page reloads after any mutation rather than patching the DOM.
 
 ## Database schema
 
