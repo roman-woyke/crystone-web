@@ -23,6 +23,28 @@ foreach ($customMods as $c) {
     $modules[] = ["name" => $c, "custom" => true];
 }
 
+// ── Initial state, rendered server-side so the page paints complete on the
+//    first byte (no fetch round-trip, no "Loading…" flash on every visit). ──
+require_once __DIR__ . "/includes/study-status.php";
+$initialStatus = studyStatusPayload($pdo, $_SESSION["user_id"]);
+
+$sessStmt = $pdo->query("
+    SELECT u.username, s.module_name, s.studied_on, SUM(s.seconds) AS seconds
+    FROM study_sessions s
+    JOIN users u ON u.id = s.user_id
+    GROUP BY u.username, s.module_name, s.studied_on
+    ORDER BY s.studied_on
+");
+$initialSessions = [];
+foreach ($sessStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $initialSessions[] = [
+        "username" => $r["username"],
+        "module"   => $r["module_name"],
+        "date"     => $r["studied_on"],
+        "seconds"  => (int) $r["seconds"],
+    ];
+}
+
 $pageTitle = "Study Counter";
 require_once __DIR__ . "/includes/header.php";
 ?>
@@ -811,7 +833,9 @@ main.container {
 (function () {
     const BASE_PATH   = "<?= BASE_PATH ?>";
     const MY_USERNAME = <?= json_encode($_SESSION["username"] ?? "") ?>;
-    const MODULES     = <?= json_encode($modules) ?>;
+    const MODULES          = <?= json_encode($modules) ?>;
+    const INITIAL_STATUS   = <?= json_encode($initialStatus) ?>;
+    const INITIAL_SESSIONS = <?= json_encode($initialSessions) ?>;
 
     // Two distinct palettes: outlines for users, fills for modules.
     const USER_COLORS = [
@@ -877,7 +901,7 @@ main.container {
     }
 
     // ── State ─────────────────────────────────────────────────────────────
-    let SESSIONS = [];     // [{username, module, date, seconds}]
+    let SESSIONS = INITIAL_SESSIONS || [];  // [{username, module, date, seconds}]
     let weekOffset = 0;    // 0 = current week, -1 = previous, ...
 
     const plotEl    = document.getElementById("chart-plot");
@@ -1432,6 +1456,10 @@ main.container {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) loadStatus();
     });
+    // Restored from the back/forward cache: timers were frozen, so re-sync.
+    window.addEventListener("pageshow", (e) => {
+        if (e.persisted) loadStatus();
+    });
 
     // ── Manual ────────────────────────────────────────────────────────────
     const manualDate = document.getElementById("manual-date");
@@ -1446,8 +1474,11 @@ main.container {
     });
 
     // ── Go ────────────────────────────────────────────────────────────────
-    loadData();
-    loadStatus();
+    // Paint synchronously from the server-embedded state — no fetch, no flash.
+    // The 15s poll / visibilitychange / pageshow handlers keep it fresh after.
+    renderAll();
+    applyMyState(INITIAL_STATUS.me);
+    renderStudying(INITIAL_STATUS.studying);
 }());
 </script>
 
