@@ -12,6 +12,8 @@
 
 function studyStatusPayload(PDO $pdo, $userId): array
 {
+    // While paused, the row isn't touched, so `updated_at` marks when the break
+    // began — `break_elapsed` is the time since then.
     $rows = $pdo->query("
         SELECT
             u.id AS user_id,
@@ -19,7 +21,8 @@ function studyStatusPayload(PDO $pdo, $userId): array
             s.mode,
             s.module_name,
             s.accumulated + IF(s.started_at IS NULL, 0, TIMESTAMPDIFF(SECOND, s.started_at, NOW())) AS elapsed,
-            (s.started_at IS NOT NULL) AS running
+            (s.started_at IS NOT NULL) AS running,
+            IF(s.started_at IS NULL, TIMESTAMPDIFF(SECOND, s.updated_at, NOW()), 0) AS break_elapsed
         FROM study_status s
         JOIN users u ON u.id = s.user_id
         ORDER BY u.username
@@ -30,11 +33,12 @@ function studyStatusPayload(PDO $pdo, $userId): array
 
     foreach ($rows as $r) {
         $entry = [
-            "username" => $r["username"],
-            "mode"     => $r["mode"],
-            "module"   => $r["module_name"],
-            "elapsed"  => (int) $r["elapsed"],
-            "running"  => (bool) $r["running"],
+            "username"      => $r["username"],
+            "mode"          => $r["mode"],
+            "module"        => $r["module_name"],
+            "elapsed"       => (int) $r["elapsed"],
+            "running"       => (bool) $r["running"],
+            "break_elapsed" => (int) $r["break_elapsed"],
         ];
         $studying[] = $entry;
 

@@ -199,6 +199,12 @@ main.container {
     font-size: 0.78rem;
 }
 
+.studying-chip .chip-break {
+    margin-left: 6px;
+    color: var(--warning);
+    font-weight: 600;
+}
+
 /* Pulsing presence dots */
 .studying-live-dot,
 .pulse-dot {
@@ -445,6 +451,19 @@ main.container {
 .timer-note .tn-live {
     color: var(--success);
     font-weight: 600;
+}
+
+.timer-break {
+    margin: -8px 0 12px;
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--warning);
+}
+
+.timer-break .tb-time {
+    font-family: var(--font-display);
+    font-weight: 700;
 }
 
 .timer-controls {
@@ -816,6 +835,7 @@ main.container {
         <!-- Timer -->
         <div class="mode-pane active" id="pane-timer">
             <div class="timer-display" id="timer-display">00:00</div>
+            <p class="timer-break" id="timer-break" style="display:none;"></p>
             <p class="timer-note" id="timer-note">Keeps running even if you close the page.</p>
             <div class="timer-controls">
                 <button type="button" class="btn-primary" id="timer-start">Start</button>
@@ -881,6 +901,34 @@ main.container {
 </div>
 
 <div class="chart-tooltip" id="chart-tooltip"></div>
+
+<!-- ── Stop / log-on-stop modal ───────────────────────────────────────────── -->
+<div id="stop-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card">
+        <h3>Log this study session?</h3>
+        <p class="muted" id="stop-modal-sub">You studied <strong id="stop-modal-time">0m</strong>. Pick a module to save it, or discard it.</p>
+
+        <label for="stop-module-select">Module</label>
+        <select id="stop-module-select">
+            <?php foreach ($modules as $m): ?>
+                <option value="<?= htmlspecialchars($m["name"]) ?>">
+                    <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
+                </option>
+            <?php endforeach; ?>
+            <option value="__new__">+ Add new module…</option>
+        </select>
+        <div class="new-module-wrap" id="stop-new-module-wrap">
+            <input type="text" id="stop-new-module-input" maxlength="255" placeholder="New module name">
+            <p class="module-hint">This module will join the shared list for everyone.</p>
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="stop-cancel">Cancel</button>
+            <button type="button" class="btn-danger" id="stop-discard">Discard</button>
+            <button type="button" class="btn-primary" id="stop-log">Log session</button>
+        </div>
+    </div>
+</div>
 
 <script>
 (function () {
@@ -1338,23 +1386,41 @@ main.container {
     // the page never stops it — we just re-sync from the server.
     const timerDisplay = document.getElementById("timer-display");
     const timerNote    = document.getElementById("timer-note");
+    const timerBreak   = document.getElementById("timer-break");
     const startBtn     = document.getElementById("timer-start");
     const resetBtn     = document.getElementById("timer-reset");
     const logBtn       = document.getElementById("timer-log");
 
     // Mirrors the server's study_status row for me.
-    let myState = { active: false, mode: null, running: false, elapsed: 0, module: null };
+    let myState = { active: false, mode: null, running: false, elapsed: 0, breakElapsed: 0, module: null };
     let ticker  = null;
 
     function manageTicker() {
         clearInterval(ticker);
         ticker = null;
-        if (myState.running) {
-            ticker = setInterval(() => {
+        if (!myState.active) return;
+        ticker = setInterval(() => {
+            if (myState.running) {
                 myState.elapsed += 1; // advances for any mode (keeps my chip live)
                 // The big display only reflects the loggable module timer.
                 if (myState.mode === "timer") timerDisplay.textContent = fmtClock(myState.elapsed);
-            }, 1000);
+            } else {
+                // On break — the study time is frozen, the break time ticks up.
+                myState.breakElapsed += 1;
+                renderBreakLine();
+            }
+        }, 1000);
+    }
+
+    // The break line under the big display (module timer only — a presence
+    // break is shown in the panel chip instead).
+    function renderBreakLine() {
+        const onBreak = myState.active && !myState.running && myState.mode === "timer";
+        if (onBreak) {
+            timerBreak.style.display = "";
+            timerBreak.innerHTML = `☕ On break · <span class="tb-time">${fmtClock(myState.breakElapsed)}</span>`;
+        } else {
+            timerBreak.style.display = "none";
         }
     }
 
@@ -1372,16 +1438,19 @@ main.container {
             startBtn.textContent = "Start";
             timerNote.textContent = "Keeps running even if you close the page.";
         }
+
+        renderBreakLine();
     }
 
     // Apply the `me` object returned by any status endpoint.
     function applyMyState(me) {
         myState = {
-            active:  !!me.active,
-            mode:    me.mode || null,
-            running: !!me.running,
-            elapsed: me.elapsed || 0,
-            module:  me.module || null,
+            active:       !!me.active,
+            mode:         me.mode || null,
+            running:      !!me.running,
+            elapsed:      me.elapsed || 0,
+            breakElapsed: me.break_elapsed || 0,
+            module:       me.module || null,
         };
         renderTimerUI();
         manageTicker();
@@ -1453,9 +1522,10 @@ main.container {
     const breakBox       = document.getElementById("studying-break-box");
     const breakList      = document.getElementById("break-list");
 
-    // Last running list from the server + when we synced it, so chips can tick
+    // Last lists from the server + when we synced them, so chips can tick
     // locally between polls instead of sitting frozen for 15s.
-    let studyingEntries = [];
+    let studyingEntries = [];  // running — study time ticks
+    let breakEntries    = [];  // paused — break time ticks
     let studyingSyncTs  = Date.now();
 
     function renderPresenceButtons() {
@@ -1497,8 +1567,9 @@ main.container {
         const running = list.filter(s => s.running);   // actively studying
         const paused  = list.filter(s => !s.running);  // on break
 
-        // Only running chips tick locally; index matches the .chip-time markup.
+        // Indices match the data-idx markup used by tickStudying().
         studyingEntries = running;
+        breakEntries    = paused;
         studyingSyncTs  = Date.now();
 
         if (running.length === 0) {
@@ -1521,25 +1592,27 @@ main.container {
             breakList.innerHTML = "";
         } else {
             breakBox.style.display = "";
-            breakList.innerHTML = paused.map(s => {
+            breakList.innerHTML = paused.map((s, i) => {
                 const isMe = s.username === MY_USERNAME;
-                // Elapsed is frozen while paused, so no live ticking needed.
+                // Study time is frozen; the break time (.chip-break) ticks up.
                 return `
                     <span class="studying-chip break ${isMe ? "me" : ""}">
                         <span class="pulse-dot paused"></span>
                         ${escapeHtml(s.username)}
-                        <span class="chip-meta">${fmtClock(s.elapsed)}${moduleSuffix(s)}</span>
+                        <span class="chip-meta">${fmtClock(s.elapsed)}${moduleSuffix(s)}<span class="chip-break" data-bidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span></span>
                     </span>
                 `;
             }).join("");
         }
     }
 
-    // Tick the running-timer chips every second (re-synced to the server on
-    // each poll). My own chip mirrors the main display exactly.
+    // Tick the chips every second (re-synced to the server on each poll): study
+    // time on running chips, break time on paused chips. My own chip mirrors the
+    // main display exactly.
     function tickStudying() {
-        if (studyingEntries.length === 0) return;
+        if (studyingEntries.length === 0 && breakEntries.length === 0) return;
         const delta = Math.floor((Date.now() - studyingSyncTs) / 1000);
+
         studyingEntries.forEach((s, i) => {
             const el = studyingList.querySelector(`.chip-time[data-idx="${i}"]`);
             if (!el) return;
@@ -1548,14 +1621,24 @@ main.container {
                 : s.elapsed + delta;
             el.textContent = fmtClock(secs);
         });
+
+        breakEntries.forEach((s, i) => {
+            const el = breakList.querySelector(`.chip-break[data-bidx="${i}"]`);
+            if (!el) return;
+            const secs = (s.username === MY_USERNAME && myState.active && !myState.running)
+                ? myState.breakElapsed
+                : (s.break_elapsed || 0) + delta;
+            el.textContent = "☕ " + fmtClock(secs);
+        });
     }
 
-    // "I'm studying" starts a quick (module-less) timer; "Stop" clears it.
+    // "I'm studying" starts a quick (module-less) timer; "Stop" asks whether to
+    // log the session before clearing it.
     toggleStudyBtn.addEventListener("click", () => {
         if (!myState.active) {
             timerAction("presence").catch(err => setFeedback(err.message, true));
         } else if (myState.mode === "presence") {
-            timerAction("stop").catch(err => setFeedback(err.message, true));
+            openStopModal();
         }
     });
 
@@ -1564,6 +1647,71 @@ main.container {
     breakBtn.addEventListener("click", () => {
         if (!myState.active) return;
         timerAction(myState.running ? "pause" : "resume")
+            .catch(err => setFeedback(err.message, true));
+    });
+
+    // ── Stop → "log this session?" modal ──────────────────────────────────
+    const stopModal        = document.getElementById("stop-modal");
+    const stopModuleSelect = document.getElementById("stop-module-select");
+    const stopNewWrap      = document.getElementById("stop-new-module-wrap");
+    const stopNewInput     = document.getElementById("stop-new-module-input");
+    const stopTimeEl       = document.getElementById("stop-modal-time");
+
+    function openStopModal() {
+        stopTimeEl.textContent = fmtTime(myState.elapsed);
+        // Default to the module picked in the log window, when it's a real one.
+        if (moduleSelect.value && moduleSelect.value !== "__new__") {
+            stopModuleSelect.value = moduleSelect.value;
+        }
+        stopNewInput.value = "";
+        stopNewWrap.classList.toggle("show", stopModuleSelect.value === "__new__");
+        stopModal.style.display = "flex";
+    }
+
+    function closeStopModal() {
+        stopModal.style.display = "none";
+    }
+
+    stopModuleSelect.addEventListener("change", () => {
+        const isNew = stopModuleSelect.value === "__new__";
+        stopNewWrap.classList.toggle("show", isNew);
+        if (isNew) stopNewInput.focus();
+    });
+
+    document.getElementById("stop-cancel").addEventListener("click", closeStopModal);
+    stopModal.addEventListener("click", (e) => { if (e.target === stopModal) closeStopModal(); });
+
+    // Discard: stop studying without recording a session.
+    document.getElementById("stop-discard").addEventListener("click", () => {
+        closeStopModal();
+        timerAction("stop").catch(err => setFeedback(err.message, true));
+    });
+
+    // Log: record the elapsed study time against the chosen module, then clear.
+    document.getElementById("stop-log").addEventListener("click", () => {
+        const extra = {};
+        if (stopModuleSelect.value === "__new__") {
+            const name = stopNewInput.value.trim();
+            if (name === "") { stopNewInput.focus(); return; }
+            extra.new_module = name;
+        } else if (stopModuleSelect.value) {
+            extra.module = stopModuleSelect.value;
+        } else {
+            stopNewInput.focus();
+            return;
+        }
+
+        closeStopModal();
+        setFeedback("Saving…", false);
+        timerAction("log", extra)
+            .then(res => {
+                if (res.logged) {
+                    setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
+                    loadData();
+                } else {
+                    setFeedback("Session stopped — nothing to log.", false);
+                }
+            })
             .catch(err => setFeedback(err.message, true));
     });
 

@@ -106,7 +106,19 @@ if ($action === "start") {
     $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
 } elseif ($action === "log") {
     $extra["logged"] = false;
-    if ($row && $row["mode"] === "timer") {
+    if ($row) {
+        // Module: an explicit override (stopping a module-less presence session
+        // and choosing what to log it as) takes precedence over the row's module.
+        $module    = trim($_POST["module"]     ?? "");
+        $newModule = trim($_POST["new_module"] ?? "");
+        if ($module !== "" || $newModule !== "") {
+            $customAdded = false;
+            $logModule = resolveStudyModule($pdo, $userId, $module, $newModule, $customAdded);
+            $extra["custom_added"] = $customAdded;
+        } else {
+            $logModule = $row["module_name"]; // null for an un-mapped presence row
+        }
+
         $e = $pdo->prepare("
             SELECT accumulated + IF(started_at IS NULL, 0, TIMESTAMPDIFF(SECOND, started_at, NOW()))
             FROM study_status WHERE user_id = ?
@@ -114,15 +126,15 @@ if ($action === "start") {
         $e->execute([$userId]);
         $elapsed = (int) $e->fetchColumn();
 
-        if ($elapsed > 0 && $elapsed <= 86400) {
+        if ($logModule !== null && $elapsed > 0 && $elapsed <= 86400) {
             $pdo->prepare("
                 INSERT INTO study_sessions (user_id, module_name, seconds, studied_on)
                 VALUES (?, ?, ?, CURDATE())
-            ")->execute([$userId, $row["module_name"], $elapsed]);
+            ")->execute([$userId, $logModule, $elapsed]);
 
             $extra["logged"]  = true;
             $extra["seconds"] = $elapsed;
-            $extra["module"]  = $row["module_name"];
+            $extra["module"]  = $logModule;
         }
 
         $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
