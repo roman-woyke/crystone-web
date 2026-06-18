@@ -168,11 +168,11 @@ CREATE TABLE study_sessions (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Live "currently studying" state — at most one row per user. A persistent
--- timer (mode='timer') survives page reloads: elapsed = accumulated +
--- (running ? NOW() - started_at : 0). A manual flag (mode='presence') just
--- marks the user as studying with no stopwatch. A row existing at all means
--- the user is currently studying.
+-- Live "currently studying" state — at most one row per user, persistent
+-- across page reloads. elapsed = accumulated + (started_at ? NOW() - started_at
+-- : 0); a NULL started_at means paused ("on break"). mode='timer' is a loggable
+-- module stopwatch (log-a-session window); mode='presence' is a module-less
+-- "I'm studying" stopwatch. A row existing at all means currently studying.
 CREATE TABLE study_status (
     user_id     INT NOT NULL PRIMARY KEY REFERENCES users(id),
     mode        ENUM('timer','presence') NOT NULL DEFAULT 'presence',
@@ -234,8 +234,7 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── get-study-status.php    ← study counter: my timer + who's studying now
 │   ├── get-typing-scores.php   ← typing battle: best WPM per user
 │   ├── log-study-session.php   ← study counter: log a session (timer/manual)
-│   ├── study-timer.php         ← study counter: persistent timer start/pause/reset/log
-│   ├── toggle-study-presence.php ← study counter: manual "I'm studying" flag
+│   ├── study-timer.php         ← study counter: persistent timer/presence state machine
 │   ├── patch-application.php
 │   ├── submit-typing-score.php ← typing battle: validated score submission
 │   └── toggle-user-exam.php    ← exam calendar checkbox toggle

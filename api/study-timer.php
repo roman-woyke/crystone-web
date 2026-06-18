@@ -74,17 +74,36 @@ if ($action === "start") {
 
         $extra["custom_added"] = $customAdded;
     }
+} elseif ($action === "presence") {
+    // Quick "I'm studying" stopwatch with no module (not loggable).
+    if (!$row) {
+        $pdo->prepare("
+            INSERT INTO study_status (user_id, mode, module_name, started_at, accumulated)
+            VALUES (?, 'presence', NULL, NOW(), 0)
+        ")->execute([$userId]);
+    } elseif ($row["started_at"] === null) {
+        // Resume whatever was paused.
+        $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
+            ->execute([$userId]);
+    }
+} elseif ($action === "resume") {
+    // Come back from a break — works for both timer and presence rows.
+    if ($row && $row["started_at"] === null) {
+        $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
+            ->execute([$userId]);
+    }
 } elseif ($action === "pause") {
-    if ($row && $row["mode"] === "timer" && $row["started_at"] !== null) {
+    // "I'm on break" — pauses whatever is running (timer or presence).
+    if ($row && $row["started_at"] !== null) {
         $pdo->prepare("
             UPDATE study_status
             SET accumulated = accumulated + TIMESTAMPDIFF(SECOND, started_at, NOW()), started_at = NULL
             WHERE user_id = ?
         ")->execute([$userId]);
     }
-} elseif ($action === "reset") {
-    $pdo->prepare("DELETE FROM study_status WHERE user_id = ? AND mode = 'timer'")
-        ->execute([$userId]);
+} elseif ($action === "reset" || $action === "stop") {
+    // Reset (timer) / Stop studying (presence) — clears the row either way.
+    $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
 } elseif ($action === "log") {
     $extra["logged"] = false;
     if ($row && $row["mode"] === "timer") {

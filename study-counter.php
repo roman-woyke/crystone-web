@@ -103,6 +103,12 @@ main.container {
     font-size: 1.05rem;
 }
 
+.studying-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .studying-toggle {
     width: auto;
     margin: 0;
@@ -121,6 +127,46 @@ main.container {
 .studying-toggle:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+.studying-break {
+    color: var(--warning);
+    border-color: rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.studying-break:hover {
+    background: rgba(251, 191, 36, 0.18);
+    border-color: var(--warning);
+    color: var(--warning);
+}
+
+/* On-break sub-container */
+.studying-break-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--glass-border);
+}
+
+.break-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.break-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.studying-chip.break {
+    opacity: 0.85;
+    border-style: dashed;
 }
 
 .studying-list {
@@ -707,10 +753,17 @@ main.container {
     <section class="studying-panel glass-card" id="studying-panel">
         <div class="studying-head">
             <h2><span class="studying-live-dot"></span> Currently studying</h2>
-            <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+            <div class="studying-actions">
+                <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+                <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+            </div>
         </div>
         <div class="studying-list" id="studying-list">
             <span class="muted">Loading…</span>
+        </div>
+        <div class="studying-break-box" id="studying-break-box" style="display:none;">
+            <span class="break-label">☕ On break</span>
+            <div class="break-list" id="break-list"></div>
         </div>
     </section>
 </div>
@@ -1298,16 +1351,17 @@ main.container {
         ticker = null;
         if (myState.running) {
             ticker = setInterval(() => {
-                myState.elapsed += 1;
-                timerDisplay.textContent = fmtClock(myState.elapsed);
+                myState.elapsed += 1; // advances for any mode (keeps my chip live)
+                // The big display only reflects the loggable module timer.
+                if (myState.mode === "timer") timerDisplay.textContent = fmtClock(myState.elapsed);
             }, 1000);
         }
     }
 
     function renderTimerUI() {
-        timerDisplay.textContent = fmtClock(myState.active ? myState.elapsed : 0);
-
         const timing = myState.active && myState.mode === "timer";
+        timerDisplay.textContent = fmtClock(timing ? myState.elapsed : 0);
+
         if (timing && myState.running) {
             startBtn.textContent = "Pause";
             timerNote.innerHTML = `<span class="tn-live">● Running</span> · <span class="tn-mod">${escapeHtml(myState.module || "")}</span>`;
@@ -1331,7 +1385,7 @@ main.container {
         };
         renderTimerUI();
         manageTicker();
-        renderToggleButton();
+        renderPresenceButtons();
     }
 
     function timerAction(action, extra) {
@@ -1359,9 +1413,9 @@ main.container {
             timerAction("pause").catch(err => setFeedback(err.message, true));
             return;
         }
-        // Start fresh or resume a paused timer.
+        // Resume a paused module timer, or start a fresh one (needs a module).
         const extra = {};
-        if (!myState.active) {
+        if (!(myState.active && myState.mode === "timer")) {
             const mod = selectedModulePayload();
             if (mod.error) { setFeedback(mod.error, true); return; }
             Object.assign(extra, mod);
@@ -1395,55 +1449,90 @@ main.container {
     // ── Currently studying ────────────────────────────────────────────────
     const studyingList   = document.getElementById("studying-list");
     const toggleStudyBtn = document.getElementById("studying-toggle");
+    const breakBtn       = document.getElementById("studying-break");
+    const breakBox       = document.getElementById("studying-break-box");
+    const breakList      = document.getElementById("break-list");
 
-    // Last list from the server + when we synced it, so chips can tick locally
-    // between polls instead of sitting frozen for 15s.
+    // Last running list from the server + when we synced it, so chips can tick
+    // locally between polls instead of sitting frozen for 15s.
     let studyingEntries = [];
     let studyingSyncTs  = Date.now();
 
-    function renderToggleButton() {
-        const timing   = myState.active && myState.mode === "timer";
-        const presence = myState.active && myState.mode === "presence";
-        toggleStudyBtn.disabled = timing; // a running timer already marks you studying
-        toggleStudyBtn.classList.toggle("active", myState.active);
-        if (timing)        toggleStudyBtn.textContent = "Timing…";
-        else if (presence) toggleStudyBtn.textContent = "Stop";
-        else               toggleStudyBtn.textContent = "I'm studying";
+    function renderPresenceButtons() {
+        const active  = myState.active;
+        const running = active && myState.running;
+
+        // Primary button: start a quick session / stop a presence session.
+        // (A module timer is started & stopped from the log-a-session window.)
+        if (!active) {
+            toggleStudyBtn.style.display = "";
+            toggleStudyBtn.classList.remove("active");
+            toggleStudyBtn.textContent = "I'm studying";
+        } else if (myState.mode === "presence") {
+            toggleStudyBtn.style.display = "";
+            toggleStudyBtn.classList.add("active");
+            toggleStudyBtn.textContent = "Stop";
+        } else {
+            toggleStudyBtn.style.display = "none";
+        }
+
+        // Break / resume button — works for both presence and module timers.
+        if (running) {
+            breakBtn.style.display = "";
+            breakBtn.textContent = "I'm on break";
+        } else if (active) {
+            breakBtn.style.display = "";
+            breakBtn.textContent = "Resume";
+        } else {
+            breakBtn.style.display = "none";
+        }
+    }
+
+    function moduleSuffix(s) {
+        return (s.mode === "timer" && s.module) ? " · " + escapeHtml(s.module) : "";
     }
 
     function renderStudying(list) {
-        studyingEntries = list || [];
+        list = list || [];
+        const running = list.filter(s => s.running);   // actively studying
+        const paused  = list.filter(s => !s.running);  // on break
+
+        // Only running chips tick locally; index matches the .chip-time markup.
+        studyingEntries = running;
         studyingSyncTs  = Date.now();
 
-        if (studyingEntries.length === 0) {
+        if (running.length === 0) {
             studyingList.innerHTML = `<span class="muted">Nobody's studying right now.</span>`;
-            return;
+        } else {
+            studyingList.innerHTML = running.map((s, i) => {
+                const isMe = s.username === MY_USERNAME;
+                return `
+                    <span class="studying-chip ${isMe ? "me" : ""}">
+                        <span class="pulse-dot"></span>
+                        ${escapeHtml(s.username)}
+                        <span class="chip-meta"><span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s)}</span>
+                    </span>
+                `;
+            }).join("");
         }
-        studyingList.innerHTML = studyingEntries.map((s, i) => {
-            const isMe = s.username === MY_USERNAME;
-            let dotCls = "pulse-dot";
-            let metaHtml;
-            if (s.mode === "timer") {
-                const mod = s.module ? " · " + escapeHtml(s.module) : "";
-                if (s.running) {
-                    // .chip-time is updated live by tickStudying().
-                    metaHtml = `<span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${mod}`;
-                } else {
-                    dotCls += " paused";
-                    metaHtml = `paused${mod}`;
-                }
-            } else {
-                dotCls += " presence";
-                metaHtml = "studying";
-            }
-            return `
-                <span class="studying-chip ${isMe ? "me" : ""}">
-                    <span class="${dotCls}"></span>
-                    ${escapeHtml(s.username)}
-                    <span class="chip-meta">${metaHtml}</span>
-                </span>
-            `;
-        }).join("");
+
+        if (paused.length === 0) {
+            breakBox.style.display = "none";
+            breakList.innerHTML = "";
+        } else {
+            breakBox.style.display = "";
+            breakList.innerHTML = paused.map(s => {
+                const isMe = s.username === MY_USERNAME;
+                // Elapsed is frozen while paused, so no live ticking needed.
+                return `
+                    <span class="studying-chip break ${isMe ? "me" : ""}">
+                        <span class="pulse-dot paused"></span>
+                        ${escapeHtml(s.username)}
+                        <span class="chip-meta">${fmtClock(s.elapsed)}${moduleSuffix(s)}</span>
+                    </span>
+                `;
+            }).join("");
+        }
     }
 
     // Tick the running-timer chips every second (re-synced to the server on
@@ -1452,7 +1541,6 @@ main.container {
         if (studyingEntries.length === 0) return;
         const delta = Math.floor((Date.now() - studyingSyncTs) / 1000);
         studyingEntries.forEach((s, i) => {
-            if (s.mode !== "timer" || !s.running) return;
             const el = studyingList.querySelector(`.chip-time[data-idx="${i}"]`);
             if (!el) return;
             const secs = (s.username === MY_USERNAME && myState.active && myState.running)
@@ -1462,11 +1550,20 @@ main.container {
         });
     }
 
+    // "I'm studying" starts a quick (module-less) timer; "Stop" clears it.
     toggleStudyBtn.addEventListener("click", () => {
-        if (myState.active && myState.mode === "timer") return;
-        fetch(BASE_PATH + "/api/toggle-study-presence.php", { method: "POST" })
-            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
-            .then(res => { applyMyState(res.me); renderStudying(res.studying); })
+        if (!myState.active) {
+            timerAction("presence").catch(err => setFeedback(err.message, true));
+        } else if (myState.mode === "presence") {
+            timerAction("stop").catch(err => setFeedback(err.message, true));
+        }
+    });
+
+    // "I'm on break" pauses whatever's running (presence OR the log-window
+    // module timer); "Resume" starts it again.
+    breakBtn.addEventListener("click", () => {
+        if (!myState.active) return;
+        timerAction(myState.running ? "pause" : "resume")
             .catch(err => setFeedback(err.message, true));
     });
 
