@@ -84,68 +84,26 @@ main.container {
 /* The dock sits in its own column (no overlap), then sticks while scrolling. */
 .studying-dock {
     position: sticky;
-    top: 78px; /* clears the sticky navbar */
-    perspective: 1800px;
+    top: 78px;
 }
 
-.flip-inner {
-    position: relative;
-    transition: transform 0.6s var(--ease-out);
-    transform-style: preserve-3d;
-}
-
-.flip-inner.flipped {
-    transform: rotateY(180deg);
-}
-
-.flip-face {
+.dock-card {
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
-    overflow: hidden;
-
-    /* Solid (not backdrop-filter) so the 3D flip stays crisp. */
     background: var(--solid-glass);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
-
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-}
-
-/* Front is in normal flow, so the dock's height tracks its content (and is
-   capped, with the body scrolling). The back overlays it at the same size. */
-.flip-front {
-    position: relative;
-    min-height: 150px;
     max-height: calc(100vh - 120px);
-}
-
-.flip-back {
-    position: absolute;
-    inset: 0;
-    transform: rotateY(180deg);
-}
-
-.flip-btn {
-    flex-shrink: 0;
-    font-size: 1.05rem;
-    line-height: 1;
-}
-
-.flip-front .studying-actions {
-    margin-bottom: 12px;
-}
-
-.face-body {
-    flex: 1;
-    min-height: 0;
     overflow-y: auto;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .flip-inner { transition: none; }
+.dock-divider {
+    flex-shrink: 0;
+    margin: 12px -18px;
+    height: 1px;
+    background: var(--glass-border);
 }
 
 @media (max-width: 900px) {
@@ -154,68 +112,151 @@ main.container {
         flex-direction: column;
     }
 
-    /* Show the dock first (top) and let it scroll with the page on mobile. */
     .studying-dock {
         order: -1;
         position: static;
         top: auto;
     }
 
-    .flip-front {
+    .dock-card {
         max-height: none;
+        overflow-y: visible;
     }
 }
 
-/* ── Day recap (back of the dock) ───────────────────────────────────────── */
+/* ── Day timeline ─────────────────────────────────────────────────────────── */
 
-.recap-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.recap-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 9px;
-    border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.03);
-    font-size: 0.82rem;
-}
-
-.recap-time {
-    flex-shrink: 0;
-    font-size: 0.74rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-}
-
-.recap-dot {
-    flex-shrink: 0;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-}
-
-.recap-user {
+.tl-label {
+    display: block;
+    font-size: 0.7rem;
     font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 8px;
 }
 
-.recap-mod {
-    min-width: 0;
+.tl-user-heads {
+    display: flex;
+    margin-left: 38px;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.tl-col-head {
+    flex: 1;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--text-2);
 }
 
-.recap-dur {
+.tl-body {
+    position: relative;
+    height: 240px;
+    display: flex;
+    gap: 4px;
+}
+
+.tl-axis {
+    position: relative;
+    width: 34px;
     flex-shrink: 0;
-    margin-left: auto;
-    font-weight: 600;
-    color: var(--text-2);
+}
+
+.tl-tick {
+    position: absolute;
+    right: 0;
+    transform: translateY(-50%);
+}
+
+.tl-tick-label {
+    font-size: 0.61rem;
+    color: var(--text-3);
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
+}
+
+.tl-cols-wrap {
+    flex: 1;
+    position: relative;
+}
+
+.tl-grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.05);
+    pointer-events: none;
+}
+
+.tl-now-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--danger);
+    opacity: 0.75;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.tl-now-dot {
+    position: absolute;
+    left: -3px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+}
+
+.tl-cols {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 4px;
+}
+
+.tl-col {
+    flex: 1;
+    position: relative;
+}
+
+.tl-block {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    border-radius: 4px;
+    min-height: 4px;
+    overflow: hidden;
+    opacity: 0.82;
+}
+
+.tl-block.live {
+    opacity: 1;
+    border-top: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.tl-block-label {
+    display: block;
+    padding: 2px 3px;
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.tl-empty {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    margin: 8px 0 0;
 }
 
 .studying-head {
@@ -238,6 +279,7 @@ main.container {
     display: flex;
     gap: 8px;
     flex-shrink: 0;
+    margin-bottom: 12px;
 }
 
 .studying-toggle {
@@ -1014,43 +1056,29 @@ main.container {
 
 </div><!-- /study-main -->
 
-<!-- Sticky "currently studying" dock (front) / day recap (back) -->
+<!-- Sticky "currently studying" dock + day timeline -->
 <aside class="studying-dock" id="studying-dock">
-    <div class="flip-inner" id="studying-flip">
+    <div class="dock-card">
 
-        <!-- Front: who's studying right now -->
-        <div class="flip-face flip-front">
-            <div class="studying-head">
-                <h2><span class="studying-live-dot"></span> Currently studying</h2>
-                <button type="button" class="icon-btn flip-btn" id="flip-to-recap" title="Today's recap" aria-label="Show today's recap">⇄</button>
-            </div>
-            <div class="studying-actions">
-                <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
-                <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
-            </div>
-            <div class="face-body">
-                <div class="studying-list" id="studying-list">
-                    <span class="muted">Loading…</span>
-                </div>
-                <div class="studying-break-box" id="studying-break-box" style="display:none;">
-                    <span class="break-label">☕ On break</span>
-                    <div class="break-list" id="break-list"></div>
-                </div>
-            </div>
+        <div class="studying-head">
+            <h2><span class="studying-live-dot"></span> Currently studying</h2>
+        </div>
+        <div class="studying-actions">
+            <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+            <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+        </div>
+        <div class="studying-list" id="studying-list">
+            <span class="muted">Loading…</span>
+        </div>
+        <div class="studying-break-box" id="studying-break-box" style="display:none;">
+            <span class="break-label">☕ On break</span>
+            <div class="break-list" id="break-list"></div>
         </div>
 
-        <!-- Back: recap of today -->
-        <div class="flip-face flip-back">
-            <div class="studying-head">
-                <h2>📅 Today's recap</h2>
-                <button type="button" class="icon-btn flip-btn" id="flip-to-front" title="Back" aria-label="Back to currently studying">⇄</button>
-            </div>
-            <div class="face-body">
-                <div class="recap-list" id="recap-list">
-                    <span class="muted">Loading…</span>
-                </div>
-            </div>
-        </div>
+        <div class="dock-divider"></div>
+
+        <span class="tl-label">Heute</span>
+        <div id="dock-timeline"></div>
 
     </div>
 </aside>
@@ -1630,7 +1658,7 @@ main.container {
                 if (res.custom_added) setTimeout(() => window.location.reload(), 400);
                 applyMyState(res.me);
                 renderStudying(res.studying);
-                renderRecap(res.recap);
+                renderTimeline(res.recap);
                 return res;
             });
     }
@@ -1679,33 +1707,130 @@ main.container {
     const breakBtn       = document.getElementById("studying-break");
     const breakBox       = document.getElementById("studying-break-box");
     const breakList      = document.getElementById("break-list");
-    const recapList      = document.getElementById("recap-list");
 
-    // Flip the dock between "currently studying" (front) and "today's recap".
-    const flipInner = document.getElementById("studying-flip");
-    document.getElementById("flip-to-recap").addEventListener("click", () => flipInner.classList.add("flipped"));
-    document.getElementById("flip-to-front").addEventListener("click", () => flipInner.classList.remove("flipped"));
+    // ── Day timeline ──────────────────────────────────────────────────────────
+    let lastRecap    = [];
+    let tlRangeStart = 0;
+    let tlRangeEnd   = 60;
 
-    // Today's recap: a time-sorted agenda of who studied when.
-    function renderRecap(list) {
-        list = list || [];
-        if (list.length === 0) {
-            recapList.innerHTML = `<span class="muted">Nothing logged today yet.</span>`;
+    function hhmm2mins(str) {
+        if (!str) return 0;
+        const parts = str.split(":");
+        return parseInt(parts[0], 10) * 60 + (parseInt(parts[1], 10) || 0);
+    }
+
+    function minsToHHMM(m) {
+        m = Math.max(0, Math.min(1439, Math.round(m)));
+        return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+    }
+
+    function renderTimeline(recap) {
+        lastRecap = recap || [];
+        const tl = document.getElementById("dock-timeline");
+        if (!tl) return;
+
+        const now     = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+
+        // Build session list: logged sessions + currently-running live blocks
+        const sessions = lastRecap.map(r => ({ ...r, live: false }));
+        studyingEntries.filter(s => s.elapsed > 30).forEach(s => {
+            const startMins = Math.max(0, nowMins - Math.floor(s.elapsed / 60));
+            sessions.push({
+                username:      s.username,
+                module:        s.module || null,
+                seconds:       s.elapsed,
+                start:         minsToHHMM(startMins),
+                end:           minsToHHMM(nowMins),
+                live:          true,
+                liveStartMins: startMins,
+            });
+        });
+
+        // All users visible today (running + on break + logged sessions)
+        const userSet = new Set([
+            ...studyingEntries.map(s => s.username),
+            ...breakEntries.map(s => s.username),
+            ...lastRecap.map(r => r.username),
+        ]);
+        const allUsers = [...userSet].sort();
+
+        if (allUsers.length === 0) {
+            tl.innerHTML = `<p class="tl-empty">Keine Sessions heute.</p>`;
             return;
         }
-        recapList.innerHTML = list.map(r => {
-            const color = userColor[r.username] || "#8b5cf6";
-            const when  = r.start && r.end ? `${r.start}–${r.end}` : (r.end || r.start || "");
-            return `
-                <div class="recap-row">
-                    <span class="recap-time">${escapeHtml(when)}</span>
-                    <span class="recap-dot" style="background:${color}"></span>
-                    <span class="recap-user">${escapeHtml(r.username)}</span>
-                    <span class="recap-mod">${escapeHtml(r.module || "")}</span>
-                    <span class="recap-dur">${fmtTime(r.seconds)}</span>
+
+        assignUserColors(allUsers);
+
+        // Time range: floor earliest start to the hour, ceil end to next hour
+        const allMins    = sessions.flatMap(s => [hhmm2mins(s.start), hhmm2mins(s.end)]);
+        const earliest   = allMins.length > 0 ? Math.min(...allMins) : Math.max(0, nowMins - 60);
+        tlRangeStart = Math.floor(earliest / 60) * 60;
+        tlRangeEnd   = Math.ceil(Math.max(nowMins + 1, allMins.length > 0 ? Math.max(...allMins) : nowMins) / 60) * 60;
+        if (tlRangeEnd <= tlRangeStart) tlRangeEnd = tlRangeStart + 60;
+        const span = tlRangeEnd - tlRangeStart;
+
+        const pct = (m) => ((m - tlRangeStart) / span * 100).toFixed(2) + "%";
+
+        const ticks = [];
+        for (let m = tlRangeStart; m <= tlRangeEnd; m += 60) ticks.push(m);
+
+        const byUser = {};
+        allUsers.forEach(u => { byUser[u] = []; });
+        sessions.forEach(s => { if (byUser[s.username]) byUser[s.username].push(s); });
+
+        const nowPct = pct(Math.min(nowMins, tlRangeEnd - 1));
+
+        tl.innerHTML = `
+            <div class="tl-user-heads">
+                ${allUsers.map(u =>
+                    `<div class="tl-col-head" style="color:${userColor[u] || "#8b5cf6"}">${escapeHtml(u)}</div>`
+                ).join("")}
+            </div>
+            <div class="tl-body">
+                <div class="tl-axis">
+                    ${ticks.map(m =>
+                        `<div class="tl-tick" style="top:${pct(m)}"><span class="tl-tick-label">${minsToHHMM(m)}</span></div>`
+                    ).join("")}
                 </div>
-            `;
-        }).join("");
+                <div class="tl-cols-wrap">
+                    ${ticks.map(m => `<div class="tl-grid-line" style="top:${pct(m)}"></div>`).join("")}
+                    <div class="tl-now-line" id="tl-now-line" style="top:${nowPct}">
+                        <span class="tl-now-dot"></span>
+                    </div>
+                    <div class="tl-cols">
+                        ${allUsers.map(u => {
+                            const color = userColor[u] || "#8b5cf6";
+                            return `<div class="tl-col">${(byUser[u] || []).map(s => {
+                                const startM  = hhmm2mins(s.start);
+                                const endM    = hhmm2mins(s.end);
+                                const blockH  = (Math.max(endM - startM, 2) / span * 100).toFixed(2) + "%";
+                                const liveAttr = s.live ? ` data-live-start="${s.liveStartMins}"` : "";
+                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds);
+                                return `<div class="tl-block ${s.live ? "live" : ""}"${liveAttr}
+                                     style="top:${pct(startM)};height:${blockH};background:${color};"
+                                     title="${tip}">${s.module ? `<span class="tl-block-label">${escapeHtml(s.module)}</span>` : ""}</div>`;
+                            }).join("")}</div>`;
+                        }).join("")}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function tickTimeline() {
+        const nowLine = document.getElementById("tl-now-line");
+        if (!nowLine) return;
+        const now     = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        if (nowMins > tlRangeEnd) { renderTimeline(lastRecap); return; }
+        const span = tlRangeEnd - tlRangeStart;
+        const pct  = (m) => ((m - tlRangeStart) / span * 100).toFixed(3) + "%";
+        nowLine.style.top = pct(Math.min(nowMins, tlRangeEnd));
+        document.querySelectorAll(".tl-block[data-live-start]").forEach(el => {
+            const startM = parseFloat(el.dataset.liveStart);
+            el.style.height = Math.max((nowMins - startM) / span * 100, 0.5).toFixed(3) + "%";
+        });
     }
 
     // Last lists from the server + when we synced them, so chips can tick
@@ -1905,13 +2030,13 @@ main.container {
     function loadStatus() {
         return fetch(BASE_PATH + "/api/get-study-status.php")
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-            .then(res => { applyMyState(res.me); renderStudying(res.studying); renderRecap(res.recap); })
+            .then(res => { applyMyState(res.me); renderStudying(res.studying); renderTimeline(res.recap); })
             .catch(() => { /* keep previous state on a transient error */ });
     }
 
     // Tick the studying chips locally every second; re-sync from the server
     // every 15s (covers other tabs and other users).
-    setInterval(tickStudying, 1000);
+    setInterval(() => { tickStudying(); tickTimeline(); }, 1000);
     setInterval(loadStatus, 15000);
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) loadStatus();
@@ -1939,7 +2064,7 @@ main.container {
     renderAll();
     applyMyState(INITIAL_STATUS.me);
     renderStudying(INITIAL_STATUS.studying);
-    renderRecap(INITIAL_STATUS.recap);
+    renderTimeline(INITIAL_STATUS.recap);
 }());
 </script>
 
