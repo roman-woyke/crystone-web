@@ -64,27 +64,138 @@ main.container {
     max-width: 680px;
 }
 
-/* ── Top row: intro + currently-studying panel ──────────────────────────── */
-
-.study-top {
-    display: flex;
-    align-items: stretch;
-    gap: 24px;
+.study-intro {
     margin-bottom: 28px;
 }
 
-.study-intro {
-    flex: 1 1 auto;
-    min-width: 0;
-    align-self: center;
+/* ── Floating, flippable "currently studying" dock ──────────────────────── */
+
+.studying-dock {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: min(340px, calc(100vw - 32px));
+    height: 420px;
+    max-height: calc(100vh - 110px);
+    z-index: 80;
+    perspective: 1800px;
 }
 
-.studying-panel {
-    flex: 0 0 340px;
-    max-width: 340px;
-    padding: 18px 20px;
+.flip-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s var(--ease-out);
+    transform-style: preserve-3d;
+}
+
+.flip-inner.flipped {
+    transform: rotateY(180deg);
+}
+
+.flip-face {
+    position: absolute;
+    inset: 0;
+
     display: flex;
     flex-direction: column;
+    padding: 16px 18px;
+    overflow: hidden;
+
+    /* Solid (not backdrop-filter) so the 3D flip stays crisp. */
+    background: var(--solid-glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
+
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.flip-back {
+    transform: rotateY(180deg);
+}
+
+.flip-btn {
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.flip-front .studying-actions {
+    margin-bottom: 12px;
+}
+
+.face-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flip-inner { transition: none; }
+}
+
+@media (max-width: 560px) {
+    .studying-dock {
+        right: 12px;
+        left: 12px;
+        bottom: 12px;
+        width: auto;
+        height: 340px;
+    }
+}
+
+/* ── Day recap (back of the dock) ───────────────────────────────────────── */
+
+.recap-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.recap-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.82rem;
+}
+
+.recap-time {
+    flex-shrink: 0;
+    font-size: 0.74rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.recap-dot {
+    flex-shrink: 0;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+
+.recap-user {
+    font-weight: 600;
+}
+
+.recap-mod {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-2);
+}
+
+.recap-dur {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
 }
 
 .studying-head {
@@ -239,17 +350,6 @@ main.container {
 @media (prefers-reduced-motion: reduce) {
     .studying-live-dot,
     .pulse-dot { animation: none; }
-}
-
-@media (max-width: 900px) {
-    .study-top {
-        flex-direction: column;
-    }
-
-    .studying-panel {
-        flex-basis: auto;
-        max-width: none;
-    }
 }
 
 /* ── Podium + per-module toggle ─────────────────────────────────────────── */
@@ -763,32 +863,54 @@ main.container {
 }
 </style>
 
-<div class="study-top">
-    <div class="study-intro">
-        <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
-        <p class="study-sub">
-            Time your study sessions live or log ones you did offline. Pick a module from the
-            exam calendar or add your own — custom modules join the shared list for everyone.
-        </p>
-    </div>
+<div class="study-intro">
+    <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
+    <p class="study-sub">
+        Time your study sessions live or log ones you did offline. Pick a module from the
+        exam calendar or add your own — custom modules join the shared list for everyone.
+    </p>
+</div>
 
-    <section class="studying-panel glass-card" id="studying-panel">
-        <div class="studying-head">
-            <h2><span class="studying-live-dot"></span> Currently studying</h2>
+<!-- Floating, flippable "currently studying" dock (front) / day recap (back) -->
+<aside class="studying-dock" id="studying-dock">
+    <div class="flip-inner" id="studying-flip">
+
+        <!-- Front: who's studying right now -->
+        <div class="flip-face flip-front">
+            <div class="studying-head">
+                <h2><span class="studying-live-dot"></span> Currently studying</h2>
+                <button type="button" class="icon-btn flip-btn" id="flip-to-recap" title="Today's recap" aria-label="Show today's recap">⇄</button>
+            </div>
             <div class="studying-actions">
                 <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
                 <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
             </div>
+            <div class="face-body">
+                <div class="studying-list" id="studying-list">
+                    <span class="muted">Loading…</span>
+                </div>
+                <div class="studying-break-box" id="studying-break-box" style="display:none;">
+                    <span class="break-label">☕ On break</span>
+                    <div class="break-list" id="break-list"></div>
+                </div>
+            </div>
         </div>
-        <div class="studying-list" id="studying-list">
-            <span class="muted">Loading…</span>
+
+        <!-- Back: recap of today -->
+        <div class="flip-face flip-back">
+            <div class="studying-head">
+                <h2>📅 Today's recap</h2>
+                <button type="button" class="icon-btn flip-btn" id="flip-to-front" title="Back" aria-label="Back to currently studying">⇄</button>
+            </div>
+            <div class="face-body">
+                <div class="recap-list" id="recap-list">
+                    <span class="muted">Loading…</span>
+                </div>
+            </div>
         </div>
-        <div class="studying-break-box" id="studying-break-box" style="display:none;">
-            <span class="break-label">☕ On break</span>
-            <div class="break-list" id="break-list"></div>
-        </div>
-    </section>
-</div>
+
+    </div>
+</aside>
 
 <!-- ── Podium ─────────────────────────────────────────────────────────────── -->
 <div class="podium-bar">
@@ -1476,6 +1598,7 @@ main.container {
                 if (res.custom_added) setTimeout(() => window.location.reload(), 400);
                 applyMyState(res.me);
                 renderStudying(res.studying);
+                renderRecap(res.recap);
                 return res;
             });
     }
@@ -1524,6 +1647,34 @@ main.container {
     const breakBtn       = document.getElementById("studying-break");
     const breakBox       = document.getElementById("studying-break-box");
     const breakList      = document.getElementById("break-list");
+    const recapList      = document.getElementById("recap-list");
+
+    // Flip the dock between "currently studying" (front) and "today's recap".
+    const flipInner = document.getElementById("studying-flip");
+    document.getElementById("flip-to-recap").addEventListener("click", () => flipInner.classList.add("flipped"));
+    document.getElementById("flip-to-front").addEventListener("click", () => flipInner.classList.remove("flipped"));
+
+    // Today's recap: a time-sorted agenda of who studied when.
+    function renderRecap(list) {
+        list = list || [];
+        if (list.length === 0) {
+            recapList.innerHTML = `<span class="muted">Nothing logged today yet.</span>`;
+            return;
+        }
+        recapList.innerHTML = list.map(r => {
+            const color = userColor[r.username] || "#8b5cf6";
+            const when  = r.start && r.end ? `${r.start}–${r.end}` : (r.end || r.start || "");
+            return `
+                <div class="recap-row">
+                    <span class="recap-time">${escapeHtml(when)}</span>
+                    <span class="recap-dot" style="background:${color}"></span>
+                    <span class="recap-user">${escapeHtml(r.username)}</span>
+                    <span class="recap-mod">${escapeHtml(r.module || "")}</span>
+                    <span class="recap-dur">${fmtTime(r.seconds)}</span>
+                </div>
+            `;
+        }).join("");
+    }
 
     // Last lists from the server + when we synced them, so chips can tick
     // locally between polls instead of sitting frozen for 15s.
@@ -1721,7 +1872,7 @@ main.container {
     function loadStatus() {
         return fetch(BASE_PATH + "/api/get-study-status.php")
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-            .then(res => { applyMyState(res.me); renderStudying(res.studying); })
+            .then(res => { applyMyState(res.me); renderStudying(res.studying); renderRecap(res.recap); })
             .catch(() => { /* keep previous state on a transient error */ });
     }
 
@@ -1755,6 +1906,7 @@ main.container {
     renderAll();
     applyMyState(INITIAL_STATUS.me);
     renderStudying(INITIAL_STATUS.studying);
+    renderRecap(INITIAL_STATUS.recap);
 }());
 </script>
 

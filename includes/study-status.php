@@ -47,5 +47,32 @@ function studyStatusPayload(PDO $pdo, $userId): array
         }
     }
 
-    return ["me" => $me, "studying" => $studying];
+    // ── Today's recap: every session logged today, with its time window ──────
+    // `created_at` is when the session was recorded (≈ when it ended), so the
+    // window is [created_at - seconds, created_at].
+    $recapRows = $pdo->query("
+        SELECT
+            u.username,
+            s.module_name,
+            s.seconds,
+            DATE_FORMAT(s.created_at - INTERVAL s.seconds SECOND, '%H:%i') AS start_time,
+            DATE_FORMAT(s.created_at, '%H:%i') AS end_time
+        FROM study_sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.studied_on = CURDATE()
+        ORDER BY s.created_at
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    $recap = [];
+    foreach ($recapRows as $r) {
+        $recap[] = [
+            "username" => $r["username"],
+            "module"   => $r["module_name"],
+            "seconds"  => (int) $r["seconds"],
+            "start"    => $r["start_time"],
+            "end"      => $r["end_time"],
+        ];
+    }
+
+    return ["me" => $me, "studying" => $studying, "recap" => $recap];
 }
