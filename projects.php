@@ -87,6 +87,45 @@ foreach ($projects as $p) {
     $grandEntries += (int) $p["entry_count"];
 }
 
+// ── Cross-user standings: everyone's projects on this instance ────────
+// Projects stay owned per-user, but totals are public so people can see
+// who's putting in the hours and what others are working on (read-only).
+$allStmt = $pdo->query("
+    SELECT
+        p.id,
+        p.user_id,
+        u.username,
+        p.name,
+        p.color,
+        COALESCE(SUM(t.seconds), 0) AS total_seconds
+    FROM projects p
+    JOIN users u ON u.id = p.user_id
+    LEFT JOIN project_time_entries t ON t.project_id = p.id
+    GROUP BY p.id, p.user_id, u.username, p.name, p.color
+    ORDER BY total_seconds DESC, p.created_at DESC
+");
+
+$userStats = [];
+foreach ($allStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $uid = (int) $r["user_id"];
+    if (!isset($userStats[$uid])) {
+        $userStats[$uid] = [
+            "username" => $r["username"],
+            "total"    => 0,
+            "projects" => [],
+        ];
+    }
+    $userStats[$uid]["total"]     += (int) $r["total_seconds"];
+    $userStats[$uid]["projects"][] = [
+        "name"  => $r["name"],
+        "color" => $r["color"],
+        "total" => (int) $r["total_seconds"],
+    ];
+}
+
+// Rank users by total time tracked (descending), keeping user_id keys.
+uasort($userStats, fn($a, $b) => $b["total"] <=> $a["total"]);
+
 function formatDuration(int $seconds): string {
     if ($seconds <= 0) return "0m";
     $h = intdiv($seconds, 3600);
@@ -366,6 +405,119 @@ main.container {
 }
 .empty-state .es-emoji { font-size: 2.4rem; display: block; margin-bottom: 10px; }
 
+/* ── Standings / cross-user comparison ──────────────────────────────── */
+.standings { margin-top: 44px; }
+
+.standings-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+}
+.standings-head h2 { margin: 0; font-size: 1.25rem; }
+.standings-sub { margin: 0; color: var(--text-3); font-size: 0.85rem; }
+
+.user-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+}
+
+.user-panel { padding: 18px 18px 14px; }
+.user-panel.me {
+    border-color: rgba(139, 92, 246, 0.45);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-card), var(--glow-violet);
+}
+
+.up-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.up-rank {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: 50%;
+    background: var(--glass-strong);
+    color: var(--text-2);
+}
+.up-rank.r1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #fff; }
+.up-rank.r2 { background: linear-gradient(135deg, #d1d5db, #9ca3af); color: #fff; }
+.up-rank.r3 { background: linear-gradient(135deg, #d97706, #92400e); color: #fff; }
+
+.up-name {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.up-you {
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--violet);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    background: var(--grad-accent-soft);
+    border-radius: var(--radius-full);
+    padding: 1px 7px;
+}
+.up-total {
+    flex-shrink: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+}
+
+.up-projects { display: flex; flex-direction: column; gap: 11px; }
+.up-empty { color: var(--text-3); font-size: 0.85rem; }
+
+.up-proj-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 5px;
+}
+.up-dot { flex-shrink: 0; width: 9px; height: 9px; border-radius: 3px; }
+.up-pname {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-2);
+}
+.up-ptime { flex-shrink: 0; font-weight: 600; color: var(--text-1); font-variant-numeric: tabular-nums; }
+
+.up-bar {
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+.up-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: var(--radius-full);
+    min-width: 2px;
+}
+
 /* Modal tweaks */
 .modal-dialog h3 { margin-top: 0; }
 .hms-row { display: flex; gap: 14px; }
@@ -503,6 +655,61 @@ main.container {
             </article>
         <?php endforeach; ?>
     </div>
+<?php endif; ?>
+
+<?php if (count($userStats) > 0): ?>
+    <section class="standings">
+        <div class="standings-head">
+            <h2>🏆 Standings</h2>
+        </div>
+        <p class="standings-sub">Total time tracked by everyone on this instance — and what they're working on.</p>
+
+        <?php $podium = array_slice($userStats, 0, 3, true); ?>
+        <div class="podium">
+            <?php $rank = 0; foreach ($podium as $u): $rank++; ?>
+                <div class="podium-card glass-card rank-<?= $rank ?>">
+                    <span class="podium-medal"><?= $rank ?></span>
+                    <div class="podium-name"><?= htmlspecialchars($u["username"]) ?></div>
+                    <div class="podium-score gradient-text"><?= htmlspecialchars(formatDuration($u["total"])) ?></div>
+                    <div class="podium-sub">total tracked</div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="user-grid">
+            <?php $rank = 0; foreach ($userStats as $uid => $u): $rank++; $isMe = ($uid === (int) $userId); ?>
+                <div class="user-panel glass-card <?= $isMe ? "me" : "" ?>">
+                    <div class="up-head">
+                        <span class="up-rank <?= $rank <= 3 ? "r{$rank}" : "" ?>"><?= $rank ?></span>
+                        <span class="up-name"><?= htmlspecialchars($u["username"]) ?></span>
+                        <?php if ($isMe): ?><span class="up-you">you</span><?php endif; ?>
+                        <span class="up-total"><?= htmlspecialchars(formatDuration($u["total"])) ?></span>
+                    </div>
+                    <div class="up-projects">
+                        <?php
+                        $maxP = 0;
+                        foreach ($u["projects"] as $pr) { $maxP = max($maxP, $pr["total"]); }
+                        ?>
+                        <?php if (count($u["projects"]) === 0): ?>
+                            <span class="up-empty">No projects yet.</span>
+                        <?php else: foreach ($u["projects"] as $pr):
+                            $c = htmlspecialchars($pr["color"] ?: "#8b5cf6");
+                            $w = $maxP > 0 ? round($pr["total"] / $maxP * 100) : 0;
+                        ?>
+                            <div class="up-proj">
+                                <div class="up-proj-top">
+                                    <span class="up-dot" style="background:<?= $c ?>"></span>
+                                    <span class="up-pname"><?= htmlspecialchars($pr["name"]) ?></span>
+                                    <span class="up-ptime"><?= htmlspecialchars(formatDuration($pr["total"])) ?></span>
+                                </div>
+                                <div class="up-bar"><span style="width:<?= $w ?>%;background:<?= $c ?>"></span></div>
+                            </div>
+                        <?php endforeach; endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
 <?php endif; ?>
 
 <!-- ── Log time modal ──────────────────────────────────────────────── -->
