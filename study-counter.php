@@ -524,80 +524,13 @@ main.container {
     color: var(--text-3);
 }
 
-/* Stop modal — split across modules */
-.stop-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin: 16px 0 10px;
+/* Stop modal */
+#stop-modal select {
+    margin: 16px 0 8px;
 }
 
-.stop-row {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.stop-row-main {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.stop-row-main select {
-    flex: 1;
-    min-width: 0;
-    margin: 0;
-}
-
-.stop-row-min {
-    width: 70px;
-    flex-shrink: 0;
-    margin: 0;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-.stop-min-label {
-    flex-shrink: 0;
-    font-size: 0.85rem;
-    color: var(--text-3);
-}
-
-.stop-row-del {
-    width: auto;
-    margin: 0;
-    padding: 8px 11px;
-    line-height: 1;
-    flex-shrink: 0;
-}
-
-.stop-row-new {
-    margin: 0;
-}
-
-.stop-add-row {
-    width: auto;
-    margin: 0;
-    padding: 7px 14px;
-    font-size: 0.85rem;
-}
-
-.stop-remaining {
-    margin: 12px 0 16px;
-    font-size: 0.82rem;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-}
-
-.stop-remaining.over {
-    color: var(--danger);
-    font-weight: 600;
-}
-
-#stop-modal .modal-dialog {
-    max-height: calc(100vh - 32px);
-    overflow-y: auto;
+#stop-new-module {
+    margin-bottom: 8px;
 }
 
 .mode-tabs {
@@ -1130,16 +1063,14 @@ main.container {
 
 <div class="chart-tooltip" id="chart-tooltip"></div>
 
-<!-- ── Stop / log-on-stop modal (split across modules) ────────────────────── -->
+<!-- ── Stop / log-on-stop modal ────────────────────────────────────────────── -->
 <div id="stop-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card">
         <h3>Log this study session?</h3>
-        <p class="muted">You studied <strong id="stop-modal-time">0m</strong>. Split it across the modules you worked on, or discard it.</p>
+        <p class="muted">You studied <strong id="stop-modal-time">0m</strong>. Choose a module to log it under, or discard it.</p>
 
-        <div class="stop-rows" id="stop-rows"></div>
-
-        <button type="button" class="btn stop-add-row" id="stop-add-row">+ Add module</button>
-        <p class="stop-remaining" id="stop-remaining"></p>
+        <select id="stop-module-sel"></select>
+        <input type="text" id="stop-new-module" placeholder="New module name" maxlength="255" style="display:none;">
 
         <div class="modal-actions">
             <button type="button" class="btn-ghost" id="stop-cancel">Cancel</button>
@@ -1680,9 +1611,8 @@ main.container {
         const body = new FormData();
         body.append("action", action);
         if (extra) {
-            if (extra.module)      body.append("module", extra.module);
-            if (extra.new_module)  body.append("new_module", extra.new_module);
-            if (extra.allocations) body.append("allocations", extra.allocations);
+            if (extra.module)     body.append("module", extra.module);
+            if (extra.new_module) body.append("new_module", extra.new_module);
         }
         return fetch(BASE_PATH + "/api/study-timer.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Timer error."); }))
@@ -1900,92 +1830,38 @@ main.container {
     });
 
     // ── Stop → "log this session?" modal (split across modules) ───────────
-    const stopModal     = document.getElementById("stop-modal");
-    const stopRows      = document.getElementById("stop-rows");
-    const stopTimeEl    = document.getElementById("stop-modal-time");
-    const stopRemaining = document.getElementById("stop-remaining");
+    const stopModal    = document.getElementById("stop-modal");
+    const stopTimeEl   = document.getElementById("stop-modal-time");
+    const stopModSel   = document.getElementById("stop-module-sel");
+    const stopNewMod   = document.getElementById("stop-new-module");
 
-    let stopTotalSeconds = 0;
-
-    // Module <option> list, shared with the log-window catalog.
-    function moduleOptionsHtml() {
-        const opts = MODULES.map(m =>
+    // Populate the module dropdown with the shared catalog.
+    function populateStopModuleSelect() {
+        stopModSel.innerHTML = MODULES.map(m =>
             `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}${m.custom ? "  (custom)" : ""}</option>`
-        ).join("");
-        return opts + `<option value="__new__">+ Add new module…</option>`;
+        ).join("") + `<option value="__new__">+ Add new module…</option>`;
     }
 
-    function addStopRow(minutes) {
-        const row = document.createElement("div");
-        row.className = "stop-row";
-        row.innerHTML = `
-            <div class="stop-row-main">
-                <select class="stop-row-mod">${moduleOptionsHtml()}</select>
-                <input type="number" class="stop-row-min" min="0" step="1" value="${minutes != null ? minutes : 0}">
-                <span class="stop-min-label">min</span>
-                <button type="button" class="stop-row-del icon-btn" aria-label="Remove module">✕</button>
-            </div>
-            <input type="text" class="stop-row-new" placeholder="New module name" maxlength="255" style="display:none;">
-        `;
-        stopRows.appendChild(row);
-
-        const sel      = row.querySelector(".stop-row-mod");
-        const newInput = row.querySelector(".stop-row-new");
-        sel.addEventListener("change", () => {
-            const isNew = sel.value === "__new__";
-            newInput.style.display = isNew ? "block" : "none";
-            if (isNew) newInput.focus();
-        });
-        row.querySelector(".stop-row-min").addEventListener("input", updateStopRemaining);
-        row.querySelector(".stop-row-del").addEventListener("click", () => {
-            row.remove();
-            if (stopRows.children.length === 0) addStopRow(0);
-            updateStopRemaining();
-        });
-        return row;
-    }
-
-    function allocatedSeconds() {
-        let total = 0;
-        stopRows.querySelectorAll(".stop-row-min").forEach(inp => {
-            total += (parseInt(inp.value, 10) || 0) * 60;
-        });
-        return total;
-    }
-
-    function updateStopRemaining() {
-        const used      = allocatedSeconds();
-        const remaining = stopTotalSeconds - used;
-        if (remaining >= 0) {
-            stopRemaining.classList.remove("over");
-            stopRemaining.textContent = `Allocated ${fmtTime(used)} of ${fmtTime(stopTotalSeconds)} · ${fmtTime(remaining)} left`;
-        } else {
-            stopRemaining.classList.add("over");
-            stopRemaining.textContent = `Over by ${fmtTime(-remaining)} — reduce a module's time`;
-        }
-    }
+    stopModSel.addEventListener("change", () => {
+        const isNew = stopModSel.value === "__new__";
+        stopNewMod.style.display = isNew ? "block" : "none";
+        if (isNew) stopNewMod.focus();
+    });
 
     function openStopModal() {
-        stopTotalSeconds = myState.elapsed;
-        stopTimeEl.textContent = fmtTime(stopTotalSeconds);
-
-        // Start with one row holding the whole time, defaulting to the module
-        // picked in the log window (when it's a real one).
-        stopRows.innerHTML = "";
-        const first = addStopRow(Math.round(stopTotalSeconds / 60));
+        stopTimeEl.textContent = fmtTime(myState.elapsed);
+        populateStopModuleSelect();
+        // Default to whatever module is selected in the log window.
         if (moduleSelect.value && moduleSelect.value !== "__new__") {
-            first.querySelector(".stop-row-mod").value = moduleSelect.value;
+            stopModSel.value = moduleSelect.value;
         }
-        updateStopRemaining();
+        stopNewMod.style.display = "none";
+        stopNewMod.value = "";
         stopModal.style.display = "flex";
     }
 
     function closeStopModal() { stopModal.style.display = "none"; }
 
-    document.getElementById("stop-add-row").addEventListener("click", () => {
-        addStopRow(0);
-        updateStopRemaining();
-    });
     document.getElementById("stop-cancel").addEventListener("click", closeStopModal);
     stopModal.addEventListener("click", (e) => { if (e.target === stopModal) closeStopModal(); });
 
@@ -1995,43 +1871,22 @@ main.container {
         timerAction("stop").catch(err => setFeedback(err.message, true));
     });
 
-    // Log: split the studied time across the chosen modules, then clear.
+    // Log: send the chosen module, then clear the timer row.
     document.getElementById("stop-log").addEventListener("click", () => {
-        const allocations = [];
-        let bad = false;
-
-        stopRows.querySelectorAll(".stop-row").forEach(row => {
-            const mins = parseInt(row.querySelector(".stop-row-min").value, 10) || 0;
-            if (mins <= 0) return; // skip rows with no time
-            const sel = row.querySelector(".stop-row-mod");
-            const a = { seconds: mins * 60 };
-            if (sel.value === "__new__") {
-                const name = row.querySelector(".stop-row-new").value.trim();
-                if (name === "") { row.querySelector(".stop-row-new").focus(); bad = true; return; }
-                a.new_module = name;
-            } else if (sel.value) {
-                a.module = sel.value;
-            } else {
-                bad = true;
-                return;
-            }
-            allocations.push(a);
-        });
-
-        if (bad) return;
-        if (allocations.length === 0) {
-            stopRemaining.classList.add("over");
-            stopRemaining.textContent = "Give at least one module some time, or discard.";
-            return;
-        }
-        if (allocatedSeconds() > stopTotalSeconds + 60) {
-            updateStopRemaining(); // shows the "over" message
+        const extra = {};
+        if (stopModSel.value === "__new__") {
+            const name = stopNewMod.value.trim();
+            if (!name) { stopNewMod.focus(); return; }
+            extra.new_module = name;
+        } else if (stopModSel.value) {
+            extra.module = stopModSel.value;
+        } else {
             return;
         }
 
         closeStopModal();
         setFeedback("Saving…", false);
-        timerAction("log", { allocations: JSON.stringify(allocations) })
+        timerAction("log", extra)
             .then(res => {
                 if (res.logged) {
                     setFeedback(`Logged ${fmtTime(res.seconds)}.`, false);
