@@ -68,23 +68,28 @@ main.container {
     margin-bottom: 28px;
 }
 
-/* ── Floating, flippable "currently studying" dock ──────────────────────── */
+/* ── Layout: content + sticky "currently studying" sidebar ──────────────── */
 
+.study-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 28px;
+    align-items: start;
+}
+
+.study-main {
+    min-width: 0; /* let wide children (chart) shrink instead of overflowing */
+}
+
+/* The dock sits in its own column (no overlap), then sticks while scrolling. */
 .studying-dock {
-    position: fixed;
-    right: 24px;
-    bottom: 24px;
-    width: min(340px, calc(100vw - 32px));
-    height: 420px;
-    max-height: calc(100vh - 110px);
-    z-index: 80;
+    position: sticky;
+    top: 78px; /* clears the sticky navbar */
     perspective: 1800px;
 }
 
 .flip-inner {
     position: relative;
-    width: 100%;
-    height: 100%;
     transition: transform 0.6s var(--ease-out);
     transform-style: preserve-3d;
 }
@@ -94,9 +99,6 @@ main.container {
 }
 
 .flip-face {
-    position: absolute;
-    inset: 0;
-
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
@@ -112,7 +114,17 @@ main.container {
     backface-visibility: hidden;
 }
 
+/* Front is in normal flow, so the dock's height tracks its content (and is
+   capped, with the body scrolling). The back overlays it at the same size. */
+.flip-front {
+    position: relative;
+    min-height: 150px;
+    max-height: calc(100vh - 120px);
+}
+
 .flip-back {
+    position: absolute;
+    inset: 0;
     transform: rotateY(180deg);
 }
 
@@ -136,13 +148,21 @@ main.container {
     .flip-inner { transition: none; }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 900px) {
+    .study-layout {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Show the dock first (top) and let it scroll with the page on mobile. */
     .studying-dock {
-        right: 12px;
-        left: 12px;
-        bottom: 12px;
-        width: auto;
-        height: 340px;
+        order: -1;
+        position: static;
+        top: auto;
+    }
+
+    .flip-front {
+        max-height: none;
     }
 }
 
@@ -504,6 +524,82 @@ main.container {
     color: var(--text-3);
 }
 
+/* Stop modal — split across modules */
+.stop-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0 10px;
+}
+
+.stop-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stop-row-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stop-row-main select {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.stop-row-min {
+    width: 70px;
+    flex-shrink: 0;
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.stop-min-label {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    color: var(--text-3);
+}
+
+.stop-row-del {
+    width: auto;
+    margin: 0;
+    padding: 8px 11px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.stop-row-new {
+    margin: 0;
+}
+
+.stop-add-row {
+    width: auto;
+    margin: 0;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+}
+
+.stop-remaining {
+    margin: 12px 0 16px;
+    font-size: 0.82rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.stop-remaining.over {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+#stop-modal .modal-dialog {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+}
+
 .mode-tabs {
     display: flex;
     gap: 8px;
@@ -863,6 +959,9 @@ main.container {
 }
 </style>
 
+<div class="study-layout">
+<div class="study-main">
+
 <div class="study-intro">
     <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
     <p class="study-sub">
@@ -870,47 +969,6 @@ main.container {
         exam calendar or add your own — custom modules join the shared list for everyone.
     </p>
 </div>
-
-<!-- Floating, flippable "currently studying" dock (front) / day recap (back) -->
-<aside class="studying-dock" id="studying-dock">
-    <div class="flip-inner" id="studying-flip">
-
-        <!-- Front: who's studying right now -->
-        <div class="flip-face flip-front">
-            <div class="studying-head">
-                <h2><span class="studying-live-dot"></span> Currently studying</h2>
-                <button type="button" class="icon-btn flip-btn" id="flip-to-recap" title="Today's recap" aria-label="Show today's recap">⇄</button>
-            </div>
-            <div class="studying-actions">
-                <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
-                <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
-            </div>
-            <div class="face-body">
-                <div class="studying-list" id="studying-list">
-                    <span class="muted">Loading…</span>
-                </div>
-                <div class="studying-break-box" id="studying-break-box" style="display:none;">
-                    <span class="break-label">☕ On break</span>
-                    <div class="break-list" id="break-list"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Back: recap of today -->
-        <div class="flip-face flip-back">
-            <div class="studying-head">
-                <h2>📅 Today's recap</h2>
-                <button type="button" class="icon-btn flip-btn" id="flip-to-front" title="Back" aria-label="Back to currently studying">⇄</button>
-            </div>
-            <div class="face-body">
-                <div class="recap-list" id="recap-list">
-                    <span class="muted">Loading…</span>
-                </div>
-            </div>
-        </div>
-
-    </div>
-</aside>
 
 <!-- ── Podium ─────────────────────────────────────────────────────────────── -->
 <div class="podium-bar">
@@ -1025,27 +1083,63 @@ main.container {
 
 </div>
 
+</div><!-- /study-main -->
+
+<!-- Sticky "currently studying" dock (front) / day recap (back) -->
+<aside class="studying-dock" id="studying-dock">
+    <div class="flip-inner" id="studying-flip">
+
+        <!-- Front: who's studying right now -->
+        <div class="flip-face flip-front">
+            <div class="studying-head">
+                <h2><span class="studying-live-dot"></span> Currently studying</h2>
+                <button type="button" class="icon-btn flip-btn" id="flip-to-recap" title="Today's recap" aria-label="Show today's recap">⇄</button>
+            </div>
+            <div class="studying-actions">
+                <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+                <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+            </div>
+            <div class="face-body">
+                <div class="studying-list" id="studying-list">
+                    <span class="muted">Loading…</span>
+                </div>
+                <div class="studying-break-box" id="studying-break-box" style="display:none;">
+                    <span class="break-label">☕ On break</span>
+                    <div class="break-list" id="break-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Back: recap of today -->
+        <div class="flip-face flip-back">
+            <div class="studying-head">
+                <h2>📅 Today's recap</h2>
+                <button type="button" class="icon-btn flip-btn" id="flip-to-front" title="Back" aria-label="Back to currently studying">⇄</button>
+            </div>
+            <div class="face-body">
+                <div class="recap-list" id="recap-list">
+                    <span class="muted">Loading…</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</aside>
+
+</div><!-- /study-layout -->
+
 <div class="chart-tooltip" id="chart-tooltip"></div>
 
-<!-- ── Stop / log-on-stop modal ───────────────────────────────────────────── -->
+<!-- ── Stop / log-on-stop modal (split across modules) ────────────────────── -->
 <div id="stop-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card">
         <h3>Log this study session?</h3>
-        <p class="muted" id="stop-modal-sub">You studied <strong id="stop-modal-time">0m</strong>. Pick a module to save it, or discard it.</p>
+        <p class="muted">You studied <strong id="stop-modal-time">0m</strong>. Split it across the modules you worked on, or discard it.</p>
 
-        <label for="stop-module-select">Module</label>
-        <select id="stop-module-select">
-            <?php foreach ($modules as $m): ?>
-                <option value="<?= htmlspecialchars($m["name"]) ?>">
-                    <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
-                </option>
-            <?php endforeach; ?>
-            <option value="__new__">+ Add new module…</option>
-        </select>
-        <div class="new-module-wrap" id="stop-new-module-wrap">
-            <input type="text" id="stop-new-module-input" maxlength="255" placeholder="New module name">
-            <p class="module-hint">This module will join the shared list for everyone.</p>
-        </div>
+        <div class="stop-rows" id="stop-rows"></div>
+
+        <button type="button" class="btn stop-add-row" id="stop-add-row">+ Add module</button>
+        <p class="stop-remaining" id="stop-remaining"></p>
 
         <div class="modal-actions">
             <button type="button" class="btn-ghost" id="stop-cancel">Cancel</button>
@@ -1586,8 +1680,9 @@ main.container {
         const body = new FormData();
         body.append("action", action);
         if (extra) {
-            if (extra.module)     body.append("module", extra.module);
-            if (extra.new_module) body.append("new_module", extra.new_module);
+            if (extra.module)      body.append("module", extra.module);
+            if (extra.new_module)  body.append("new_module", extra.new_module);
+            if (extra.allocations) body.append("allocations", extra.allocations);
         }
         return fetch(BASE_PATH + "/api/study-timer.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Timer error."); }))
@@ -1804,63 +1899,142 @@ main.container {
             .catch(err => setFeedback(err.message, true));
     });
 
-    // ── Stop → "log this session?" modal ──────────────────────────────────
-    const stopModal        = document.getElementById("stop-modal");
-    const stopModuleSelect = document.getElementById("stop-module-select");
-    const stopNewWrap      = document.getElementById("stop-new-module-wrap");
-    const stopNewInput     = document.getElementById("stop-new-module-input");
-    const stopTimeEl       = document.getElementById("stop-modal-time");
+    // ── Stop → "log this session?" modal (split across modules) ───────────
+    const stopModal     = document.getElementById("stop-modal");
+    const stopRows      = document.getElementById("stop-rows");
+    const stopTimeEl    = document.getElementById("stop-modal-time");
+    const stopRemaining = document.getElementById("stop-remaining");
+
+    let stopTotalSeconds = 0;
+
+    // Module <option> list, shared with the log-window catalog.
+    function moduleOptionsHtml() {
+        const opts = MODULES.map(m =>
+            `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}${m.custom ? "  (custom)" : ""}</option>`
+        ).join("");
+        return opts + `<option value="__new__">+ Add new module…</option>`;
+    }
+
+    function addStopRow(minutes) {
+        const row = document.createElement("div");
+        row.className = "stop-row";
+        row.innerHTML = `
+            <div class="stop-row-main">
+                <select class="stop-row-mod">${moduleOptionsHtml()}</select>
+                <input type="number" class="stop-row-min" min="0" step="1" value="${minutes != null ? minutes : 0}">
+                <span class="stop-min-label">min</span>
+                <button type="button" class="stop-row-del icon-btn" aria-label="Remove module">✕</button>
+            </div>
+            <input type="text" class="stop-row-new" placeholder="New module name" maxlength="255" style="display:none;">
+        `;
+        stopRows.appendChild(row);
+
+        const sel      = row.querySelector(".stop-row-mod");
+        const newInput = row.querySelector(".stop-row-new");
+        sel.addEventListener("change", () => {
+            const isNew = sel.value === "__new__";
+            newInput.style.display = isNew ? "block" : "none";
+            if (isNew) newInput.focus();
+        });
+        row.querySelector(".stop-row-min").addEventListener("input", updateStopRemaining);
+        row.querySelector(".stop-row-del").addEventListener("click", () => {
+            row.remove();
+            if (stopRows.children.length === 0) addStopRow(0);
+            updateStopRemaining();
+        });
+        return row;
+    }
+
+    function allocatedSeconds() {
+        let total = 0;
+        stopRows.querySelectorAll(".stop-row-min").forEach(inp => {
+            total += (parseInt(inp.value, 10) || 0) * 60;
+        });
+        return total;
+    }
+
+    function updateStopRemaining() {
+        const used      = allocatedSeconds();
+        const remaining = stopTotalSeconds - used;
+        if (remaining >= 0) {
+            stopRemaining.classList.remove("over");
+            stopRemaining.textContent = `Allocated ${fmtTime(used)} of ${fmtTime(stopTotalSeconds)} · ${fmtTime(remaining)} left`;
+        } else {
+            stopRemaining.classList.add("over");
+            stopRemaining.textContent = `Over by ${fmtTime(-remaining)} — reduce a module's time`;
+        }
+    }
 
     function openStopModal() {
-        stopTimeEl.textContent = fmtTime(myState.elapsed);
-        // Default to the module picked in the log window, when it's a real one.
+        stopTotalSeconds = myState.elapsed;
+        stopTimeEl.textContent = fmtTime(stopTotalSeconds);
+
+        // Start with one row holding the whole time, defaulting to the module
+        // picked in the log window (when it's a real one).
+        stopRows.innerHTML = "";
+        const first = addStopRow(Math.round(stopTotalSeconds / 60));
         if (moduleSelect.value && moduleSelect.value !== "__new__") {
-            stopModuleSelect.value = moduleSelect.value;
+            first.querySelector(".stop-row-mod").value = moduleSelect.value;
         }
-        stopNewInput.value = "";
-        stopNewWrap.classList.toggle("show", stopModuleSelect.value === "__new__");
+        updateStopRemaining();
         stopModal.style.display = "flex";
     }
 
-    function closeStopModal() {
-        stopModal.style.display = "none";
-    }
+    function closeStopModal() { stopModal.style.display = "none"; }
 
-    stopModuleSelect.addEventListener("change", () => {
-        const isNew = stopModuleSelect.value === "__new__";
-        stopNewWrap.classList.toggle("show", isNew);
-        if (isNew) stopNewInput.focus();
+    document.getElementById("stop-add-row").addEventListener("click", () => {
+        addStopRow(0);
+        updateStopRemaining();
     });
-
     document.getElementById("stop-cancel").addEventListener("click", closeStopModal);
     stopModal.addEventListener("click", (e) => { if (e.target === stopModal) closeStopModal(); });
 
-    // Discard: stop studying without recording a session.
+    // Discard: stop studying without recording anything.
     document.getElementById("stop-discard").addEventListener("click", () => {
         closeStopModal();
         timerAction("stop").catch(err => setFeedback(err.message, true));
     });
 
-    // Log: record the elapsed study time against the chosen module, then clear.
+    // Log: split the studied time across the chosen modules, then clear.
     document.getElementById("stop-log").addEventListener("click", () => {
-        const extra = {};
-        if (stopModuleSelect.value === "__new__") {
-            const name = stopNewInput.value.trim();
-            if (name === "") { stopNewInput.focus(); return; }
-            extra.new_module = name;
-        } else if (stopModuleSelect.value) {
-            extra.module = stopModuleSelect.value;
-        } else {
-            stopNewInput.focus();
+        const allocations = [];
+        let bad = false;
+
+        stopRows.querySelectorAll(".stop-row").forEach(row => {
+            const mins = parseInt(row.querySelector(".stop-row-min").value, 10) || 0;
+            if (mins <= 0) return; // skip rows with no time
+            const sel = row.querySelector(".stop-row-mod");
+            const a = { seconds: mins * 60 };
+            if (sel.value === "__new__") {
+                const name = row.querySelector(".stop-row-new").value.trim();
+                if (name === "") { row.querySelector(".stop-row-new").focus(); bad = true; return; }
+                a.new_module = name;
+            } else if (sel.value) {
+                a.module = sel.value;
+            } else {
+                bad = true;
+                return;
+            }
+            allocations.push(a);
+        });
+
+        if (bad) return;
+        if (allocations.length === 0) {
+            stopRemaining.classList.add("over");
+            stopRemaining.textContent = "Give at least one module some time, or discard.";
+            return;
+        }
+        if (allocatedSeconds() > stopTotalSeconds + 60) {
+            updateStopRemaining(); // shows the "over" message
             return;
         }
 
         closeStopModal();
         setFeedback("Saving…", false);
-        timerAction("log", extra)
+        timerAction("log", { allocations: JSON.stringify(allocations) })
             .then(res => {
                 if (res.logged) {
-                    setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
+                    setFeedback(`Logged ${fmtTime(res.seconds)}.`, false);
                     loadData();
                 } else {
                     setFeedback("Session stopped — nothing to log.", false);
