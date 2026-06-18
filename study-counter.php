@@ -1434,7 +1434,7 @@ main.container {
             requestAnimationFrame(() => next.classList.remove("fade-out"));
         }, 280);
         showingModules = !showingModules;
-        toggleBtn.textContent = showingModules ? "Overall" : "Per module";
+        toggleBtn.textContent = showingModules ? "Per module" : "Overall";
     });
 
     // ── Data load + full render ───────────────────────────────────────────
