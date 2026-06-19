@@ -1191,17 +1191,19 @@ main.container {
 
     // User colors assigned once from all usernames seen (stable across weeks).
     const userColor = {};
-    function assignUserColors(usernames) {
-        usernames.slice().sort().forEach((u) => {
-            if (u in userColor) return;
-            const fixed = FIXED_USER_COLORS[u.toLowerCase()];
-            userColor[u] = fixed || USER_COLORS[Object.keys(userColor).length % USER_COLORS.length];
-        });
-    }
-    // Colour for any username (incl. people who are studying but have no logged
-    // sessions yet, so they're not in userColor).
+    // Colour for any username — fixed regulars first, otherwise a deterministic
+    // palette pick from the name (so it's stable across renders and refreshes,
+    // and works for people studying who have no logged sessions yet). Cached.
     function colorFor(username) {
-        return userColor[username] || FIXED_USER_COLORS[(username || "").toLowerCase()] || "#8b5cf6";
+        if (userColor[username]) return userColor[username];
+        const fixed = FIXED_USER_COLORS[(username || "").toLowerCase()];
+        if (fixed) return (userColor[username] = fixed);
+        let h = 0;
+        for (let i = 0; i < username.length; i++) h = (h * 31 + username.charCodeAt(i)) >>> 0;
+        return (userColor[username] = USER_COLORS[h % USER_COLORS.length]);
+    }
+    function assignUserColors(usernames) {
+        usernames.forEach(colorFor);
     }
 
     // ── State ─────────────────────────────────────────────────────────────
