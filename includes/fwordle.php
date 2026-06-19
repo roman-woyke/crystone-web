@@ -17,7 +17,7 @@
 //   dict-<len>.txt    — SOWPODS Scrabble words, the *guess validation* list
 //   answers-<len>.txt — common words ∩ SOWPODS, the *answer / suggestion* pool
 
-const FWORDLE_MAX_GUESSES = 7;
+const FWORDLE_MAX_GUESSES = 9;
 const FWORDLE_MAX_WORDS   = 4;
 const FWORDLE_MIN_LEN     = 5;
 const FWORDLE_MAX_LEN     = 10;

@@ -235,6 +235,17 @@ main.container { max-width: 1280px; }
 
 .fw-key:hover { background: rgba(255, 255, 255, 0.12); }
 .fw-key:active { transform: translateY(1px); }
+
+/* Press feedback — fires on click and on physical-keyboard typing. */
+.fw-key.pressed { animation: fw-key-press 0.16s ease-out; }
+@keyframes fw-key-press {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(0.86); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.5); }
+    100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fw-key.pressed { animation: none; }
+}
 .fw-key.wide { max-width: 76px; font-size: 0.74rem; letter-spacing: 0.04em; }
 .fw-key.space { max-width: 260px; font-size: 0.74rem; letter-spacing: 0.1em; }
 .fw-key[disabled] { cursor: not-allowed; }
@@ -364,7 +375,7 @@ main.container { max-width: 1280px; }
     <div class="fw-intro">
         <h1 class="page-heading fw-head">f<span class="gradient-text">Wordle</span></h1>
         <p class="fw-sub">
-            One puzzle a day, shared by everyone. Solve every board in 7 guesses. A guess can be
+            One puzzle a day, shared by everyone. Solve every board in 9 guesses. A guess can be
             any word from 5 letters up to the day's length — slide it left/right to place it.
             Beat the day and you get to set one of tomorrow's words.
         </p>
@@ -699,8 +710,19 @@ main.container { max-width: 1280px; }
     }
 
     // ── Input handling ─────────────────────────────────────────────────────
+    // Replay the press animation on the matching on-screen key (so physical
+    // typing lights it up too). Re-trigger by removing + reflowing the class.
+    function flashKey(key) {
+        const btn = keyboardEl.querySelector(`.fw-key[data-key="${key}"]`);
+        if (!btn) return;
+        btn.classList.remove("pressed");
+        void btn.offsetWidth;
+        btn.classList.add("pressed");
+    }
+
     function handleKey(key) {
         if (STATE.me.finished || busy) return;
+        flashKey(key);
         if (key === "enter") return submitGuess();
         if (key === "back")  { buffer = buffer.slice(0, -1); rerenderInput(); return; }
         if (key === "space") {
