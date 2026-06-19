@@ -663,9 +663,18 @@ main.container { max-width: 1280px; }
 
     // ── Tomorrow's word picker ─────────────────────────────────────────────
     let changing = false;
+    let lastChooseSig = null;
     function renderChoose() {
         const c = STATE.choose;
-        if (!c.eligible || !STATE.me.solved) { chooseEl.style.display = "none"; return; }
+        const visible = c.eligible && STATE.me.solved;
+
+        // Only rebuild when something actually changed — otherwise a background
+        // poll would wipe the custom-word input you're typing in.
+        const sig = visible ? `${c.already || ""}|${changing}|${c.tomorrow_length}` : "hidden";
+        if (sig === lastChooseSig) return;
+        lastChooseSig = sig;
+
+        if (!visible) { chooseEl.style.display = "none"; return; }
         chooseEl.style.display = "";
 
         const tlen = c.tomorrow_length;
