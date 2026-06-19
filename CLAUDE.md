@@ -56,6 +56,9 @@ All return plain text on error (non-200 status) or their payload on success:
 | `api/patch-project.php` | POST | Update `name`, `description`, or `color` on an owned project; returns `OK` |
 | `api/delete-project.php` | POST | Delete an owned project plus its time entries; returns `OK` |
 | `api/delete-time-entry.php` | POST | Delete one owned `project_time_entries` row; returns `OK` |
+| `api/fwordle-state.php` | GET | Full fWordle state for today: my boards (with letters), opponents' boards (colors only), and the tomorrow-word pick panel |
+| `api/fwordle-guess.php` | POST | Submit a guess (`word` + `offset`); validates length/position/dictionary server-side, scores every board, updates `fwordle_results`; returns the new state |
+| `api/fwordle-choose.php` | POST | Set one of tomorrow's words (`word`); solver-only, validated against the dictionary + tomorrow's length, no duplicates; returns `{ok, word, tomorrow_length}` |
 
 ### Ownership checks
 
@@ -109,6 +112,16 @@ The study timer is **server-backed** so it survives closing/reloading the page. 
 
 - Time is logged two ways: a **live timer** per card and a **manual** hours/minutes modal. Unlike the study counter's server-backed timer, the project timer is **client-only** — the start epoch is kept in `localStorage` (key `project_timer_<BASE_PATH>_<id>`) so it survives reloads, and on stop the elapsed seconds POST to `api/log-time.php`. There is no shared/presence aspect.
 - `api/log-time.php` validates duration (1–86400s, capped) and project ownership before inserting. `patch-project.php` (name/description/colour, validated against the colour palette), `delete-project.php` (deletes entries then the project), and `delete-time-entry.php` all include `AND user_id = ?` ownership checks. The page reloads after any mutation rather than patching the DOM.
+
+### fWordle
+
+`fwordle.php` (auth-guarded) is a daily, multi-board, multiplayer Wordle. All logic lives in `includes/fwordle.php`; the page server-renders the initial state and then polls. The word lists are **bundled text files** in `includes/fwordle/` (not the DB): `dict-<5..10>.txt` (full SOWPODS, for guess validation) and `answers-<5..10>.txt` (common words ∩ SOWPODS, for random answers + suggestions). `fwordleIsValidWord()` lazily loads + caches the one length it needs.
+
+- **One puzzle per day** (server date). The day's **length L** is rolled once with weights 5→50% / 6→25% / 7→15% / 8→6% / 9→3% / 10→1% (`fwordleRollLength`) and stored on `fwordle_days`. **N boards** (1–4), all length L, are solved Quordle-style: one guess scored against every board.
+- **Variable-length guesses.** A guess is any valid word of length 5..L, **positioned** within the L-wide row. It's stored in `fwordle_guesses.guess` as an L-char string with `_` for blank cells (e.g. `__HELLO___`), encoding word + offset together — so no schema column is needed for position. Blank cells score as `empty` (neutral); `fwordleScore()` does standard greens-first multiplicity over the filled cells. A board is only **solved** by the full L-length answer at offset 0 (`guess === answer`). 7 shared guesses max.
+- **N is set by the previous day**: `fwordleFinalizeWords()` runs when a day arrives, taking the first ≤4 solvers of the prior day (ordered by `fwordle_results.solved_at`) as slots — each slot uses that solver's `fwordle_choices` word, else a random backfill. **0 solvers → 4 random words.** Finalize is idempotent and race-safe (re-checks `words_finalized` under `SELECT … FOR UPDATE`).
+- **Choosing tomorrow's word**: the first ≤4 solvers (`fwordleChoiceEligible`) get a pick. Tomorrow's row (and its length) is created lazily via `fwordleEnsureDay` so the picker can constrain to the right length. Three stable suggestions come from the answer pool (`fwordleSuggestions`, deterministic per user/day); a custom word is validated against the dictionary + length, and no two boards may share a word. `api/fwordle-choose.php` `REPLACE`s into `fwordle_choices`, so a pick can be changed until that day finalizes.
+- **Live competition**: opponents' boards are sent as **colors only, never letters** (`fwordleState` strips `text` from everyone but the requester). Own answers are revealed only once *I* finish (win or out of guesses). The page polls `fwordle-state.php` every 6s, on `visibilitychange`, and on bfcache `pageshow`; a poll never clobbers the in-progress local guess buffer/offset (those live only client-side until submitted).
 
 ## Database schema
 

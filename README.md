@@ -201,6 +201,66 @@ CREATE TABLE project_time_entries (
     note       VARCHAR(255),
     logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- fWordle (fwordle.php): a daily multi-board, multiplayer Wordle. One puzzle a
+-- day; N boards (1–4) all of the same length L. The word lists live as bundled
+-- text files in includes/fwordle/, NOT in the DB.
+
+-- One row per calendar day: the day's word length + whether its answer words
+-- have been finalized. Length is rolled when the row is first created.
+CREATE TABLE fwordle_days (
+    game_date       DATE NOT NULL PRIMARY KEY,
+    word_length     TINYINT UNSIGNED NOT NULL,
+    words_finalized TINYINT NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The answer words for each day (1–4), one row per board position.
+-- source = 'chosen' (a prior-day solver picked it) or 'random' (backfilled).
+CREATE TABLE fwordle_words (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    game_date  DATE NOT NULL,
+    position   TINYINT UNSIGNED NOT NULL,
+    word       VARCHAR(10) NOT NULL,
+    source     ENUM('chosen','random') NOT NULL DEFAULT 'random',
+    chooser_id INT NULL REFERENCES users(id),
+    UNIQUE KEY uniq_day_pos (game_date, position)
+);
+
+-- A solver's chosen word for the NEXT day. game_date is the date the word is
+-- FOR; user_id is the chooser. Folded into fwordle_words when that day arrives.
+CREATE TABLE fwordle_choices (
+    game_date  DATE NOT NULL,
+    user_id    INT NOT NULL REFERENCES users(id),
+    word       VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_date, user_id)
+);
+
+-- Per user, per day outcome. solved_at orders who earns choice rights
+-- (first 4 solvers). finished locks the board (win or out of guesses).
+CREATE TABLE fwordle_results (
+    game_date    DATE NOT NULL,
+    user_id      INT NOT NULL REFERENCES users(id),
+    finished     TINYINT NOT NULL DEFAULT 0,
+    solved       TINYINT NOT NULL DEFAULT 0,
+    guesses_used TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    solved_at    DATETIME NULL,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_date, user_id)
+);
+
+-- Each guess a user has made today (shared across all boards), in order. The
+-- guess is stored as an L-wide string with '_' for unused cells (e.g.
+-- '__HELLO___'), encoding both the word and where it was positioned.
+CREATE TABLE fwordle_guesses (
+    game_date   DATE NOT NULL,
+    user_id     INT NOT NULL REFERENCES users(id),
+    guess_index TINYINT UNSIGNED NOT NULL,
+    guess       VARCHAR(10) NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_date, user_id, guess_index)
+);
 ```
 
 > **Deploy note:** when merging new tables into another branch's deployment,
@@ -249,6 +309,9 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── delete-application.php
 │   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
 │   ├── delete-time-entry.php   ← project tracker: remove a single logged session
+│   ├── fwordle-choose.php      ← fWordle: set one of tomorrow's words (solver-only)
+│   ├── fwordle-guess.php       ← fWordle: submit a guess (validated + scored server-side)
+│   ├── fwordle-state.php       ← fWordle: full game state (mine + opponents' colors)
 │   ├── get-leaderboard.php
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
@@ -266,6 +329,8 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   ├── css/style.css      ← design tokens + shared glass components
 │   └── js/app.js          ← mobile nav toggle + countUp helper
 ├── includes/
+│   ├── fwordle/           ← fWordle word data: dict-<5..10>.txt (validation) + answers-<5..10>.txt (answer pool)
+│   ├── fwordle.php        ← fWordle: length roll, day lifecycle, scoring, state payload
 │   ├── footer.php
 │   ├── header.php         ← brand, conditional nav, fonts, background orbs
 │   ├── scoring.php        ← shared scoring logic + SQL helpers
@@ -275,6 +340,7 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 │   └── typing-sentences.php ← sentence corpus for the typing battle
 ├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
+├── fwordle.php            ← daily multi-board multiplayer Wordle
 ├── index.php              ← marketing landing page (per-instance root)
 ├── leaderboard.php        ← public leaderboard page
 ├── login.php
