@@ -1198,6 +1198,11 @@ main.container {
             userColor[u] = fixed || USER_COLORS[Object.keys(userColor).length % USER_COLORS.length];
         });
     }
+    // Colour for any username (incl. people who are studying but have no logged
+    // sessions yet, so they're not in userColor).
+    function colorFor(username) {
+        return userColor[username] || FIXED_USER_COLORS[(username || "").toLowerCase()] || "#8b5cf6";
+    }
 
     // ── State ─────────────────────────────────────────────────────────────
     let SESSIONS = INITIAL_SESSIONS || [];  // [{username, module, date, seconds}]
@@ -1905,7 +1910,7 @@ main.container {
                 return `
                     <span class="studying-chip ${isMe ? "me" : ""}">
                         <span class="pulse-dot"></span>
-                        ${escapeHtml(s.username)}
+                        <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
                         <span class="chip-meta"><span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s)}</span>
                     </span>
                 `;
@@ -1923,7 +1928,7 @@ main.container {
                 return `
                     <span class="studying-chip break ${isMe ? "me" : ""}">
                         <span class="pulse-dot paused"></span>
-                        ${escapeHtml(s.username)}
+                        <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
                         <span class="chip-meta">${fmtClock(s.elapsed)}${moduleSuffix(s)}<span class="chip-break" data-bidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span></span>
                     </span>
                 `;
