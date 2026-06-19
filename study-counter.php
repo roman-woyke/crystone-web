@@ -1134,7 +1134,7 @@ main.container {
 
     // Two distinct palettes: outlines for users, fills for modules.
     // Fixed colours for the regulars; everyone else draws from the palette.
-    const FIXED_USER_COLORS = { basti: "#22c55e", ben: "#ef4444", roman: "#8b5cf6" };
+    const FIXED_USER_COLORS = { basti: "#22c55e", ben: "#ef4444", roman: "#8b5cf6", lorenz: "#eab308" };
     const USER_COLORS = [
         "#f472b6", "#f59e0b", "#22d3ee", "#a3e635",
         "#fb7185", "#c084fc", "#facc15", "#2dd4bf",
