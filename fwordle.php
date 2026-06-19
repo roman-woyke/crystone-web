@@ -165,24 +165,6 @@ main.container { max-width: 1280px; }
 /* ── Controls / keyboard ────────────────────────────────────────────────── */
 .fw-controls { margin-bottom: 20px; }
 
-.fw-offset {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    font-size: 0.84rem;
-    color: var(--text-2);
-}
-
-.fw-offset button {
-    width: auto;
-    margin: 0;
-    padding: 6px 14px;
-    font-size: 1rem;
-    line-height: 1;
-}
-
 .fw-msg {
     margin: 12px 0 0;
     min-height: 1.2em;
@@ -192,12 +174,38 @@ main.container { max-width: 1280px; }
 }
 .fw-msg.ok { color: var(--success); }
 
+.fw-kb-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+/* Vertical board switcher: which board's letter colours the keyboard shows. */
+.fw-kb-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    flex-shrink: 0;
+}
+
+.fw-kb-tab {
+    width: 40px;
+    max-width: 40px;
+    flex: none;
+}
+.fw-kb-tab.active {
+    background: var(--grad-accent);
+    color: #fff;
+    box-shadow: var(--glow-violet);
+}
+.fw-kb-tab.solved { box-shadow: inset 0 0 0 2px var(--fw-green); }
+
 .fw-keyboard {
     display: flex;
     flex-direction: column;
     gap: 7px;
     max-width: 560px;
-    margin: 0 auto;
 }
 
 .fw-krow {
@@ -228,7 +236,13 @@ main.container { max-width: 1280px; }
 .fw-key:hover { background: rgba(255, 255, 255, 0.12); }
 .fw-key:active { transform: translateY(1px); }
 .fw-key.wide { max-width: 76px; font-size: 0.74rem; letter-spacing: 0.04em; }
-.fw-key[disabled] { opacity: 0.4; cursor: not-allowed; }
+.fw-key.space { max-width: 260px; font-size: 0.74rem; letter-spacing: 0.1em; }
+.fw-key[disabled] { cursor: not-allowed; }
+
+/* Letter feedback (for the currently selected board). */
+.fw-key.green  { background: var(--fw-green); color: #fff; }
+.fw-key.orange { background: var(--fw-orange); color: #fff; }
+.fw-key.grey   { background: var(--fw-grey); color: #fff; opacity: 0.85; }
 
 /* ── Tomorrow's word picker ─────────────────────────────────────────────── */
 .fw-choose { padding: 20px; }
@@ -363,12 +377,10 @@ main.container { max-width: 1280px; }
     <div class="fw-boards" id="fw-boards"></div>
 
     <div class="fw-controls" id="fw-controls">
-        <div class="fw-offset" id="fw-offset" style="display:none;">
-            <button type="button" class="btn" id="fw-off-left" aria-label="Move left">◀</button>
-            <span id="fw-off-label">Slide your word into place</span>
-            <button type="button" class="btn" id="fw-off-right" aria-label="Move right">▶</button>
+        <div class="fw-kb-wrap">
+            <div class="fw-kb-selector" id="fw-kb-selector"></div>
+            <div class="fw-keyboard" id="fw-keyboard"></div>
         </div>
-        <div class="fw-keyboard" id="fw-keyboard"></div>
         <p class="fw-msg" id="fw-msg"></p>
     </div>
 
@@ -391,25 +403,20 @@ main.container { max-width: 1280px; }
     const MAX = STATE.max_guesses;
 
     // ── Local input state (never lives on the server until submitted) ──────
-    let buffer = "";   // typed letters (lowercase)
-    let offset = 0;    // where the word sits within the L-wide row
+    // `buffer` is the row as typed: letters plus spaces (a space = a blank cell
+    // used to push a shorter word into position). Capped at the day's length.
+    let buffer = "";
     let busy = false;
+    let kbBoard = 0;   // which board's letter colours the keyboard shows
 
     const L = () => STATE.length;
-
-    function clampOffset() {
-        const max = L() - buffer.length;
-        if (buffer.length === 0 || buffer.length >= L()) offset = 0;
-        else offset = Math.max(0, Math.min(offset, max));
-    }
 
     // ── DOM refs ───────────────────────────────────────────────────────────
     const statusEl  = document.getElementById("fw-status");
     const boardsEl   = document.getElementById("fw-boards");
     const bannerEl   = document.getElementById("fw-banner");
-    const offsetEl   = document.getElementById("fw-offset");
-    const offLabel   = document.getElementById("fw-off-label");
     const keyboardEl = document.getElementById("fw-keyboard");
+    const selectorEl = document.getElementById("fw-kb-selector");
     const msgEl      = document.getElementById("fw-msg");
     const chooseEl   = document.getElementById("fw-choose");
     const oppEl      = document.getElementById("fw-opponents");
@@ -450,37 +457,52 @@ main.container { max-width: 1280px; }
         const activeRowIndex = me.finished ? -1 : me.guesses_used;
         let html = "";
 
+        const owned = me.owned || [];
+        const answers = me.answers || [];
+
         for (let b = 0; b < n; b++) {
+            const isOwned = owned.includes(b);
             const solved = me.solved_boards[b];
             const failed = me.finished && !solved;
             html += `<div class="fw-board ${solved ? "solved" : ""} ${failed ? "failed" : ""}">`;
-            html += `<div class="fw-board-head"><span>Board ${b + 1}</span>${solved ? '<span class="fw-check">✓ solved</span>' : ""}</div>`;
+            const badge = isOwned
+                ? '<span class="fw-check">★ your word</span>'
+                : (solved ? '<span class="fw-check">✓ solved</span>' : "");
+            html += `<div class="fw-board-head"><span>Board ${b + 1}</span>${badge}</div>`;
             html += `<div class="fw-grid" style="--cols:${len}">`;
 
-            for (let r = 0; r < MAX; r++) {
-                if (r < me.guesses.length) {
-                    const g = me.guesses[r];
-                    const colors = g.boards[b];
+            if (isOwned) {
+                // You chose this word — it's revealed and counts as solved.
+                const ans = answers[b] || "";
+                for (let r = 0; r < MAX; r++) {
                     for (let i = 0; i < len; i++) {
-                        const ch = g.text[i] === "_" ? "" : g.text[i];
-                        html += cell(ch, colors[i]);
+                        html += (r === 0) ? cell(ans[i] || "", "green") : cell("", "empty");
                     }
-                } else if (r === activeRowIndex && !solved) {
-                    for (let i = 0; i < len; i++) {
-                        if (i >= offset && i < offset + buffer.length) {
-                            html += cell(buffer[i - offset], "active");
-                        } else {
-                            html += cell("", buffer.length ? "blank" : "empty");
+                }
+            } else {
+                for (let r = 0; r < MAX; r++) {
+                    if (r < me.guesses.length) {
+                        const g = me.guesses[r];
+                        const colors = g.boards[b];
+                        for (let i = 0; i < len; i++) {
+                            const ch = g.text[i] === "_" ? "" : g.text[i];
+                            html += cell(ch, colors[i]);
                         }
+                    } else if (r === activeRowIndex && !solved) {
+                        for (let i = 0; i < len; i++) {
+                            const ch = buffer[i];
+                            if (ch && ch !== " ") html += cell(ch, "active");
+                            else html += cell("", buffer.length ? "blank" : "empty");
+                        }
+                    } else {
+                        for (let i = 0; i < len; i++) html += cell("", "empty");
                     }
-                } else {
-                    for (let i = 0; i < len; i++) html += cell("", "empty");
                 }
             }
 
             html += `</div>`; // grid
-            if (failed && me.answers) {
-                html += `<div class="fw-answer">Answer: <strong>${escapeHtml(me.answers[b])}</strong></div>`;
+            if (!isOwned && failed && answers[b]) {
+                html += `<div class="fw-answer">Answer: <strong>${escapeHtml(answers[b])}</strong></div>`;
             }
             html += `</div>`; // board
         }
@@ -513,6 +535,8 @@ main.container { max-width: 1280px; }
             if (idx === 2) html += `<button type="button" class="fw-key wide" data-key="back">⌫</button>`;
             html += `</div>`;
         });
+        // A space bar pads blank cells so a shorter word can be placed anywhere.
+        html += `<div class="fw-krow"><button type="button" class="fw-key space" data-key="space">space</button></div>`;
         keyboardEl.innerHTML = html;
         keyboardEl.querySelectorAll(".fw-key").forEach(btn => {
             btn.addEventListener("click", () => handleKey(btn.dataset.key));
@@ -520,18 +544,55 @@ main.container { max-width: 1280px; }
     }
 
     function renderControls() {
-        const me = STATE.me;
-        const disabled = me.finished;
+        const disabled = STATE.me.finished;
         keyboardEl.querySelectorAll(".fw-key").forEach(b => { b.disabled = disabled; });
+    }
 
-        // The position controls only matter when a shorter-than-L word is in play.
-        const canShift = !me.finished && buffer.length > 0 && buffer.length < L();
-        offsetEl.style.display = canShift ? "flex" : "none";
-        if (canShift) {
-            document.getElementById("fw-off-left").disabled  = offset <= 0;
-            document.getElementById("fw-off-right").disabled = offset >= L() - buffer.length;
-            offLabel.textContent = `Position ${offset + 1}–${offset + buffer.length} of ${L()}`;
+    // Best colour seen for each letter on a given board (green > orange > grey).
+    function kbStatesFor(b) {
+        const rank = { grey: 1, orange: 2, green: 3 };
+        const st = {};
+        for (const g of STATE.me.guesses) {
+            const colors = g.boards[b];
+            for (let i = 0; i < g.text.length; i++) {
+                const ch = g.text[i];
+                const c = colors[i];
+                if (ch === "_" || c === "empty") continue;
+                if (!st[ch] || rank[c] > rank[st[ch]]) st[ch] = c;
+            }
         }
+        return st;
+    }
+
+    // The 1·2·3·4 board switcher + the per-board key tinting.
+    function renderKeyboard() {
+        const n = STATE.num_boards;
+        if (kbBoard >= n) kbBoard = 0;
+
+        // Switcher only earns its place with more than one board.
+        if (n <= 1) {
+            selectorEl.style.display = "none";
+        } else {
+            selectorEl.style.display = "flex";
+            selectorEl.innerHTML = "";
+            for (let b = 0; b < n; b++) {
+                const solved = STATE.me.solved_boards[b];
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "fw-key fw-kb-tab" + (b === kbBoard ? " active" : "") + (solved ? " solved" : "");
+                btn.textContent = String(b + 1);
+                btn.title = "Board " + (b + 1) + (solved ? " (solved)" : "");
+                btn.addEventListener("click", () => { kbBoard = b; renderKeyboard(); });
+                selectorEl.appendChild(btn);
+            }
+        }
+
+        const st = n > 0 ? kbStatesFor(kbBoard) : {};
+        keyboardEl.querySelectorAll(".fw-key").forEach(key => {
+            const k = key.dataset.key;
+            key.classList.remove("green", "orange", "grey");
+            if (/^[a-z]$/.test(k) && st[k]) key.classList.add(st[k]);
+        });
     }
 
     // ── Opponents ────────────────────────────────────────────────────────
@@ -641,18 +702,17 @@ main.container { max-width: 1280px; }
     function handleKey(key) {
         if (STATE.me.finished || busy) return;
         if (key === "enter") return submitGuess();
-        if (key === "back")  { buffer = buffer.slice(0, -1); clampOffset(); rerenderInput(); return; }
+        if (key === "back")  { buffer = buffer.slice(0, -1); rerenderInput(); return; }
+        if (key === "space") {
+            // Leading/trailing blanks position a short word; ignore a leading run
+            // longer than would leave room, and never start with nothing typed.
+            if (buffer.length < L()) { buffer += " "; rerenderInput(); }
+            return;
+        }
         if (/^[a-z]$/.test(key) && buffer.length < L()) {
             buffer += key;
-            clampOffset();
             rerenderInput();
         }
-    }
-
-    function shift(delta) {
-        if (buffer.length === 0 || buffer.length >= L()) return;
-        offset = Math.max(0, Math.min(L() - buffer.length, offset + delta));
-        rerenderInput();
     }
 
     // Only the active row + controls change while typing — no need to repaint
@@ -661,33 +721,36 @@ main.container { max-width: 1280px; }
 
     function submitGuess() {
         if (busy || STATE.me.finished) return;
-        if (buffer.length < 5) { setMsg("Use at least 5 letters."); return; }
+
+        // Pull the contiguous word out of the row and where it sits.
+        const first = buffer.search(/[a-z]/);
+        if (first === -1) { setMsg("Type a word."); return; }
+        const last = buffer.length - 1 - [...buffer].reverse().findIndex(c => /[a-z]/.test(c));
+        const word = buffer.slice(first, last + 1);
+        if (/\s/.test(word)) { setMsg("No gaps inside the word — spaces only before or after it."); return; }
+        if (word.length < 5)  { setMsg("Use at least 5 letters."); return; }
 
         busy = true;
         const body = new FormData();
-        body.append("word", buffer);
-        body.append("offset", offset);
+        body.append("word", word);
+        body.append("offset", first);
         fetch(BASE_PATH + "/api/fwordle-guess.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Guess failed."); }))
             .then(state => {
                 STATE = state;
-                buffer = ""; offset = 0;
+                buffer = "";
                 renderAll();
             })
             .catch(err => setMsg(err.message))
             .finally(() => { busy = false; });
     }
 
-    document.getElementById("fw-off-left").addEventListener("click", () => shift(-1));
-    document.getElementById("fw-off-right").addEventListener("click", () => shift(1));
-
     document.addEventListener("keydown", e => {
         const tag = (document.activeElement && document.activeElement.tagName) || "";
         if (tag === "INPUT" || tag === "TEXTAREA") return; // don't hijack the custom-word field
-        if (e.key === "Enter")      { e.preventDefault(); handleKey("enter"); }
+        if (e.key === "Enter")          { e.preventDefault(); handleKey("enter"); }
         else if (e.key === "Backspace") { e.preventDefault(); handleKey("back"); }
-        else if (e.key === "ArrowLeft")  { e.preventDefault(); shift(-1); }
-        else if (e.key === "ArrowRight") { e.preventDefault(); shift(1); }
+        else if (e.key === " ")         { e.preventDefault(); handleKey("space"); }
         else if (/^[a-zA-Z]$/.test(e.key)) { handleKey(e.key.toLowerCase()); }
     });
 
@@ -697,10 +760,10 @@ main.container { max-width: 1280px; }
         fetch(BASE_PATH + "/api/fwordle-state.php")
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
             .then(state => {
-                // Don't clobber an in-progress guess: keep local buffer/offset.
+                // Don't clobber an in-progress guess: the local buffer is kept.
                 STATE = state;
                 renderBoards(); renderBanner(); renderStatus();
-                renderControls(); renderOpponents(); renderChoose();
+                renderControls(); renderKeyboard(); renderOpponents(); renderChoose();
             })
             .catch(() => {});
     }
@@ -710,6 +773,7 @@ main.container { max-width: 1280px; }
         renderBoards();
         renderBanner();
         renderControls();
+        renderKeyboard();
         renderOpponents();
         renderChoose();
     }

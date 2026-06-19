@@ -79,7 +79,8 @@ $gStmt = $pdo->prepare("SELECT guess FROM fwordle_guesses WHERE game_date = ? AN
 $gStmt->execute([$date, $userId]);
 $myGuesses = $gStmt->fetchAll(PDO::FETCH_COLUMN);
 
-$boards    = fwordleUserBoards($myGuesses, $answers);
+$owned     = fwordleOwnedPositions($pdo, $date, $userId);
+$boards    = fwordleUserBoards($myGuesses, $answers, $owned);
 $usedNow   = count($myGuesses);
 $solved    = $boards["solved"];
 $finished  = $solved || $usedNow >= FWORDLE_MAX_GUESSES;

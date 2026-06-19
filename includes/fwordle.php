@@ -215,11 +215,16 @@ function fwordleScore(string $answer, string $guess): array
     return $res;
 }
 
-// Replay a user's guesses across all boards.
-function fwordleUserBoards(array $guesses, array $answers): array
+// Replay a user's guesses across all boards. `$owned` are board positions the
+// user picked the word for — those count as solved without guessing (they
+// already know the word), so they don't block the win.
+function fwordleUserBoards(array $guesses, array $answers, array $owned = []): array
 {
     $num = count($answers);
     $solvedBoards = array_fill(0, $num, false);
+    foreach ($owned as $p) {
+        if ($p >= 0 && $p < $num) $solvedBoards[$p] = true;
+    }
     $rows = [];
     foreach ($guesses as $g) {
         $boards = [];
@@ -231,6 +236,14 @@ function fwordleUserBoards(array $guesses, array $answers): array
     }
     $solved = $num > 0 && !in_array(false, $solvedBoards, true);
     return ['guesses' => $rows, 'solved_boards' => $solvedBoards, 'solved' => $solved];
+}
+
+// Board positions whose word this user chose (auto-solved for them).
+function fwordleOwnedPositions(PDO $pdo, string $date, int $userId): array
+{
+    $stmt = $pdo->prepare("SELECT position FROM fwordle_words WHERE game_date = ? AND chooser_id = ?");
+    $stmt->execute([$date, $userId]);
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 }
 
 // ── Eligibility + full state payload ─────────────────────────────────────────
@@ -261,10 +274,23 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     $lenStmt->execute([$date]);
     $len = (int) $lenStmt->fetchColumn();
 
-    $wstmt = $pdo->prepare("SELECT word FROM fwordle_words WHERE game_date = ? ORDER BY position");
+    $wstmt = $pdo->prepare("SELECT position, word, chooser_id FROM fwordle_words WHERE game_date = ? ORDER BY position");
     $wstmt->execute([$date]);
-    $answers = $wstmt->fetchAll(PDO::FETCH_COLUMN);
+    $answers = [];
+    $chooser = []; // position => chooser user_id (or null)
+    foreach ($wstmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $pos = (int) $r['position'];
+        $answers[$pos] = $r['word'];
+        $chooser[$pos] = $r['chooser_id'] !== null ? (int) $r['chooser_id'] : null;
+    }
     $numBoards = count($answers);
+
+    // Owned (auto-solved) board positions per user.
+    $ownedOf = function (int $uid) use ($chooser): array {
+        $own = [];
+        foreach ($chooser as $pos => $cid) if ($cid === $uid) $own[] = $pos;
+        return $own;
+    };
 
     $gstmt = $pdo->prepare("
         SELECT g.user_id, u.username, g.guess
@@ -280,7 +306,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $byUser[$uid]['guesses'][] = $r['guess'];
     }
 
-    $rstmt = $pdo->prepare("SELECT user_id, finished, solved FROM fwordle_results WHERE game_date = ?");
+    $rstmt = $pdo->prepare("SELECT user_id, finished, solved, solved_at FROM fwordle_results WHERE game_date = ?");
     $rstmt->execute([$date]);
     $results = [];
     foreach ($rstmt->fetchAll(PDO::FETCH_ASSOC) as $r) $results[(int) $r['user_id']] = $r;
@@ -289,35 +315,60 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     $unStmt->execute([$userId]);
     $myName = $unStmt->fetchColumn() ?: '';
 
-    $me = [
-        'username' => $myName, 'finished' => false, 'solved' => false,
-        'guesses_used' => 0, 'solved_boards' => array_fill(0, $numBoards, false),
-        'guesses' => [],
-    ];
-    $opponents = [];
+    // ── Me (computed even with zero guesses, so an owned board still shows) ──
+    $myGuesses = $byUser[$userId]['guesses'] ?? [];
+    $myOwned   = $ownedOf($userId);
+    $mb        = fwordleUserBoards($myGuesses, $answers, $myOwned);
+    $myUsed    = count($myGuesses);
+    $myRes     = $results[$userId] ?? null;
+    $myFinished = $myRes ? (bool) $myRes['finished'] : ($mb['solved'] || $myUsed >= FWORDLE_MAX_GUESSES);
 
+    // Persist a result when solved/finished isn't recorded yet — covers an
+    // auto-win on a board you chose (no guess ever submitted).
+    if ($myFinished && (!$myRes || (int) $myRes['finished'] !== 1)) {
+        $solvedAt = ($myRes && $myRes['solved_at']) ? $myRes['solved_at'] : ($mb['solved'] ? date('Y-m-d H:i:s') : null);
+        $pdo->prepare("
+            INSERT INTO fwordle_results (game_date, user_id, finished, solved, guesses_used, solved_at)
+            VALUES (?, ?, 1, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                finished = VALUES(finished), solved = VALUES(solved),
+                guesses_used = VALUES(guesses_used), solved_at = VALUES(solved_at)
+        ")->execute([$date, $userId, $mb['solved'] ? 1 : 0, $myUsed, $solvedAt]);
+    }
+
+    // Reveal answers for boards I own, plus every board once I'm finished.
+    $reveal = [];
+    for ($p = 0; $p < $numBoards; $p++) {
+        $reveal[$p] = ($myFinished || in_array($p, $myOwned, true)) ? $answers[$p] : null;
+    }
+
+    $me = [
+        'username'      => $myName,
+        'finished'      => $myFinished,
+        'solved'        => $mb['solved'],
+        'guesses_used'  => $myUsed,
+        'solved_boards' => $mb['solved_boards'],
+        'owned'         => $myOwned,
+        'guesses'       => $mb['guesses'],
+        'answers'       => $reveal,
+    ];
+
+    // ── Opponents (colors only, never letters) ──
+    $opponents = [];
     foreach ($byUser as $uid => $info) {
-        $b = fwordleUserBoards($info['guesses'], $answers);
+        if ($uid === $userId) continue;
+        $b = fwordleUserBoards($info['guesses'], $answers, $ownedOf($uid));
         $used = count($info['guesses']);
         $res = $results[$uid] ?? null;
         $finished = $res ? (bool) $res['finished'] : ($b['solved'] || $used >= FWORDLE_MAX_GUESSES);
-
-        $entry = [
+        $opponents[] = [
             'username'      => $info['username'],
             'finished'      => $finished,
             'solved'        => $b['solved'],
             'guesses_used'  => $used,
             'solved_boards' => $b['solved_boards'],
+            'guesses'       => array_map(fn($g) => ['boards' => $g['boards']], $b['guesses']),
         ];
-
-        if ($uid === $userId) {
-            $entry['guesses'] = $b['guesses']; // full letters
-            if ($finished) $entry['answers'] = $answers;
-            $me = $entry;
-        } else {
-            $entry['guesses'] = array_map(fn($g) => ['boards' => $g['boards']], $b['guesses']);
-            $opponents[] = $entry;
-        }
     }
 
     // Tomorrow's word pick (only once I've solved and earned a slot).
