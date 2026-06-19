@@ -1363,11 +1363,13 @@ main.container {
         const top = ranked.slice(0, 3);
         podium.innerHTML = top.map(([username, secs], i) => {
             const rank = i + 1;
+            const color = userColor[username] || "#8b5cf6";
+            const style = `border-color:${color}; background:linear-gradient(160deg, ${color}24, ${color}0a); box-shadow:0 10px 28px ${color}33;`;
             return `
-                <div class="podium-card glass-card rank-${rank}">
+                <div class="podium-card glass-card rank-${rank}" style="${style}">
                     <span class="podium-medal">${rank}</span>
                     <div class="podium-name">${escapeHtml(username)}</div>
-                    <div class="podium-score gradient-text">${fmtTime(secs)}</div>
+                    <div class="podium-score" style="color:${color}">${fmtTime(secs)}</div>
                     <div class="podium-sub podium-sub-time">total studied</div>
                 </div>
             `;
