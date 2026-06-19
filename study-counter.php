@@ -788,28 +788,15 @@ main.container {
     width: 100%;
     max-width: 30px;
     min-height: 3px;
-    border: 2px solid var(--user-color, var(--violet));
     border-radius: 6px 6px 4px 4px;
-    background: rgba(255, 255, 255, 0.02);
+    /* Solid user colour — "whose bar" is instant; modules live in the tooltip. */
+    background: var(--user-color, var(--violet));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
     cursor: default;
     transition: filter var(--t-fast);
 }
 
-.user-bar:hover { filter: brightness(1.18); }
-
-.bar-fill {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column-reverse; /* stack modules from the bottom up */
-    border-radius: 4px 4px 3px 3px;
-    overflow: hidden;
-}
-
-.module-seg {
-    width: 100%;
-    min-height: 2px;
-}
+.user-bar:hover { filter: brightness(1.12); }
 
 .bar-total {
     position: absolute;
@@ -946,7 +933,6 @@ main.container {
 
 @media (max-width: 560px) {
     .chart-area { height: 240px; }
-    .user-bar { border-width: 1.5px; }
     .manual-grid { grid-template-columns: 1fr; }
 }
 </style>
@@ -1063,12 +1049,8 @@ main.container {
 
         <div class="legends">
             <div class="legend-group">
-                <h4>Users <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400;">(bar outline)</span></h4>
+                <h4>Users <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400;">(bar colour · hover a bar for the module split)</span></h4>
                 <div class="legend-items" id="legend-users"></div>
-            </div>
-            <div class="legend-group">
-                <h4>Modules <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400;">(bar fill)</span></h4>
-                <div class="legend-items" id="legend-modules"></div>
             </div>
         </div>
     </section>
@@ -1319,18 +1301,9 @@ main.container {
                 totalLabel.textContent = fmtTime(u.total);
                 bar.appendChild(totalLabel);
 
-                // Module segments — largest at the bottom for a stable look
-                const fill = document.createElement("div");
-                fill.className = "bar-fill";
+                // The bar is a solid user colour; the module split is in the
+                // tooltip (and the Per-module podium), not stacked in the bar.
                 const segs = Object.entries(u.mods).sort((a, b) => b[1] - a[1]);
-                segs.forEach(([mod, secs]) => {
-                    const seg = document.createElement("div");
-                    seg.className = "module-seg";
-                    seg.style.height = ((secs / u.total) * 100) + "%";
-                    seg.style.background = moduleColor[mod] || "#64748b";
-                    fill.appendChild(seg);
-                });
-                bar.appendChild(fill);
 
                 // Tooltip listeners on the bar (lists all modules)
                 bar.addEventListener("mousemove", (e) => {
@@ -1438,7 +1411,7 @@ main.container {
         }).join("");
     }
 
-    // ── Legends ───────────────────────────────────────────────────────────
+    // ── Legend (users only — modules now live in the bar tooltips) ─────────
     function buildLegends() {
         const usersSeen = Object.keys(userTotals()).sort();
         const lu = document.getElementById("legend-users");
@@ -1446,22 +1419,8 @@ main.container {
             ? `<span class="muted">—</span>`
             : usersSeen.map(u => `
                 <span class="legend-item">
-                    <span class="legend-swatch outline" style="--sw:${userColor[u] || "#8b5cf6"}"></span>
+                    <span class="legend-swatch" style="background:${userColor[u] || "#8b5cf6"}"></span>
                     ${escapeHtml(u)}
-                </span>
-            `).join("");
-
-        // Only show modules that have been studied
-        const studied = {};
-        SESSIONS.forEach(s => { studied[s.module] = true; });
-        const lm = document.getElementById("legend-modules");
-        const mods = MODULES.filter(m => studied[m.name]);
-        lm.innerHTML = mods.length === 0
-            ? `<span class="muted">—</span>`
-            : mods.map(m => `
-                <span class="legend-item ${m.custom ? "custom" : ""}">
-                    <span class="legend-swatch" style="background:${moduleColor[m.name]}"></span>
-                    ${escapeHtml(m.name)}
                 </span>
             `).join("");
     }

@@ -91,7 +91,7 @@ All chart JS is inline in `score-chart.php`; `assets/js/app.js` carries only sit
 
 - `api/log-study-session.php` validates duration (1–86400s) and date (valid `Y-m-d`, not future), resolves the module against the allowed set, and — when `new_module` is a genuinely new name — inserts it into `study_modules` first. The page reloads after adding a new custom module so the shared list/colors update.
 - `api/get-study-data.php` returns the module list and sessions aggregated per user/module/day. All chart/podium aggregation is client-side.
-- The chart is a hand-built HTML/CSS grouped+stacked bar chart (no Chart.js): one group of bars per weekday, one bar per user (outline = a per-user color), each bar stacked by module (fill = a per-module color). User and module palettes are deliberately disjoint. Week navigation is pure client-side (`weekOffset`); the "next" button is disabled at the current week.
+- The chart is a hand-built HTML/CSS grouped bar chart (no Chart.js): one group of bars per weekday, one **solid user-coloured** bar per user (height = that day's total), so "whose bar" reads instantly. The per-module split is **not** stacked into the bar — it's shown in the hover tooltip (module-coloured swatches via `moduleColor`) and the Per-module podium. The chart legend is users-only. Week navigation is pure client-side (`weekOffset`); the "next" button is disabled at the current week.
 - Above the chart, a podium of total hours studied; a single "Per module / Overall" button crossfades between the overall podium and a per-module grid of mini-podiums.
 
 #### Persistent timer + presence
