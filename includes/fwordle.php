@@ -21,11 +21,12 @@ const FWORDLE_MAX_WORDS = 4;
 const FWORDLE_MIN_LEN   = 5;
 const FWORDLE_MAX_LEN   = 10;
 
-// Shared guesses for a day: 5 for 1 board, +1 per extra board (→ 5/6/7/8 for
-// 1–4 boards), plus 1 more for long words (length above 6).
+// Shared guesses for a day: 6 for 1 board, +1 per extra board → 6/7/8/9 for
+// 1–4 boards. The 4-board default is 9, like a cat's nine lives: each globally
+// lost board (a failed player) costs a life the next day. Length-independent.
 function fwordleMaxGuesses(int $numBoards, int $length): int
 {
-    return 4 + $numBoards + ($length > 6 ? 1 : 0);
+    return 5 + $numBoards;
 }
 
 // ── Word lists ─────────────────────────────────────────────────────────────
