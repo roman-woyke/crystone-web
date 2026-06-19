@@ -59,9 +59,14 @@ main.container { max-width: 1280px; }
 /* ── Boards ─────────────────────────────────────────────────────────────── */
 .fw-boards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 18px;
+    grid-template-columns: repeat(var(--boards, 4), minmax(0, 1fr));
+    gap: 14px;
     margin-bottom: 22px;
+}
+
+/* On phones, all-on-one-line gets too cramped — fall back to two per row. */
+@media (max-width: 600px) {
+    .fw-boards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .fw-board {
@@ -69,6 +74,7 @@ main.container { max-width: 1280px; }
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     background: rgba(255, 255, 255, 0.02);
+    container-type: inline-size; /* lets cells size their font to the board width */
 }
 
 .fw-board.solved {
@@ -102,13 +108,19 @@ main.container { max-width: 1280px; }
 
 .fw-cell {
     aspect-ratio: 1;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0; /* keep the square — don't let the letter push the cell taller */
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 5px;
     font-family: var(--font-display);
     font-weight: 700;
-    font-size: clamp(0.7rem, 2.1vw, 1.15rem);
+    /* font scales to the cell (board width ÷ columns), so 8–10-wide boards fit */
+    font-size: clamp(0.5rem, calc(62cqw / var(--cols)), 1.25rem);
+    line-height: 1;
+    overflow: hidden;
     text-transform: uppercase;
     color: #fff;
     user-select: none;
@@ -434,6 +446,7 @@ main.container { max-width: 1280px; }
             return;
         }
 
+        boardsEl.style.setProperty("--boards", n);
         const activeRowIndex = me.finished ? -1 : me.guesses_used;
         let html = "";
 
