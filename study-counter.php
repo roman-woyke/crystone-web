@@ -757,10 +757,10 @@ main.container {
     flex: 1;
     display: flex;
     align-items: flex-end;
-    gap: 6px;
+    gap: 16px; /* clear separation between days (bars within a day stay tight) */
     border-left: 1px solid var(--glass-border);
     border-bottom: 1px solid var(--glass-border);
-    padding: 0 4px;
+    padding: 0 6px;
 }
 
 .grid-line {
@@ -780,8 +780,14 @@ main.container {
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 4px;
+    gap: 5px;
+    padding: 0 6px;
+    /* subtle band so each day reads as one group */
+    background: rgba(255, 255, 255, 0.025);
+    border-radius: 8px 8px 0 0;
 }
+
+.day-col.is-today { background: rgba(139, 92, 246, 0.10); }
 
 .user-bar {
     position: relative;
@@ -824,8 +830,8 @@ main.container {
 .chart-xaxis .xaxis-cols {
     flex: 1;
     display: flex;
-    gap: 6px;
-    padding: 0 4px;
+    gap: 16px;
+    padding: 0 6px;
 }
 
 .day-label {
@@ -1282,7 +1288,7 @@ main.container {
         weekDays.forEach(d => {
             const dateStr = toDateStr(d);
             const col = document.createElement("div");
-            col.className = "day-col";
+            col.className = "day-col" + (dateStr === todayStr ? " is-today" : "");
 
             const bars = col; // bars stack directly inside the day column
 
