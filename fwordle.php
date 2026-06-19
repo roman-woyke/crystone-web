@@ -491,8 +491,17 @@ main.container { max-width: 1280px; }
                     }
                 }
             } else {
+                // A solved board freezes at its winning row — later guesses
+                // (aimed at other boards) shouldn't keep filling it in. The
+                // solving guess is the only all-green row for this board.
+                let shown = me.guesses.length;
+                if (solved) {
+                    for (let r = 0; r < me.guesses.length; r++) {
+                        if (me.guesses[r].boards[b].every(c => c === "green")) { shown = r + 1; break; }
+                    }
+                }
                 for (let r = 0; r < MAX; r++) {
-                    if (r < me.guesses.length) {
+                    if (r < shown) {
                         const g = me.guesses[r];
                         const colors = g.boards[b];
                         for (let i = 0; i < len; i++) {
@@ -622,10 +631,17 @@ main.container { max-width: 1280px; }
 
             let minis = "";
             for (let b = 0; b < STATE.num_boards; b++) {
+                // Freeze a solved board at its winning (all-green) row.
+                let shown = o.guesses.length;
+                if (o.solved_boards[b]) {
+                    for (let r = 0; r < o.guesses.length; r++) {
+                        if (o.guesses[r].boards[b].every(c => c === "green")) { shown = r + 1; break; }
+                    }
+                }
                 minis += `<div class="fw-mini" style="--cols:${len}">`;
                 for (let r = 0; r < MAX; r++) {
                     for (let i = 0; i < len; i++) {
-                        const c = (r < o.guesses.length) ? o.guesses[r].boards[b][i] : "";
+                        const c = (r < shown) ? o.guesses[r].boards[b][i] : "";
                         const cls = (c === "green" || c === "orange" || c === "grey") ? c : "";
                         minis += `<div class="fw-mcell ${cls}"></div>`;
                     }
