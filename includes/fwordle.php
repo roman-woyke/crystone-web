@@ -17,10 +17,16 @@
 //   dict-<len>.txt    — SOWPODS Scrabble words, the *guess validation* list
 //   answers-<len>.txt — common words ∩ SOWPODS, the *answer / suggestion* pool
 
-const FWORDLE_MAX_GUESSES = 9;
-const FWORDLE_MAX_WORDS   = 4;
-const FWORDLE_MIN_LEN     = 5;
-const FWORDLE_MAX_LEN     = 10;
+const FWORDLE_MAX_WORDS = 4;
+const FWORDLE_MIN_LEN   = 5;
+const FWORDLE_MAX_LEN   = 10;
+
+// Shared guesses for a day: 5 for 1 board, +1 per extra board (→ 5/6/7/8 for
+// 1–4 boards), plus 1 more for long words (length above 6).
+function fwordleMaxGuesses(int $numBoards, int $length): int
+{
+    return 4 + $numBoards + ($length > 6 ? 1 : 0);
+}
 
 // ── Word lists ─────────────────────────────────────────────────────────────
 
@@ -111,9 +117,11 @@ function fwordleEnsureDay(PDO $pdo, string $date): array
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-// Build (once) the answer words for a date that has arrived: one slot per
-// previous-day solver (their chosen word, else random backfill), or 4 random
-// words when nobody solved. Idempotent and race-safe.
+// Build (once) the answer words for a date that has arrived. The board count
+// starts at 4 and drops by one for every player who PLAYED AND FAILED the
+// previous day (floored at 1); players who didn't play don't count. Each
+// previous-day solver fills a slot with their chosen word (else random
+// backfill) and owns it; any remaining slots are random. Idempotent + race-safe.
 function fwordleFinalizeWords(PDO $pdo, string $date): void
 {
     $day = fwordleEnsureDay($pdo, $date);
@@ -123,6 +131,17 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
     $len  = (int) $day['word_length'];
     $prev = date('Y-m-d', strtotime($date . ' -1 day'));
 
+    // Players who played (≥1 guess) but didn't solve → each removes one board.
+    $failStmt = $pdo->prepare("
+        SELECT COUNT(*) FROM fwordle_results
+        WHERE game_date = ? AND solved = 0 AND guesses_used >= 1
+    ");
+    $failStmt->execute([$prev]);
+    $failed = (int) $failStmt->fetchColumn();
+    $numBoards = max(1, FWORDLE_MAX_WORDS - $failed);
+
+    // Solvers (ordered by solve time) each get a slot to fill + own. Because
+    // solvers + failers ≤ players ≤ 4, the solver count never exceeds numBoards.
     $solverStmt = $pdo->prepare("
         SELECT user_id FROM fwordle_results
         WHERE game_date = ? AND solved = 1
@@ -134,31 +153,24 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
 
     $words = []; // [word, source, chooser_id]
     $used  = [];
+    $choiceStmt = $pdo->prepare("SELECT word FROM fwordle_choices WHERE game_date = ? AND user_id = ?");
 
-    if (empty($slotUsers)) {
-        for ($i = 0; $i < FWORDLE_MAX_WORDS; $i++) {
-            $w = fwordleRandomAnswer($len, $used);
-            if ($w === null) break;
-            $used[] = $w;
-            $words[] = [$w, 'random', null];
-        }
-    } else {
-        $choiceStmt = $pdo->prepare("SELECT word FROM fwordle_choices WHERE game_date = ? AND user_id = ?");
-        foreach ($slotUsers as $uid) {
+    for ($pos = 0; $pos < $numBoards; $pos++) {
+        $uid = $slotUsers[$pos] ?? null;
+        if ($uid !== null) {
             $choiceStmt->execute([$date, $uid]);
             $chosen = $choiceStmt->fetchColumn();
             $chosen = $chosen !== false ? strtolower($chosen) : null;
-
             if ($chosen !== null && fwordleIsValidWord($chosen, $len) && !in_array($chosen, $used, true)) {
                 $used[] = $chosen;
                 $words[] = [$chosen, 'chosen', $uid];
-            } else {
-                $w = fwordleRandomAnswer($len, $used);
-                if ($w === null) continue;
-                $used[] = $w;
-                $words[] = [$w, 'random', null];
+                continue;
             }
         }
+        $w = fwordleRandomAnswer($len, $used);
+        if ($w === null) continue;
+        $used[] = $w;
+        $words[] = [$w, 'random', null];
     }
 
     $pdo->beginTransaction();
@@ -284,6 +296,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $chooser[$pos] = $r['chooser_id'] !== null ? (int) $r['chooser_id'] : null;
     }
     $numBoards = count($answers);
+    $maxGuesses = fwordleMaxGuesses($numBoards, $len);
 
     // Owned (auto-solved) board positions per user.
     $ownedOf = function (int $uid) use ($chooser): array {
@@ -321,7 +334,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     $mb        = fwordleUserBoards($myGuesses, $answers, $myOwned);
     $myUsed    = count($myGuesses);
     $myRes     = $results[$userId] ?? null;
-    $myFinished = $myRes ? (bool) $myRes['finished'] : ($mb['solved'] || $myUsed >= FWORDLE_MAX_GUESSES);
+    $myFinished = $myRes ? (bool) $myRes['finished'] : ($mb['solved'] || $myUsed >= $maxGuesses);
 
     // Persist a result when solved/finished isn't recorded yet — covers an
     // auto-win on a board you chose (no guess ever submitted).
@@ -360,7 +373,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $b = fwordleUserBoards($info['guesses'], $answers, $ownedOf($uid));
         $used = count($info['guesses']);
         $res = $results[$uid] ?? null;
-        $finished = $res ? (bool) $res['finished'] : ($b['solved'] || $used >= FWORDLE_MAX_GUESSES);
+        $finished = $res ? (bool) $res['finished'] : ($b['solved'] || $used >= $maxGuesses);
         $opponents[] = [
             'username'      => $info['username'],
             'finished'      => $finished,
@@ -391,7 +404,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'date'        => $date,
         'length'      => $len,
         'num_boards'  => $numBoards,
-        'max_guesses' => FWORDLE_MAX_GUESSES,
+        'max_guesses' => $maxGuesses,
         'me'          => $me,
         'opponents'   => $opponents,
         'choose'      => $choose,

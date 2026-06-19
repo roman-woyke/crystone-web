@@ -19,6 +19,9 @@ $lenStmt = $pdo->prepare("SELECT word_length FROM fwordle_days WHERE game_date =
 $lenStmt->execute([$date]);
 $len = (int) $lenStmt->fetchColumn();
 
+$numBoards  = (int) $pdo->query("SELECT COUNT(*) FROM fwordle_words WHERE game_date = " . $pdo->quote($date))->fetchColumn();
+$maxGuesses = fwordleMaxGuesses($numBoards, $len);
+
 // Already finished today? No more guesses.
 $rStmt = $pdo->prepare("SELECT finished, solved, solved_at FROM fwordle_results WHERE game_date = ? AND user_id = ?");
 $rStmt->execute([$date, $userId]);
@@ -32,7 +35,7 @@ if ($result && (int) $result["finished"] === 1) {
 $cStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_guesses WHERE game_date = ? AND user_id = ?");
 $cStmt->execute([$date, $userId]);
 $used = (int) $cStmt->fetchColumn();
-if ($used >= FWORDLE_MAX_GUESSES) {
+if ($used >= $maxGuesses) {
     http_response_code(409);
     exit("No guesses left.");
 }
@@ -83,7 +86,7 @@ $owned     = fwordleOwnedPositions($pdo, $date, $userId);
 $boards    = fwordleUserBoards($myGuesses, $answers, $owned);
 $usedNow   = count($myGuesses);
 $solved    = $boards["solved"];
-$finished  = $solved || $usedNow >= FWORDLE_MAX_GUESSES;
+$finished  = $solved || $usedNow >= $maxGuesses;
 
 // Preserve an existing solve time; stamp it the moment all boards fall.
 $solvedAt = ($result && $result["solved_at"]) ? $result["solved_at"] : null;
