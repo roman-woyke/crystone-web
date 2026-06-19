@@ -965,7 +965,7 @@ main.container {
 <!-- ── Podium ─────────────────────────────────────────────────────────────── -->
 <div class="podium-bar">
     <h2>🏆 Most hours studied</h2>
-    <button type="button" class="btn podium-toggle" id="podium-toggle">Per module</button>
+    <button type="button" class="btn podium-toggle" id="podium-toggle">Overall</button>
 </div>
 
 <div class="podium-views">
