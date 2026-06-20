@@ -1,0 +1,22 @@
+# Block includes directory
+<DirectoryMatch "includes">
+    Require all denied
+</DirectoryMatch>
+
+# Block config
+<Files "config.php">
+    Require all denied
+</Files>
+
+# Block partials
+<Files "score-chart.php">
+    Require all denied
+</Files>
+<Files "score-table.php">
+    Require all denied
+</Files>
+
+# Block README
+<Files "README.md">
+    Require all denied
+</Files>
