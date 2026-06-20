@@ -1,93 +1,40 @@
 # Internship Leaderboard
 
-A shared leaderboard for tracking internship applications with friends. Each person gets their own deployed instance with a separate database.
+A shared leaderboard for tracking internship applications with friends.
 
 ---
 
-## How branches map to deployments
+## Deployment
 
-The repository has three long-lived branches. Each is independently deployed to Hostinger via a webhook, into a dedicated subfolder:
+The repo is deployed to Hostinger at the **web root** (`public_html/`) via a Git webhook — pushing the deployed branch updates the live site. All application code is in the repo; the only file that isn't is `config.php`, which holds the database credentials and is kept **one level above the web root** so it can never be served over HTTP.
 
-| Branch | Subfolder on server | URL path   |
-|--------|---------------------|------------|
-| `main` | `/roman/`           | `/roman/`  |
-| `basti` | `/basti/`          | `/basti/`  |
-| `ben`  | `/ben/`             | `/ben/`    |
+### `config.php` (one level above the web root, managed manually on the server)
 
-All three branches contain the same application code. The only thing that differs per deployment is the **database credentials**, which are stored in a shared `config.php` file that lives **outside the repo, one level above the web root** (so it cannot be served over HTTP).
-   
----
-
-## Files outside the repo (managed manually on the server)
-
-Two files are managed directly on the server (e.g. via Hostinger's File Manager or SFTP) and not tracked by Git. `config.php` lives **one level above the web root** so it is never served over HTTP; `index.php` lives at the web root.
-
-### `config.php` (one level above web root)
-
-Detects which subfolder is being served from `$_SERVER["SCRIPT_NAME"]` and connects to the corresponding database. It also defines `BASE_PATH` (used by all pages for links and redirects) and `INVITE_CODE` (required to register an account — keep this secret since the repo is public).
+Defines `INVITE_CODE` (required to register an account — keep this secret since the repo is public), sets `BASE_PATH` (the URL prefix every page uses for links and redirects — empty when served from the web root), and opens the PDO connection into `$pdo`.
 
 ```php
 <?php
 
 define("INVITE_CODE", "your-secret-code-here");
 
-$configs = [
-    "roman" => [
-        "host" => "...",
-        "dbname" => "...",
-        "user" => "...",
-        "pass" => "...",
-    ],
-    "basti" => [
-        "host" => "...",
-        "dbname" => "...",
-        "user" => "...",
-        "pass" => "...",
-    ],
-    "ben" => [
-        "host" => "...",
-        "dbname" => "...",
-        "user" => "...",
-        "pass" => "...",
-    ],
-];
-
-// Detect current subfolder from the request path
-$segment = explode("/", trim($_SERVER["SCRIPT_NAME"], "/"))[0];
-
-define("BASE_PATH", "/" . $segment);
-
-$cfg = $configs[$segment] ?? null;
-if (!$cfg) die("Unknown project.");
+// Served from the web root — no subfolder prefix.
+define("BASE_PATH", "");
 
 $pdo = new PDO(
-    "mysql:host={$cfg["host"]};dbname={$cfg["dbname"]};charset=utf8mb4",
-    $cfg["user"],
-    $cfg["pass"],
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    "mysql:host=localhost;dbname=YOUR_DB;charset=utf8mb4",
+    "YOUR_USER",
+    "YOUR_PASS"
 );
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 ```
 
-### `/index.php` (at web root)
-
-Redirects visitors who land at the root to Roman's instance. Edit this if you want the root to point elsewhere.
-
-```php
-<?php
-require_once __DIR__ . "/roman/includes/start-session.php";
-if (isset($_SESSION["user_id"])) {
-    header("Location: /roman/leaderboard.php");
-} else {
-    header("Location: /roman/login.php");
-}
-exit;
-```
+Every page reaches it with `require_once __DIR__ . "/../config.php"` (repo-root files) or `"/../../config.php"` (files in `api/` and `includes/`). The repo's own `index.php` redirects visitors landing at the root to the dashboard or login.
 
 ---
 
 ## Database schema
 
-Each instance uses its own MySQL database. Run this SQL to set it up:
+The app uses a single MySQL database. Run this SQL to set it up:
 
 ```sql
 CREATE TABLE users (
@@ -263,9 +210,9 @@ CREATE TABLE fwordle_guesses (
 );
 ```
 
-> **Deploy note:** when merging new tables into another branch's deployment,
-> run the corresponding `CREATE TABLE` on that instance's database **before**
-> pushing the code, otherwise pages using the table will 500.
+> **Deploy note:** run the corresponding `CREATE TABLE` on the database
+> **before** pushing code that uses a new table, otherwise pages hitting it
+> will 500.
 
 ---
 
@@ -297,14 +244,9 @@ Interview/Offer points shown above are the net gain (the +2 from the initial PEN
 
 ```
 /                          ← one level above web root (not in repo)
-├── config.php             ← shared DB config + BASE_PATH (above web root, not served over HTTP)
-└── public_html/           ← web root
-    ├── index.php          ← root redirect (not in repo)
-    ├── roman/             ← main branch deployment
-    ├── basti/             ← basti branch deployment
-    └── ben/               ← ben branch deployment
+└── config.php             ← DB config + BASE_PATH (above web root, not served over HTTP)
 
-internship-leaderboard/    ← this repo (inside each subfolder)
+public_html/               ← web root = this repo
 ├── api/                   ← JSON endpoints (called by JS fetch)
 │   ├── delete-application.php
 │   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
@@ -341,7 +283,7 @@ internship-leaderboard/    ← this repo (inside each subfolder)
 ├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
 ├── fwordle.php            ← daily multi-board multiplayer Wordle
-├── index.php              ← marketing landing page (per-instance root)
+├── index.php              ← redirects root visitors to the dashboard / login
 ├── leaderboard.php        ← public leaderboard page
 ├── login.php
 ├── logout.php
