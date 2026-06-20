@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . "/start-session.php";
-require_once __DIR__ . "/../../../config.php";
+require_once __DIR__ . "/../../config.php";
 
 if (!isset($_SESSION["user_id"])) {
     $next = $_SERVER["REQUEST_URI"] ?? "";

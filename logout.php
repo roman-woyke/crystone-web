@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . "/includes/start-session.php";
-require_once __DIR__ . "/../../config.php";
+require_once __DIR__ . "/../config.php";
 
 $_SESSION = [];
 
@@ -23,3 +23,4 @@ session_destroy();
 
 header("Location: " . BASE_PATH . "/login.php");
 exit;
+#dsdsd

@@ -1,4 +1,74 @@
-<table border="1" cellpadding="10" width="100%">
+<style>
+.details-cell {
+    padding: 0 18px 18px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.details-cell table {
+    margin-top: 14px;
+    background: rgba(255, 255, 255, 0.02);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+.details-cell .status-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.details-cell .status-stack .peak-arrow {
+    opacity: 0.5;
+    font-size: 0.9em;
+}
+
+@media (max-width: 800px) {
+    table.responsive-table td.details-cell {
+        display: block;
+        text-align: left;
+        overflow-x: auto;
+    }
+
+    table.responsive-table td.details-cell::before {
+        display: none;
+    }
+
+    /* The nested per-user table keeps its grid layout and scrolls instead */
+    .details-cell table,
+    .details-cell tbody {
+        display: table;
+        width: 100%;
+    }
+
+    .details-cell tbody {
+        display: table-row-group;
+    }
+
+    .details-cell tr {
+        display: table-row;
+        margin: 0;
+        border: none;
+        background: transparent;
+    }
+
+    .details-cell td,
+    .details-cell th {
+        display: table-cell;
+        text-align: center;
+        border-bottom: 1px solid var(--glass-border);
+    }
+
+    .details-cell td::before {
+        display: none;
+    }
+}
+</style>
+
+    <div id="podium" class="podium" style="display:none;"></div>
+
+    <div class="table-wrap">
+    <table class="responsive-table">
         <thead>
             <tr>
                 <th>Rank</th>
@@ -19,6 +89,7 @@
             </tr>
         </tbody>
     </table>
+    </div>
 
     <script>
         fetch("<?= BASE_PATH ?>/api/get-leaderboard.php")
@@ -41,22 +112,29 @@
                     return;
                 }
 
+                buildPodium(users);
+
                 tbody.innerHTML = "";
 
                 users.forEach((user, index) => {
                     const row = document.createElement("tr");
                     row.style.cursor = "pointer";
 
+                    const rank = index + 1;
+                    const rankHtml = rank <= 3
+                        ? `<span class="rank-medal rank-medal-${rank}">${rank}</span>`
+                        : rank;
+
                     row.innerHTML = `
-                        <td>${index + 1}</td>
-                        <td>${escapeHtml(user.username)}</td>
-                        <td>${user.total_applications}</td>
-                        <td>${user.pending}</td>
-                        <td>${user.rejected}</td>
-                        <td>${user.ghosted}</td>
-                        <td>${user.interviews}</td>
-                        <td>${user.offers}</td>
-                        <td>${user.score}</td>
+                        <td data-label="Rank">${rankHtml}</td>
+                        <td data-label="User"><strong>${escapeHtml(user.username)}</strong></td>
+                        <td data-label="Sent">${user.total_applications}</td>
+                        <td data-label="Pending">${user.pending}</td>
+                        <td data-label="Rejected">${user.rejected}</td>
+                        <td data-label="Ghosted">${user.ghosted}</td>
+                        <td data-label="Interviews">${user.interviews}</td>
+                        <td data-label="Offers">${user.offers}</td>
+                        <td data-label="Score"><strong class="score-cell" data-score="${user.score}">${user.score}</strong></td>
                     `;
 
                     const detailsRow = document.createElement("tr");
@@ -64,18 +142,27 @@
 
                     const detailsCell = document.createElement("td");
                     detailsCell.colSpan = 9;
+                    detailsCell.className = "details-cell";
                     detailsCell.innerHTML = buildApplicationsHtml(user.applications);
 
                     detailsRow.appendChild(detailsCell);
 
                     row.addEventListener("click", () => {
+                        // Empty string falls back to the stylesheet display value,
+                        // which differs between desktop (table-row) and mobile cards.
                         detailsRow.style.display =
-                            detailsRow.style.display === "none" ? "table-row" : "none";
+                            detailsRow.style.display === "none" ? "" : "none";
                     });
 
                     tbody.appendChild(row);
                     tbody.appendChild(detailsRow);
                 });
+
+                if (typeof window.countUp === "function") {
+                    document.querySelectorAll(".score-cell").forEach(el => {
+                        window.countUp(el, el.dataset.score, 900);
+                    });
+                }
             })
             .catch(error => {
                 document.getElementById("leaderboard-body").innerHTML = `
@@ -85,13 +172,39 @@
                 `;
             });
 
+        function buildPodium(users) {
+            const podium = document.getElementById("podium");
+            const top = users.slice(0, 3);
+            if (top.length === 0) return;
+
+            podium.innerHTML = top.map((user, i) => {
+                const rank = i + 1;
+                return `
+                    <div class="podium-card glass-card rank-${rank}">
+                        <span class="podium-medal">${rank}</span>
+                        <div class="podium-name">${escapeHtml(user.username)}</div>
+                        <div class="podium-score gradient-text podium-score-value" data-score="${user.score}">${user.score}</div>
+                        <div class="podium-sub">${user.offers} offers · ${user.interviews} interviews</div>
+                    </div>
+                `;
+            }).join("");
+
+            podium.style.display = "flex";
+
+            if (typeof window.countUp === "function") {
+                podium.querySelectorAll(".podium-score-value").forEach(el => {
+                    window.countUp(el, el.dataset.score, 1100);
+                });
+            }
+        }
+
         function buildApplicationsHtml(applications) {
             if (applications.length === 0) {
                 return "<p>No applications yet.</p>";
             }
 
             let html = `
-                <table border="1" cellpadding="8" width="100%">
+                <table>
                     <thead>
                         <tr>
                             <th>Tag</th>
@@ -116,9 +229,9 @@
                         <td>${escapeHtml(app.job_title ?? "")}</td>
                         <td>${
                                 (app.peak_status && app.peak_status !== app.status && (app.peak_status === 'INTERVIEW' || app.peak_status === 'OFFER'))
-                                    ? `<div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                                    ? `<div class="status-stack">
                                             ${statusBadge(app.peak_status)}
-                                            <span style="opacity:0.5; font-size:0.9em;">↓</span>
+                                            <span class="peak-arrow">↓</span>
                                             ${statusBadge(app.status)}
                                        </div>`
                                     : statusBadge(app.status)

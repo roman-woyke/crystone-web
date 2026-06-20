@@ -60,13 +60,12 @@ foreach ($exams as $e) {
 
 $canEdit = ($myUser !== null && $myUser === $selectedUser);
 
+$pageTitle = "Exam Calendar";
 require_once __DIR__ . "/includes/header.php";
 ?>
 
 <style>
-/* Let the calendar page use much more of the viewport than other pages.
-   (The 1200px min-width floor that keeps the 7-column grid from being
-   squished lives on <body> in style.css, shared by every page.) */
+/* Let the calendar page use much more of the viewport than other pages. */
 main.container {
     max-width: none;
     padding-left: 24px;
@@ -81,6 +80,7 @@ main.container {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     gap: 24px;
 }
 
@@ -107,41 +107,43 @@ main.container {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #1f2937;
-    border: 1px solid #374151;
-    border-radius: 12px;
-    padding: 12px 28px;
+    padding: 14px 28px;
+}
+
+.exam-progress .cd-value,
+.exam-countdown .cd-value {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1;
 }
 
 .exam-progress .cd-value {
-    font-size: 2.6rem;
-    font-weight: 800;
-    line-height: 1;
-    color: #34d399;
+    color: var(--success);
 }
 
 .exam-countdown .cd-value {
-    font-size: 2.6rem;
-    font-weight: 800;
-    line-height: 1;
-    color: #f87171;
-    animation: cd-blink 1s steps(1, end) infinite;
+    color: var(--danger);
+    text-shadow: 0 0 18px rgba(248, 113, 113, 0.45);
+    animation: cd-pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes cd-blink {
-    50% { opacity: 0.15; }
+@keyframes cd-pulse {
+    50% { opacity: 0.45; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .exam-countdown .cd-value { animation: none; }
 }
 
+.exam-progress .cd-label,
 .exam-countdown .cd-label {
-    margin-top: 4px;
-    font-size: 0.75rem;
-    color: #9ca3af;
+    margin-top: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-3);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.09em;
 }
 
 .user-tabs {
@@ -151,26 +153,28 @@ main.container {
 }
 
 .user-tab {
-    padding: 10px 22px;
-    background: #374151;
-    color: #f3f4f6;
-    border: 1px solid #4b5563;
-    border-radius: 8px;
+    padding: 9px 22px;
+    background: var(--glass-strong);
+    color: var(--text-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.95rem;
     text-decoration: none;
-    transition: background 0.15s;
+    transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .user-tab:hover {
-    background: #4b5563;
+    background: rgba(255, 255, 255, 0.11);
+    color: var(--text-1);
     text-decoration: none;
 }
 
 .user-tab.active {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: white;
+    background: var(--grad-accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--glow-violet);
 }
 
 .calendar-layout {
@@ -182,21 +186,17 @@ main.container {
 .exam-sidebar {
     width: 280px;
     flex-shrink: 0;
-    background: #1f2937;
-    border: 1px solid #374151;
-    border-radius: 10px;
-    padding: 16px;
+    padding: 18px;
 }
 
 .exam-sidebar h3 {
     margin: 0 0 12px 0;
     font-size: 1.05rem;
-    color: #f3f4f6;
 }
 
 .exam-sidebar .hint {
     font-size: 0.8rem;
-    color: #9ca3af;
+    color: var(--text-3);
     margin-bottom: 14px;
 }
 
@@ -213,11 +213,16 @@ main.container {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 8px;
-    background: #111827;
-    border: 1px solid #374151;
-    border-radius: 6px;
+    padding: 9px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
     font-size: 0.85rem;
+    transition: border-color var(--t-fast);
+}
+
+.exam-list li:hover {
+    border-color: rgba(139, 92, 246, 0.3);
 }
 
 .exam-list input[type="checkbox"] {
@@ -225,6 +230,7 @@ main.container {
     margin: 3px 0 0 0;
     padding: 0;
     flex-shrink: 0;
+    accent-color: var(--violet);
 }
 
 .exam-list label {
@@ -234,11 +240,11 @@ main.container {
 
 .exam-list .exam-title {
     font-weight: 600;
-    color: #f3f4f6;
+    color: var(--text-1);
 }
 
 .exam-list .exam-meta {
-    color: #9ca3af;
+    color: var(--text-3);
     font-size: 0.78rem;
     margin-top: 2px;
 }
@@ -252,47 +258,46 @@ main.container {
 
 .weekday-header {
     text-align: center;
-    font-size: 0.9rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    color: #9ca3af;
+    color: var(--text-3);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.09em;
     padding: 8px 0;
 }
 
 .cal-day {
-    background: #1f2937;
-    border: 1px solid #374151;
-    border-radius: 10px;
     padding: 14px;
     min-height: 220px;
     display: flex;
     flex-direction: column;
+    border-radius: var(--radius-md);
 }
 
 .cal-day.weekend {
-    background: #161e2c;
+    background: rgba(10, 10, 22, 0.6);
 }
 
 .cal-day-num {
-    font-size: 1.75rem;
+    font-family: var(--font-display);
+    font-size: 1.6rem;
     font-weight: 700;
-    color: #f3f4f6;
+    color: var(--text-1);
     margin-bottom: 10px;
 }
 
 .cal-day-num .month {
     font-size: 0.8rem;
-    color: #9ca3af;
+    color: var(--text-3);
     font-weight: 400;
     margin-left: 6px;
 }
 
 .exam-block {
     padding: 8px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     margin-top: 8px;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     line-height: 1.35;
 }
 
@@ -300,7 +305,7 @@ main.container {
     font-weight: 700;
     display: block;
     margin-bottom: 3px;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
 }
 
 .exam-block .eb-title {
@@ -309,32 +314,104 @@ main.container {
 }
 
 .exam-block.highlighted {
-    background: #2563eb;
-    color: #ffffff;
-    border: 1px solid #3b82f6;
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+    background: var(--grad-accent-soft);
+    color: var(--text-1);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.25);
 }
 
 .exam-block.dimmed {
-    background: #2a3441;
-    color: #6b7280;
-    border: 1px solid #374151;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-3);
+    border: 1px solid var(--glass-border);
     opacity: 0.45;
 }
 
 .viewing-banner {
-    background: #1f2937;
-    border: 1px solid #374151;
-    border-radius: 8px;
-    padding: 10px 14px;
+    padding: 10px 16px;
     margin-top: 24px;
     margin-bottom: 16px;
     font-size: 0.9rem;
-    color: #9ca3af;
+    color: var(--text-2);
+    border-radius: var(--radius-md);
 }
 
 .viewing-banner strong {
-    color: #f3f4f6;
+    color: var(--text-1);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+    .calendar-layout {
+        flex-direction: column;
+    }
+
+    .exam-sidebar {
+        width: 100%;
+    }
+
+    .exam-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+
+    .cal-day {
+        min-height: 140px;
+        padding: 10px;
+    }
+
+    .cal-day-num {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .weekday-header {
+        display: none;
+    }
+
+    /* Agenda view: each day becomes a full-width card */
+    .calendar-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .cal-day {
+        min-height: 0;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+    .cal-day-num {
+        flex-shrink: 0;
+        width: 64px;
+        margin-bottom: 0;
+    }
+
+    .cal-day-num .month {
+        display: block;
+        margin-left: 0;
+    }
+
+    .cal-day .day-exams {
+        flex: 1;
+    }
+
+    .exam-block:first-child {
+        margin-top: 0;
+    }
+
+    .header-stats {
+        width: 100%;
+    }
+
+    .exam-progress,
+    .exam-countdown {
+        flex: 1;
+    }
 }
 </style>
 
@@ -355,12 +432,12 @@ main.container {
         </div>
 
         <div class="header-stats">
-            <div class="exam-progress">
+            <div class="exam-progress glass-card">
                 <span class="cd-value"><?= $passedSelected ?>/<?= $totalSelected ?></span>
                 <span class="cd-label">exams written</span>
             </div>
 
-            <div class="exam-countdown">
+            <div class="exam-countdown glass-card">
                 <?php if ($daysUntil > 0): ?>
                     <span class="cd-value">D-<?= $daysUntil ?></span>
                     <span class="cd-label">until first exam</span>
@@ -375,7 +452,7 @@ main.container {
         </div>
     </div>
 
-    <div class="viewing-banner">
+    <div class="viewing-banner glass-card">
         Viewing exams for <strong><?= htmlspecialchars($selectedUser) ?></strong>.
         <?php if ($canEdit): ?>
             Toggle the checkboxes to add or remove your highlights.
@@ -386,7 +463,7 @@ main.container {
 
     <div class="calendar-layout">
 
-        <aside class="exam-sidebar">
+        <aside class="exam-sidebar glass-card">
             <h3><?= htmlspecialchars($selectedUser) ?>'s exams</h3>
             <p class="hint">
                 <?php if ($canEdit): ?>
@@ -433,10 +510,11 @@ main.container {
                 $weekend = $dow >= 6;
                 $todays  = $examsByDay[$dayKey] ?? [];
             ?>
-                <div class="cal-day <?= $weekend ? 'weekend' : '' ?>">
+                <div class="cal-day glass-card <?= $weekend ? 'weekend' : '' ?>">
                     <div class="cal-day-num">
                         <?= $d->format("j") ?><span class="month"><?= $d->format("M") ?></span>
                     </div>
+                    <div class="day-exams">
                     <?php foreach ($todays as $e):
                         $eid   = (int) $e["id"];
                         $isSel = isset($selectedSet[$eid]);
@@ -448,6 +526,7 @@ main.container {
                             <span class="eb-title"><?= htmlspecialchars($e["title"]) ?></span>
                         </div>
                     <?php endforeach; ?>
+                    </div>
                 </div>
             <?php endforeach; ?>
         </div>

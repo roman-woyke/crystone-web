@@ -15,7 +15,7 @@ The repository has three long-lived branches. Each is independently deployed to 
 | `ben`  | `/ben/`             | `/ben/`    |
 
 All three branches contain the same application code. The only thing that differs per deployment is the **database credentials**, which are stored in a shared `config.php` file that lives **outside the repo, one level above the web root** (so it cannot be served over HTTP).
-
+   
 ---
 
 ## Files outside the repo (managed manually on the server)
@@ -118,7 +118,154 @@ CREATE TABLE application_status_history (
     score_delta    INT NOT NULL DEFAULT 0,
     changed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Exam calendar (keyed by username string, independent from applications)
+CREATE TABLE exams (
+    id        INT AUTO_INCREMENT PRIMARY KEY,
+    title     VARCHAR(255) NOT NULL,
+    professor VARCHAR(255),
+    exam_date DATE NOT NULL,
+    exam_time TIME NOT NULL
+);
+
+CREATE TABLE user_exams (
+    username VARCHAR(50) NOT NULL,
+    exam_id  INT NOT NULL,
+    PRIMARY KEY (username, exam_id),
+    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+);
+
+-- Typing battle highscores (typing-game.php). WPM and accuracy are
+-- computed server-side in api/submit-typing-score.php.
+CREATE TABLE typing_scores (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT NOT NULL REFERENCES users(id),
+    wpm           DECIMAL(6,2) NOT NULL,
+    accuracy      DECIMAL(5,2) NOT NULL,
+    correct_chars INT NOT NULL,
+    typed_chars   INT NOT NULL,
+    duration_ms   INT NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Study counter (study-counter.php). Custom modules added by users join the
+-- shared list; the default modules are the distinct exam titles from `exams`.
+CREATE TABLE study_modules (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL UNIQUE,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- One row per logged study session (timer or manual). `module_name` is a plain
+-- string so sessions are decoupled from both `exams` and `study_modules`.
+CREATE TABLE study_sessions (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id),
+    module_name VARCHAR(255) NOT NULL,
+    seconds     INT NOT NULL,
+    studied_on  DATE NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Live "currently studying" state — at most one row per user, persistent
+-- across page reloads. elapsed = accumulated + (started_at ? NOW() - started_at
+-- : 0); a NULL started_at means paused ("on break"). mode='timer' is a loggable
+-- module stopwatch (log-a-session window); mode='presence' is a module-less
+-- "I'm studying" stopwatch. A row existing at all means currently studying.
+CREATE TABLE study_status (
+    user_id     INT NOT NULL PRIMARY KEY REFERENCES users(id),
+    mode        ENUM('timer','presence') NOT NULL DEFAULT 'presence',
+    module_name VARCHAR(255) NULL,
+    started_at  DATETIME NULL,
+    accumulated INT NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Project time tracker (projects.php). Per-user projects with a colour and
+-- description; each logged session is one row in project_time_entries.
+CREATE TABLE projects (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id),
+    name        VARCHAR(255) NOT NULL,
+    description TEXT,
+    color       VARCHAR(20) NOT NULL DEFAULT '#8b5cf6',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE project_time_entries (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id    INT NOT NULL REFERENCES users(id),
+    seconds    INT NOT NULL,
+    note       VARCHAR(255),
+    logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- fWordle (fwordle.php): a daily multi-board, multiplayer Wordle. One puzzle a
+-- day; N boards (1–4) all of the same length L. The word lists live as bundled
+-- text files in includes/fwordle/, NOT in the DB.
+
+-- One row per calendar day: the day's word length + whether its answer words
+-- have been finalized. Length is rolled when the row is first created.
+CREATE TABLE fwordle_days (
+    game_date       DATE NOT NULL PRIMARY KEY,
+    word_length     TINYINT UNSIGNED NOT NULL,
+    words_finalized TINYINT NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The answer words for each day (1–4), one row per board position.
+-- source = 'chosen' (a prior-day solver picked it) or 'random' (backfilled).
+CREATE TABLE fwordle_words (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    game_date  DATE NOT NULL,
+    position   TINYINT UNSIGNED NOT NULL,
+    word       VARCHAR(10) NOT NULL,
+    source     ENUM('chosen','random') NOT NULL DEFAULT 'random',
+    chooser_id INT NULL REFERENCES users(id),
+    UNIQUE KEY uniq_day_pos (game_date, position)
+);
+
+-- A solver's chosen word for the NEXT day. game_date is the date the word is
+-- FOR; user_id is the chooser. Folded into fwordle_words when that day arrives.
+CREATE TABLE fwordle_choices (
+    game_date  DATE NOT NULL,
+    user_id    INT NOT NULL REFERENCES users(id),
+    word       VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_date, user_id)
+);
+
+-- Per user, per day outcome. solved_at orders who earns choice rights
+-- (first 4 solvers). finished locks the board (win or out of guesses).
+CREATE TABLE fwordle_results (
+    game_date    DATE NOT NULL,
+    user_id      INT NOT NULL REFERENCES users(id),
+    finished     TINYINT NOT NULL DEFAULT 0,
+    solved       TINYINT NOT NULL DEFAULT 0,
+    guesses_used TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    solved_at    DATETIME NULL,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_date, user_id)
+);
+
+-- Each guess a user has made today (shared across all boards), in order. The
+-- guess is stored as an L-wide string with '_' for unused cells (e.g.
+-- '__HELLO___'), encoding both the word and where it was positioned.
+CREATE TABLE fwordle_guesses (
+    game_date   DATE NOT NULL,
+    user_id     INT NOT NULL REFERENCES users(id),
+    guess_index TINYINT UNSIGNED NOT NULL,
+    guess       VARCHAR(10) NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_date, user_id, guess_index)
+);
 ```
+
+> **Deploy note:** when merging new tables into another branch's deployment,
+> run the corresponding `CREATE TABLE` on that instance's database **before**
+> pushing the code, otherwise pages using the table will 500.
 
 ---
 
@@ -160,24 +307,48 @@ Interview/Offer points shown above are the net gain (the +2 from the initial PEN
 internship-leaderboard/    ← this repo (inside each subfolder)
 ├── api/                   ← JSON endpoints (called by JS fetch)
 │   ├── delete-application.php
+│   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
+│   ├── delete-time-entry.php   ← project tracker: remove a single logged session
+│   ├── fwordle-choose.php      ← fWordle: set one of tomorrow's words (solver-only)
+│   ├── fwordle-guess.php       ← fWordle: submit a guess (validated + scored server-side)
+│   ├── fwordle-state.php       ← fWordle: full game state (mine + opponents' colors)
 │   ├── get-leaderboard.php
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
-│   └── patch-application.php
+│   ├── get-study-data.php      ← study counter: modules + aggregated sessions
+│   ├── get-study-status.php    ← study counter: my timer + who's studying now
+│   ├── get-typing-scores.php   ← typing battle: best WPM per user
+│   ├── log-study-session.php   ← study counter: log a session (timer/manual)
+│   ├── log-time.php            ← project tracker: log time against a project
+│   ├── study-timer.php         ← study counter: persistent timer/presence state machine
+│   ├── patch-application.php
+│   ├── patch-project.php       ← project tracker: edit name/description/colour
+│   ├── submit-typing-score.php ← typing battle: validated score submission
+│   └── toggle-user-exam.php    ← exam calendar checkbox toggle
 ├── assets/
-│   ├── css/style.css
-│   └── js/app.js
+│   ├── css/style.css      ← design tokens + shared glass components
+│   └── js/app.js          ← mobile nav toggle + countUp helper
 ├── includes/
+│   ├── fwordle/           ← fWordle word data: dict-<5..10>.txt (validation) + answers-<5..10>.txt (answer pool)
+│   ├── fwordle.php        ← fWordle: length roll, day lifecycle, scoring, state payload
 │   ├── footer.php
-│   ├── header.php
+│   ├── header.php         ← brand, conditional nav, fonts, background orbs
 │   ├── scoring.php        ← shared scoring logic + SQL helpers
 │   ├── session.php        ← auth guard (redirects to login if not logged in)
-│   └── start-session.php  ← session config (30-day cookie)
+│   ├── start-session.php  ← session config (30-day cookie)
+│   ├── study-status.php   ← shared "currently studying" payload helper
+│   └── typing-sentences.php ← sentence corpus for the typing battle
+├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
+├── fwordle.php            ← daily multi-board multiplayer Wordle
+├── index.php              ← marketing landing page (per-instance root)
 ├── leaderboard.php        ← public leaderboard page
 ├── login.php
 ├── logout.php
+├── projects.php           ← project time tracker (timer + manual, per-project totals)
 ├── register.php
 ├── score-chart.php        ← chart partial (included by leaderboard.php)
-└── score-table.php        ← table partial (included by leaderboard.php)
+├── score-table.php        ← table partial (included by leaderboard.php)
+├── study-counter.php      ← study session tracker (timer + manual, weekly chart)
+└── typing-game.php        ← 60-second typing battle with highscores
 ```

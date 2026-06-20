@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . "/includes/session.php";
+
+$pageTitle = "Leaderboard";
 require_once __DIR__ . "/includes/header.php";
 ?>
 
@@ -11,12 +13,7 @@ main.container {
 }
 </style>
 
-    <h1>Internship Application Leaderboard</h1>
-
-    <p>
-        <a href="<?= BASE_PATH ?>/dashboard.php">Dashboard</a> |
-        <a href="<?= BASE_PATH ?>/logout.php">Logout</a>
-    </p>
+    <h1 class="page-heading">Internship Application <span class="gradient-text">Leaderboard</span></h1>
 
 <?php
 require_once __DIR__ . "/score-table.php";

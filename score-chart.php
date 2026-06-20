@@ -4,13 +4,13 @@
 // Fetches data from /api/get-score-history.php and /api/get-raw-events.php
 ?>
 
-<div id="score-chart-section" style="margin-top: 40px;">
-    <h2>Score Evolution</h2>
-    <div id="score-chart-wrap" style="position: relative; min-width: 700px; min-height: 360px;">
+<div id="score-chart-section" class="glass-card" style="margin-top: 40px; padding: 24px;">
+    <h2>Score <span class="gradient-text">Evolution</span></h2>
+    <div id="score-chart-wrap" style="position: relative; width: 100%; min-height: 360px;">
         <canvas id="scoreChart"></canvas>
     </div>
 
-    <p id="chart-status" style="color: #9ca3af; font-size: 0.9rem;"></p>
+    <p id="chart-status" class="muted" style="font-size: 0.9rem;"></p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -19,15 +19,46 @@
 (function () {
 
     const USER_COLORS = [
-        "#60a5fa", // blue
-        "#f87171", // red
+        "#8b5cf6", // violet
+        "#3b82f6", // blue
         "#34d399", // green
         "#fbbf24", // amber
-        "#a78bfa", // purple
-        "#fb923c", // orange
-        "#38bdf8", // sky
         "#f472b6", // pink
+        "#38bdf8", // sky
+        "#fb923c", // orange
+        "#f87171", // red
     ];
+
+    // ── Theme helpers (gradient strokes/fills, glass tooltip) ────────
+
+    function hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    // chartArea is undefined on the first render pass — fall back to the
+    // flat color until the chart has been laid out.
+    function gradientStroke(context, color) {
+        const { ctx, chartArea } = context.chart;
+        if (!chartArea) return color;
+
+        const g = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+        g.addColorStop(0, hexToRgba(color, 0.65));
+        g.addColorStop(1, color);
+        return g;
+    }
+
+    function gradientFill(context, color) {
+        const { ctx, chartArea } = context.chart;
+        if (!chartArea) return hexToRgba(color, 0.08);
+
+        const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        g.addColorStop(0, hexToRgba(color, 0.16));
+        g.addColorStop(1, hexToRgba(color, 0));
+        return g;
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────
 
@@ -202,11 +233,15 @@
             datasets.push({
                 label:                username,
                 data:                 points.map(p => ({ x: p.x, y: p.y, _tooltip: p.tooltipLines })),
-                borderColor:          color,
-                backgroundColor:      color,
+                borderColor:          (context) => gradientStroke(context, color),
+                borderWidth:          2.5,
+                backgroundColor:      (context) => gradientFill(context, color),
+                fill:                 "origin",
                 pointBackgroundColor: color,
-                pointRadius:          5,
-                pointHoverRadius:     7,
+                pointBorderColor:     "rgba(255, 255, 255, 0.9)",
+                pointBorderWidth:     1.5,
+                pointRadius:          3.5,
+                pointHoverRadius:     6,
                 tension:              0,
                 spanGaps:             false,
                 parsing:              false,
@@ -237,6 +272,12 @@
             // Build x-axis labels for all day boundaries
             const labels = allDates.map(d => formatLabel(d));
 
+            Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+            Chart.defaults.color = "#a7a7bc";
+
+            // Widen the tick step on long histories so labels stay readable.
+            const tickStep = Math.max(1, Math.ceil(allDates.length / 12));
+
             const ctx = document.getElementById("scoreChart").getContext("2d");
             chart = new Chart(ctx, {
                 type: "line",
@@ -248,15 +289,21 @@
                     interaction: { mode: "nearest", intersect: true },
                     plugins: {
                         legend: {
-                            labels: { color: "#f3f4f6" },
+                            labels: {
+                                color: "#f4f4f8",
+                                usePointStyle: true,
+                                pointStyle: "circle",
+                                padding: 18,
+                            },
                         },
                         tooltip: {
-                            backgroundColor: "#1f2937",
-                            borderColor:     "#374151",
+                            backgroundColor: "rgba(16, 16, 30, 0.88)",
+                            borderColor:     "rgba(255, 255, 255, 0.12)",
                             borderWidth:     1,
-                            titleColor:      "#f3f4f6",
-                            bodyColor:       "#d1d5db",
-                            padding:         10,
+                            titleColor:      "#f4f4f8",
+                            bodyColor:       "#a7a7bc",
+                            padding:         12,
+                            cornerRadius:    10,
                             callbacks: {
                                 title() { return ""; },
                                 label(item) {
@@ -271,23 +318,23 @@
                             min:    0,
                             max:    allDates.length, // number of data days + 1 padding
                             ticks: {
-                                color:    "#9ca3af",
-                                stepSize: 1,
+                                color:    "#6e6e84",
+                                stepSize: tickStep,
                                 callback(value) {
                                     if (!Number.isInteger(value)) return "";
                                     return labels[value] ?? "";
                                 },
                             },
-                            grid: { color: "#374151" },
+                            grid: { color: "rgba(255, 255, 255, 0.05)" },
                         },
                         y: {
                             beginAtZero: true,
-                            ticks: { color: "#9ca3af" },
-                            grid:  { color: "#374151" },
+                            ticks: { color: "#6e6e84" },
+                            grid:  { color: "rgba(255, 255, 255, 0.05)" },
                             title: {
                                 display: true,
                                 text:    "Score",
-                                color:   "#9ca3af",
+                                color:   "#6e6e84",
                             },
                         },
                     },
