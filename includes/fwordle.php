@@ -132,10 +132,12 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
     $len  = (int) $day['word_length'];
     $prev = date('Y-m-d', strtotime($date . ' -1 day'));
 
-    // Players who played (≥1 guess) but didn't solve → each removes one board.
+    // Players who used ALL their guesses without solving → each removes one
+    // board. (finished = ran out of guesses; someone who guessed a bit and left
+    // without exhausting them doesn't count.)
     $failStmt = $pdo->prepare("
         SELECT COUNT(*) FROM fwordle_results
-        WHERE game_date = ? AND solved = 0 AND guesses_used >= 1
+        WHERE game_date = ? AND solved = 0 AND finished = 1
     ");
     $failStmt->execute([$prev]);
     $failed = (int) $failStmt->fetchColumn();
