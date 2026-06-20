@@ -669,6 +669,17 @@ main.container {
 
 .timer-controls button { margin: 0; flex: 1; }
 
+.manual-today {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    font-size: 0.86rem;
+    color: var(--text-2);
+    cursor: pointer;
+}
+.manual-today input { width: auto; margin: 0; cursor: pointer; }
+
 .manual-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -676,6 +687,11 @@ main.container {
 }
 
 .manual-grid .full { grid-column: 1 / -1; }
+
+/* Toggle between exact-time inputs (Today) and a duration (past day). */
+#pane-manual.today-mode .manual-dur   { display: none; }
+#pane-manual:not(.today-mode) .manual-exact { display: none; }
+.manual-grid input:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .log-feedback {
     margin: 12px 0 0;
@@ -1017,12 +1033,27 @@ main.container {
 
         <!-- Manual -->
         <div class="mode-pane" id="pane-manual">
+            <label class="manual-today">
+                <input type="checkbox" id="manual-today" checked>
+                <span>Today — log exact start &amp; end time</span>
+            </label>
+
             <div class="manual-grid">
-                <div>
+                <!-- Exact start/end (Today mode) -->
+                <div class="manual-exact">
+                    <label for="manual-start">Start</label>
+                    <input type="time" id="manual-start">
+                </div>
+                <div class="manual-exact">
+                    <label for="manual-end">End</label>
+                    <input type="time" id="manual-end">
+                </div>
+                <!-- Duration (past-day mode) -->
+                <div class="manual-dur">
                     <label for="manual-hours">Hours</label>
                     <input type="number" id="manual-hours" min="0" max="24" step="1" value="0">
                 </div>
-                <div>
+                <div class="manual-dur">
                     <label for="manual-minutes">Minutes</label>
                     <input type="number" id="manual-minutes" min="0" max="59" step="1" value="30">
                 </div>
@@ -1531,14 +1562,21 @@ main.container {
         feedback.classList.toggle("error", !!isError);
     }
 
-    function submitSession(seconds, studiedOn, onDone) {
+    // opts: { startTime, endTime } for exact mode, or { seconds, studiedOn }.
+    function submitSession(opts) {
         const mod = selectedModulePayload();
         if (mod.error) { setFeedback(mod.error, true); return; }
-        if (!seconds || seconds <= 0) { setFeedback("Nothing to log yet.", true); return; }
 
+        const exact = opts.startTime && opts.endTime;
         const body = new FormData();
-        body.append("seconds", seconds);
-        if (studiedOn) body.append("studied_on", studiedOn);
+        if (exact) {
+            body.append("start_time", opts.startTime);
+            body.append("end_time", opts.endTime);
+        } else {
+            if (!opts.seconds || opts.seconds <= 0) { setFeedback("Nothing to log yet.", true); return; }
+            body.append("seconds", opts.seconds);
+            if (opts.studiedOn) body.append("studied_on", opts.studiedOn);
+        }
         if (mod.module)     body.append("module", mod.module);
         if (mod.new_module) body.append("new_module", mod.new_module);
 
@@ -2050,15 +2088,40 @@ main.container {
     });
 
     // ── Manual ────────────────────────────────────────────────────────────
-    const manualDate = document.getElementById("manual-date");
-    manualDate.value = toDateStr(startOfDay(new Date()));
-    manualDate.max = manualDate.value;
+    const manualDate  = document.getElementById("manual-date");
+    const manualPane  = document.getElementById("pane-manual");
+    const manualToday = document.getElementById("manual-today");
+    const manualStart = document.getElementById("manual-start");
+    const manualEnd   = document.getElementById("manual-end");
+    const todayStr    = toDateStr(startOfDay(new Date()));
+    manualDate.value  = todayStr;
+    manualDate.max    = todayStr;
+
+    const fmtHM = (d) => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+
+    // "Today" → exact start/end + date locked to today; otherwise duration + date.
+    function applyManualMode() {
+        const today = manualToday.checked;
+        manualPane.classList.toggle("today-mode", today);
+        manualDate.disabled = today;
+        if (today) {
+            manualDate.value = todayStr;
+            if (!manualEnd.value)   manualEnd.value   = fmtHM(new Date());
+            if (!manualStart.value) manualStart.value = fmtHM(new Date(Date.now() - 30 * 60000));
+        }
+    }
+    manualToday.addEventListener("change", applyManualMode);
+    applyManualMode();
 
     document.getElementById("manual-log").addEventListener("click", () => {
-        const h = parseInt(document.getElementById("manual-hours").value, 10) || 0;
-        const m = parseInt(document.getElementById("manual-minutes").value, 10) || 0;
-        const secs = h * 3600 + m * 60;
-        submitSession(secs, manualDate.value || null);
+        if (manualToday.checked) {
+            if (!manualStart.value || !manualEnd.value) { setFeedback("Enter a start and end time.", true); return; }
+            submitSession({ startTime: manualStart.value, endTime: manualEnd.value });
+        } else {
+            const h = parseInt(document.getElementById("manual-hours").value, 10) || 0;
+            const m = parseInt(document.getElementById("manual-minutes").value, 10) || 0;
+            submitSession({ seconds: h * 3600 + m * 60, studiedOn: manualDate.value || null });
+        }
     });
 
     // ── Go ────────────────────────────────────────────────────────────────

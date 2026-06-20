@@ -12,27 +12,64 @@ $userId = $_SESSION["user_id"];
 
 $module    = trim($_POST["module"]     ?? "");
 $newModule = trim($_POST["new_module"] ?? "");
-$seconds   = filter_var($_POST["seconds"] ?? null, FILTER_VALIDATE_INT);
-$studiedOn = trim($_POST["studied_on"] ?? "");
+$startTime = trim($_POST["start_time"] ?? "");
+$endTime   = trim($_POST["end_time"]   ?? "");
 
-// ── Duration: positive, at most a full day ───────────────────────────────
-if ($seconds === false || $seconds === null || $seconds <= 0 || $seconds > 86400) {
-    http_response_code(400);
-    exit("Invalid duration.");
-}
+$startedAt = null; // set in exact (start/end) mode → also written as a segment
+$endedAt   = null;
 
-// ── Date: default to today, must be a real Y-m-d and not in the future ───
-if ($studiedOn === "") {
-    $studiedOn = (new DateTime("today"))->format("Y-m-d");
-} else {
-    $d = DateTime::createFromFormat("Y-m-d", $studiedOn);
-    if (!$d || $d->format("Y-m-d") !== $studiedOn) {
+if ($startTime !== "" && $endTime !== "") {
+    // ── Exact mode: a start & end time for today ─────────────────────────────
+    $today     = (new DateTime("today"))->format("Y-m-d");
+    $studiedOn = $today;
+
+    if (!preg_match('/^\d{1,2}:\d{2}$/', $startTime) || !preg_match('/^\d{1,2}:\d{2}$/', $endTime)) {
         http_response_code(400);
-        exit("Invalid date.");
+        exit("Invalid time.");
     }
-    if ($d > new DateTime("today")) {
+    $startDT = DateTime::createFromFormat("!Y-m-d H:i", "$today $startTime");
+    $endDT   = DateTime::createFromFormat("!Y-m-d H:i", "$today $endTime");
+    if (!$startDT || !$endDT) {
         http_response_code(400);
-        exit("Date cannot be in the future.");
+        exit("Invalid time.");
+    }
+
+    $seconds = $endDT->getTimestamp() - $startDT->getTimestamp();
+    if ($seconds <= 0) {
+        http_response_code(400);
+        exit("End time must be after the start time.");
+    }
+    if ($seconds > 86400) {
+        http_response_code(400);
+        exit("Invalid duration.");
+    }
+
+    $startedAt = $startDT->format("Y-m-d H:i:s");
+    $endedAt   = $endDT->format("Y-m-d H:i:s");
+} else {
+    // ── Duration mode: a length + a date (today or earlier) ──────────────────
+    $seconds   = filter_var($_POST["seconds"] ?? null, FILTER_VALIDATE_INT);
+    $studiedOn = trim($_POST["studied_on"] ?? "");
+
+    if ($seconds === false || $seconds === null || $seconds <= 0 || $seconds > 86400) {
+        http_response_code(400);
+        exit("Invalid duration.");
+    }
+
+    if ($studiedOn === "") {
+        $studiedOn = (new DateTime("today"))->format("Y-m-d");
+    } else {
+        // "!Y-m-d" resets the time to 00:00:00 — otherwise today's date keeps the
+        // current clock time and wrongly compares as "in the future".
+        $d = DateTime::createFromFormat("!Y-m-d", $studiedOn);
+        if (!$d || $d->format("Y-m-d") !== $studiedOn) {
+            http_response_code(400);
+            exit("Invalid date.");
+        }
+        if ($d > new DateTime("today")) {
+            http_response_code(400);
+            exit("Date cannot be in the future.");
+        }
     }
 }
 
@@ -84,9 +121,19 @@ if ($newModule !== "") {
 
 // ── Store the session ────────────────────────────────────────────────────
 $pdo->prepare("
-    INSERT INTO study_sessions (user_id, module_name, seconds, studied_on)
-    VALUES (?, ?, ?, ?)
-")->execute([$userId, $finalModule, $seconds, $studiedOn]);
+    INSERT INTO study_sessions (user_id, module_name, seconds, studied_on, started_at)
+    VALUES (?, ?, ?, ?, ?)
+")->execute([$userId, $finalModule, $seconds, $studiedOn, $startedAt]);
+
+// Exact mode → store the interval as a segment so the day recap draws it at the
+// real clock times (duration mode has no fixed times, so no segment).
+if ($startedAt !== null) {
+    $sessionId = (int) $pdo->lastInsertId();
+    $pdo->prepare("
+        INSERT INTO study_segments (user_id, session_id, started_at, ended_at)
+        VALUES (?, ?, ?, ?)
+    ")->execute([$userId, $sessionId, $startedAt, $endedAt]);
+}
 
 header("Content-Type: application/json");
 echo json_encode([
