@@ -1807,8 +1807,7 @@ main.container {
                                 const color    = moduleColor[s.module] || "#64748b";
                                 const blockH   = (Math.max(s.endM - s.startM, 2) / span * 100).toFixed(2) + "%";
                                 const liveAttr = s.live ? ` data-live-start="${s.startM}"` : "";
-                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") +
-                                    minsToHHMM(s.startM) + "–" + minsToHHMM(s.endM) + " · " + fmtTime(s.seconds);
+                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds);
                                 return `<div class="tl-block ${s.live ? "live" : ""}"${liveAttr}
                                      style="top:${pct(s.startM)};height:${blockH};background:${color};"
                                      title="${tip}">${s.module ? `<span class="tl-block-label">${escapeHtml(s.module)}</span>` : ""}</div>`;
