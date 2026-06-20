@@ -134,6 +134,20 @@ CREATE TABLE study_status (
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- One row per contiguous study INTERVAL. start/resume opens a row (ended_at
+-- NULL = the interval running now); pause/log closes it. While a session is
+-- in progress the rows have session_id NULL; on log they're attached to the
+-- study_sessions row. The day recap draws one block per interval, so breaks
+-- show as the gaps between them.
+CREATE TABLE study_segments (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NOT NULL REFERENCES users(id),
+    session_id INT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
+    started_at DATETIME NOT NULL,
+    ended_at   DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Project time tracker (projects.php). Per-user projects with a colour and
 -- description; each logged session is one row in project_time_entries.
 CREATE TABLE projects (

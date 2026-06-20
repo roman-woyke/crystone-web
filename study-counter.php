@@ -255,6 +255,9 @@ main.container {
     min-height: 4px;
     overflow: hidden;
     opacity: 0.82;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .tl-block.live {
@@ -263,11 +266,12 @@ main.container {
 }
 
 .tl-block-label {
-    display: block;
-    padding: 2px 3px;
+    max-width: 100%;
+    padding: 0 3px;
     font-size: 0.58rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.95);
+    text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1708,69 +1712,46 @@ main.container {
     const breakList      = document.getElementById("break-list");
 
     // ── Day timeline ──────────────────────────────────────────────────────────
+    // Recap blocks are one-per-study-interval, positioned in minutes from today's
+    // midnight (0–1440). Breaks show as the gaps between a session's blocks.
     let lastRecap    = [];
     let tlRangeStart = 0;
     let tlRangeEnd   = 60;
 
-    function hhmm2mins(str) {
-        if (!str) return 0;
-        const parts = str.split(":");
-        return parseInt(parts[0], 10) * 60 + (parseInt(parts[1], 10) || 0);
-    }
-
-    function minsToHHMM(m) {
-        // Normalize to 0–1439 (handles extended minutes > 1440 for midnight crossings)
-        m = ((Math.round(m) % 1440) + 1440) % 1440;
-        return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
-    }
-
-    // Convert a session's end HH:MM to extended minutes (adds 1440 if it crosses midnight).
-    function extMins(startM, endHHMM) {
-        let e = hhmm2mins(endHHMM);
-        if (e < startM - 30) e += 1440; // end < start → midnight crossing
-        return e;
-    }
+    const clampDay  = (m) => Math.max(0, Math.min(1440, m));
+    const minsToHHMM = (m) => {
+        m = Math.round(m);
+        const h = Math.floor(m / 60), mm = m % 60;
+        return String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+    };
 
     function renderTimeline(recap) {
         lastRecap = recap || [];
         const tl = document.getElementById("dock-timeline");
         if (!tl) return;
 
-        const now        = new Date();
-        const nowMinsRaw = now.getHours() * 60 + now.getMinutes();
+        const now    = new Date();
+        const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
 
-        // ── Build raw session list (logged + live running) ────────────────────
-        const rawSessions = lastRecap.map(r => ({ ...r, live: false }));
-        studyingEntries.filter(s => s.elapsed > 30).forEach(s => {
-            // Span the real session (study + breaks) via since_secs, so the live
-            // block starts where the session actually began — not just the study
-            // time. break_seconds = the gap beyond what's been studied.
-            const ago = (s.since_secs != null ? s.since_secs : s.elapsed);
-            const startMins = Math.max(0, nowMinsRaw - Math.floor(ago / 60));
-            rawSessions.push({
-                username:      s.username,
-                module:        s.module || null,
-                seconds:       s.elapsed,
-                break_seconds: s.since_secs != null ? Math.max(0, s.since_secs - s.elapsed) : 0,
-                start:         minsToHHMM(startMins),
-                end:           minsToHHMM(nowMinsRaw),
-                live:          true,
+        // Clamp every interval into today's 0–24h; a live block runs up to now.
+        const blocks = [];
+        lastRecap.forEach(r => {
+            const startM = clampDay(r.start_min);
+            const endM   = clampDay(r.live ? nowMin : r.end_min);
+            if (endM - startM < 0.5) return; // nothing inside today to draw
+            blocks.push({
+                username: r.username,
+                module:   r.module || null,
+                seconds:  r.seconds,
+                live:     !!r.live,
+                startM, endM,
             });
         });
 
-        // ── Convert to extended minutes (handles midnight crossings) ──────────
-        // e.g. start=23:40 end=00:05 → startM=1420 endM=1445
-        const sessions = rawSessions.map(s => {
-            const startM = hhmm2mins(s.start);
-            const endM   = extMins(startM, s.end);
-            return { ...s, startM, endM };
-        });
-
-        // ── All users visible today ───────────────────────────────────────────
         const userSet = new Set([
+            ...blocks.map(b => b.username),
             ...studyingEntries.map(s => s.username),
             ...breakEntries.map(s => s.username),
-            ...lastRecap.map(r => r.username),
         ]);
         const allUsers = [...userSet].sort();
 
@@ -1781,19 +1762,14 @@ main.container {
 
         assignUserColors(allUsers);
 
-        // ── nowMins in extended coordinates ───────────────────────────────────
-        // If late-night sessions exist and we're just past midnight, shift forward.
-        const maxEndM = sessions.length > 0 ? Math.max(...sessions.map(s => s.endM)) : nowMinsRaw;
-        let nowMins = nowMinsRaw;
-        if (maxEndM > 1380 && nowMinsRaw < 120) nowMins += 1440;
-
-        // ── Time range ────────────────────────────────────────────────────────
-        const allStartM = sessions.map(s => s.startM);
-        const allEndM   = sessions.map(s => s.endM);
-        const earliest  = allStartM.length > 0 ? Math.min(...allStartM) : Math.max(0, nowMins - 60);
-        tlRangeStart = Math.floor(earliest / 60) * 60;
-        tlRangeEnd   = Math.ceil(Math.max(nowMins + 1, allEndM.length > 0 ? Math.max(...allEndM) : nowMins) / 60) * 60;
-        if (tlRangeEnd <= tlRangeStart) tlRangeEnd = tlRangeStart + 60;
+        // Auto-zoom the visible window, but never beyond [00:00, 24:00].
+        const starts   = blocks.map(b => b.startM);
+        const ends     = blocks.map(b => b.endM);
+        const earliest = starts.length ? Math.min(...starts) : Math.max(0, nowMin - 60);
+        const latest   = Math.max(nowMin, ends.length ? Math.max(...ends) : nowMin);
+        tlRangeStart = Math.max(0,    Math.floor(earliest / 60) * 60);
+        tlRangeEnd   = Math.min(1440, Math.ceil(latest / 60) * 60);
+        if (tlRangeEnd <= tlRangeStart) tlRangeEnd = Math.min(1440, tlRangeStart + 60);
         const span = tlRangeEnd - tlRangeStart;
 
         const pct = (m) => ((m - tlRangeStart) / span * 100).toFixed(2) + "%";
@@ -1803,9 +1779,9 @@ main.container {
 
         const byUser = {};
         allUsers.forEach(u => { byUser[u] = []; });
-        sessions.forEach(s => { if (byUser[s.username]) byUser[s.username].push(s); });
+        blocks.forEach(b => { if (byUser[b.username]) byUser[b.username].push(b); });
 
-        const nowPct = pct(Math.min(nowMins, tlRangeEnd - 1));
+        const nowPct = pct(Math.min(Math.max(nowMin, tlRangeStart), tlRangeEnd));
 
         tl.innerHTML = `
             <div class="tl-user-heads">
@@ -1831,8 +1807,8 @@ main.container {
                                 const color    = moduleColor[s.module] || "#64748b";
                                 const blockH   = (Math.max(s.endM - s.startM, 2) / span * 100).toFixed(2) + "%";
                                 const liveAttr = s.live ? ` data-live-start="${s.startM}"` : "";
-                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds) +
-                                    (s.break_seconds ? " · ☕ " + fmtTime(s.break_seconds) : "");
+                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") +
+                                    minsToHHMM(s.startM) + "–" + minsToHHMM(s.endM) + " · " + fmtTime(s.seconds);
                                 return `<div class="tl-block ${s.live ? "live" : ""}"${liveAttr}
                                      style="top:${pct(s.startM)};height:${blockH};background:${color};"
                                      title="${tip}">${s.module ? `<span class="tl-block-label">${escapeHtml(s.module)}</span>` : ""}</div>`;
@@ -1848,16 +1824,16 @@ main.container {
         const nowLine = document.getElementById("tl-now-line");
         if (!nowLine) return;
         const now = new Date();
-        let nowMins = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-        // Post-midnight: if range extends past midnight, shift nowMins into extended coords.
-        if (tlRangeEnd > 1380 && nowMins < 120) nowMins += 1440;
-        if (nowMins > tlRangeEnd) { renderTimeline(lastRecap); return; }
+        const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        // Grew past the current window (e.g. crossed an hour boundary) → re-layout.
+        if (nowMin > tlRangeEnd + 0.5 && tlRangeEnd < 1440) { renderTimeline(lastRecap); return; }
         const span = tlRangeEnd - tlRangeStart;
         const pct  = (m) => ((m - tlRangeStart) / span * 100).toFixed(3) + "%";
-        nowLine.style.top = pct(Math.min(nowMins, tlRangeEnd));
+        const capped = Math.min(nowMin, tlRangeEnd);
+        nowLine.style.top = pct(capped);
         document.querySelectorAll(".tl-block[data-live-start]").forEach(el => {
             const startM = parseFloat(el.dataset.liveStart);
-            el.style.height = Math.max((nowMins - startM) / span * 100, 0.5).toFixed(3) + "%";
+            el.style.height = Math.max((capped - startM) / span * 100, 0.5).toFixed(3) + "%";
         });
     }
 
