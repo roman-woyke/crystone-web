@@ -22,7 +22,8 @@ function studyStatusPayload(PDO $pdo, $userId): array
             s.module_name,
             s.accumulated + IF(s.started_at IS NULL, 0, TIMESTAMPDIFF(SECOND, s.started_at, NOW())) AS elapsed,
             (s.started_at IS NOT NULL) AS running,
-            IF(s.started_at IS NULL, TIMESTAMPDIFF(SECOND, s.updated_at, NOW()), 0) AS break_elapsed
+            IF(s.started_at IS NULL, TIMESTAMPDIFF(SECOND, s.updated_at, NOW()), 0) AS break_elapsed,
+            IF(s.session_start IS NULL, NULL, TIMESTAMPDIFF(SECOND, s.session_start, NOW())) AS since_secs
         FROM study_status s
         JOIN users u ON u.id = s.user_id
         ORDER BY u.username
@@ -39,6 +40,9 @@ function studyStatusPayload(PDO $pdo, $userId): array
             "elapsed"       => (int) $r["elapsed"],
             "running"       => (bool) $r["running"],
             "break_elapsed" => (int) $r["break_elapsed"],
+            // Wall-clock seconds since the session began (study + breaks) — lets
+            // the live timeline block span the real window, not just study time.
+            "since_secs"    => $r["since_secs"] === null ? null : (int) $r["since_secs"],
         ];
         $studying[] = $entry;
 
@@ -48,15 +52,19 @@ function studyStatusPayload(PDO $pdo, $userId): array
     }
 
     // ── Today's recap: every session logged today, with its time window ──────
-    // `created_at` is when the session was recorded (≈ when it ended), so the
-    // window is [created_at - seconds, created_at].
+    // The window is [real start, created_at]. `started_at` is the true session
+    // start (study + breaks); older rows without it fall back to created_at -
+    // seconds. `break_seconds` is the span beyond the studied time.
     $recapRows = $pdo->query("
         SELECT
             u.username,
             s.module_name,
             s.seconds,
-            DATE_FORMAT(s.created_at - INTERVAL s.seconds SECOND, '%H:%i') AS start_time,
-            DATE_FORMAT(s.created_at, '%H:%i') AS end_time
+            COALESCE(s.started_at, s.created_at - INTERVAL s.seconds SECOND) AS real_start,
+            DATE_FORMAT(COALESCE(s.started_at, s.created_at - INTERVAL s.seconds SECOND), '%H:%i') AS start_time,
+            DATE_FORMAT(s.created_at, '%H:%i') AS end_time,
+            IF(s.started_at IS NULL, 0,
+               GREATEST(0, TIMESTAMPDIFF(SECOND, s.started_at, s.created_at) - s.seconds)) AS break_seconds
         FROM study_sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.studied_on = CURDATE()
@@ -66,11 +74,12 @@ function studyStatusPayload(PDO $pdo, $userId): array
     $recap = [];
     foreach ($recapRows as $r) {
         $recap[] = [
-            "username" => $r["username"],
-            "module"   => $r["module_name"],
-            "seconds"  => (int) $r["seconds"],
-            "start"    => $r["start_time"],
-            "end"      => $r["end_time"],
+            "username"      => $r["username"],
+            "module"        => $r["module_name"],
+            "seconds"       => (int) $r["seconds"],
+            "start"         => $r["start_time"],
+            "end"           => $r["end_time"],
+            "break_seconds" => (int) $r["break_seconds"],
         ];
     }
 

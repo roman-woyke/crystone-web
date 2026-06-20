@@ -40,7 +40,7 @@ function resolveStudyModule(PDO $pdo, $userId, string $module, string $newModule
 }
 
 // Current row (if any)
-$stmt = $pdo->prepare("SELECT mode, module_name, started_at, accumulated FROM study_status WHERE user_id = ?");
+$stmt = $pdo->prepare("SELECT mode, module_name, started_at, accumulated, session_start FROM study_status WHERE user_id = ?");
 $stmt->execute([$userId]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -65,11 +65,14 @@ if ($action === "start") {
             exit("Pick a module first.");
         }
 
+        // session_start = NOW() marks the real wall-clock start of the session;
+        // it survives pause/resume so the day recap can show the true span.
         $pdo->prepare("
-            INSERT INTO study_status (user_id, mode, module_name, started_at, accumulated)
-            VALUES (?, 'timer', ?, NOW(), 0)
+            INSERT INTO study_status (user_id, mode, module_name, started_at, accumulated, session_start)
+            VALUES (?, 'timer', ?, NOW(), 0, NOW())
             ON DUPLICATE KEY UPDATE
-                mode = 'timer', module_name = VALUES(module_name), started_at = NOW(), accumulated = 0
+                mode = 'timer', module_name = VALUES(module_name),
+                started_at = NOW(), accumulated = 0, session_start = NOW()
         ")->execute([$userId, $resolved]);
 
         $extra["custom_added"] = $customAdded;
@@ -78,8 +81,8 @@ if ($action === "start") {
     // Quick "I'm studying" stopwatch with no module (not loggable).
     if (!$row) {
         $pdo->prepare("
-            INSERT INTO study_status (user_id, mode, module_name, started_at, accumulated)
-            VALUES (?, 'presence', NULL, NOW(), 0)
+            INSERT INTO study_status (user_id, mode, module_name, started_at, accumulated, session_start)
+            VALUES (?, 'presence', NULL, NOW(), 0, NOW())
         ")->execute([$userId]);
     } elseif ($row["started_at"] === null) {
         // Resume whatever was paused.
@@ -127,10 +130,12 @@ if ($action === "start") {
         $elapsed = (int) $e->fetchColumn();
 
         if ($logModule !== null && $elapsed > 0 && $elapsed <= 86400) {
+            // started_at = the real session start (with breaks); the recap uses it
+            // to draw the true window. Falls back to NULL for pre-migration rows.
             $pdo->prepare("
-                INSERT INTO study_sessions (user_id, module_name, seconds, studied_on)
-                VALUES (?, ?, ?, CURDATE())
-            ")->execute([$userId, $logModule, $elapsed]);
+                INSERT INTO study_sessions (user_id, module_name, seconds, studied_on, started_at)
+                VALUES (?, ?, ?, CURDATE(), ?)
+            ")->execute([$userId, $logModule, $elapsed, $row["session_start"] ?? null]);
 
             $extra["logged"]  = true;
             $extra["seconds"] = $elapsed;

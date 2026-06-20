@@ -1742,14 +1742,19 @@ main.container {
         // ── Build raw session list (logged + live running) ────────────────────
         const rawSessions = lastRecap.map(r => ({ ...r, live: false }));
         studyingEntries.filter(s => s.elapsed > 30).forEach(s => {
-            const startMins = Math.max(0, nowMinsRaw - Math.floor(s.elapsed / 60));
+            // Span the real session (study + breaks) via since_secs, so the live
+            // block starts where the session actually began — not just the study
+            // time. break_seconds = the gap beyond what's been studied.
+            const ago = (s.since_secs != null ? s.since_secs : s.elapsed);
+            const startMins = Math.max(0, nowMinsRaw - Math.floor(ago / 60));
             rawSessions.push({
-                username: s.username,
-                module:   s.module || null,
-                seconds:  s.elapsed,
-                start:    minsToHHMM(startMins),
-                end:      minsToHHMM(nowMinsRaw),
-                live:     true,
+                username:      s.username,
+                module:        s.module || null,
+                seconds:       s.elapsed,
+                break_seconds: s.since_secs != null ? Math.max(0, s.since_secs - s.elapsed) : 0,
+                start:         minsToHHMM(startMins),
+                end:           minsToHHMM(nowMinsRaw),
+                live:          true,
             });
         });
 
@@ -1821,11 +1826,13 @@ main.container {
                     </div>
                     <div class="tl-cols">
                         ${allUsers.map(u => {
-                            const color = userColor[u] || "#8b5cf6";
                             return `<div class="tl-col">${(byUser[u] || []).map(s => {
+                                // Colour by module (the column header already identifies the user).
+                                const color    = moduleColor[s.module] || "#64748b";
                                 const blockH   = (Math.max(s.endM - s.startM, 2) / span * 100).toFixed(2) + "%";
                                 const liveAttr = s.live ? ` data-live-start="${s.startM}"` : "";
-                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds);
+                                const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds) +
+                                    (s.break_seconds ? " · ☕ " + fmtTime(s.break_seconds) : "");
                                 return `<div class="tl-block ${s.live ? "live" : ""}"${liveAttr}
                                      style="top:${pct(s.startM)};height:${blockH};background:${color};"
                                      title="${tip}">${s.module ? `<span class="tl-block-label">${escapeHtml(s.module)}</span>` : ""}</div>`;

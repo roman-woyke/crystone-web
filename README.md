@@ -106,11 +106,15 @@ CREATE TABLE study_modules (
 
 -- One row per logged study session (timer or manual). `module_name` is a plain
 -- string so sessions are decoupled from both `exams` and `study_modules`.
+-- `seconds` is studied time only; `started_at` is the real wall-clock start
+-- (study + breaks) so the day recap can draw the true window (NULL = manual /
+-- pre-migration → recap falls back to created_at - seconds).
 CREATE TABLE study_sessions (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     user_id     INT NOT NULL REFERENCES users(id),
     module_name VARCHAR(255) NOT NULL,
     seconds     INT NOT NULL,
+    started_at  DATETIME NULL,
     studied_on  DATE NOT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -121,12 +125,13 @@ CREATE TABLE study_sessions (
 -- module stopwatch (log-a-session window); mode='presence' is a module-less
 -- "I'm studying" stopwatch. A row existing at all means currently studying.
 CREATE TABLE study_status (
-    user_id     INT NOT NULL PRIMARY KEY REFERENCES users(id),
-    mode        ENUM('timer','presence') NOT NULL DEFAULT 'presence',
-    module_name VARCHAR(255) NULL,
-    started_at  DATETIME NULL,
-    accumulated INT NOT NULL DEFAULT 0,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    user_id       INT NOT NULL PRIMARY KEY REFERENCES users(id),
+    mode          ENUM('timer','presence') NOT NULL DEFAULT 'presence',
+    module_name   VARCHAR(255) NULL,
+    started_at    DATETIME NULL,
+    accumulated   INT NOT NULL DEFAULT 0,
+    session_start DATETIME NULL,  -- real start of the session, kept across pause/resume
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Project time tracker (projects.php). Per-user projects with a colour and
