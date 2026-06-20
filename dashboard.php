@@ -110,8 +110,8 @@ foreach ($scoreStmt->fetchAll(PDO::FETCH_ASSOC) as $event) {
 
 function daysSince(?string $ts): ?int {
     if (empty($ts)) return null;
-    $then = new DateTime($ts, new DateTimeZone("UTC"));
-    $now  = new DateTime("now", new DateTimeZone("UTC"));
+    $then = new DateTime($ts);          // DB timestamps are local time (Europe/Berlin)
+    $now  = new DateTime("now");
     return (int) floor(($now->getTimestamp() - $then->getTimestamp()) / 86400);
 }
 

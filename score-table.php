@@ -271,10 +271,11 @@
             return `<span class="status-badge status-badge-${slug}">${escapeHtml(status)}</span>`;
         }
 
-        // Returns days elapsed since a UTC timestamp string, or null.
+        // Returns days elapsed since a DB timestamp string, or null. DB times are
+        // local (Europe/Berlin) and so is the browser, so parse them as local.
         function daysSince(timestamp) {
             if (!timestamp) return null;
-            const iso = String(timestamp).includes("T") ? timestamp : String(timestamp).replace(" ", "T") + "Z";
+            const iso = String(timestamp).includes("T") ? timestamp : String(timestamp).replace(" ", "T");
             const then = new Date(iso);
             if (isNaN(then)) return null;
             return Math.floor((Date.now() - then.getTime()) / 86400000);
@@ -304,8 +305,8 @@
 
         function relativeDays(timestamp) {
             if (!timestamp) return "—";
-            // Treat DB timestamps (no TZ suffix) as UTC so day-count math is consistent.
-            const iso = String(timestamp).includes("T") ? timestamp : String(timestamp).replace(" ", "T") + "Z";
+            // DB timestamps are local (Europe/Berlin), as is the browser — parse as local.
+            const iso = String(timestamp).includes("T") ? timestamp : String(timestamp).replace(" ", "T");
             const then = new Date(iso);
             if (isNaN(then)) return "—";
             const diffMs   = Date.now() - then.getTime();

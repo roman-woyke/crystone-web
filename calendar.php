@@ -30,17 +30,17 @@ $selectedSet = array_flip($selectedExamIds);
 
 // ── Countdown to first exam ───────────────────────────────────────────
 $firstExamDate = $exams[0]["exam_date"] ?? "2026-07-13";
-$today    = new DateTime("today", new DateTimeZone("UTC"));
-$firstDay = new DateTime($firstExamDate, new DateTimeZone("UTC"));
+$today    = new DateTime("today");
+$firstDay = new DateTime($firstExamDate);
 $daysUntil = (int) ceil(($firstDay->getTimestamp() - $today->getTimestamp()) / 86400);
 
 // ── Progress: how many of the selected exams are already written ──────
-$now            = new DateTime("now", new DateTimeZone("UTC"));
+$now            = new DateTime("now");
 $totalSelected  = count($selectedExamIds);
 $passedSelected = 0;
 foreach ($exams as $e) {
     if (!isset($selectedSet[(int) $e["id"]])) continue;
-    $examDateTime = new DateTime($e["exam_date"] . " " . $e["exam_time"], new DateTimeZone("UTC"));
+    $examDateTime = new DateTime($e["exam_date"] . " " . $e["exam_time"]);
     if ($examDateTime < $now) $passedSelected++;
 }
 
