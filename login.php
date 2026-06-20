@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . "/includes/start-session.php";
-require_once __DIR__ . "/../../config.php";
+require_once __DIR__ . "/../config.php";
 
 // Only accept `next` if it's a same-app relative path (prevents open redirect).
 function safeNext(?string $next): string {
