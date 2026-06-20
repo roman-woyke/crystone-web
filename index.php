@@ -1,11 +1,11 @@
 <?php
 
-require_once __DIR__ . "/basti/includes/start-session.php";
+require_once __DIR__ . "/includes/start-session.php";
 
 if (isset($_SESSION["user_id"])) {
-    header("Location: /basti/study-counter.php");
+    header("Location: /study-counter.php");
 } else {
-    header("Location: /basti/login.php");
+    header("Location: /login.php");
 }
 
 exit;
