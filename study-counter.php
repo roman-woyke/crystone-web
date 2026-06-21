@@ -468,7 +468,7 @@ main.container {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-full);
-    padding: 3px;
+    padding: 2px;
     gap: 2px;
 }
 
@@ -1569,10 +1569,10 @@ main.container {
     });
 
     // ── Period tabs ───────────────────────────────────────────────────────
-    document.querySelectorAll(".period-tab").forEach(tab => {
+    document.querySelectorAll(".period-tab[data-period]").forEach(tab => {
         tab.addEventListener("click", () => {
             if (tab.dataset.period === podiumPeriod) return;
-            document.querySelectorAll(".period-tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".period-tab[data-period]").forEach(t => t.classList.remove("active"));
             tab.classList.add("active");
             podiumPeriod = tab.dataset.period;
             if (showingModules) buildModulePodiums(); else buildOverallPodium();
