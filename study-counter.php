@@ -455,10 +455,58 @@ main.container {
     font-size: 1.25rem;
 }
 
+.podium-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.period-tabs {
+    display: flex;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+    padding: 3px;
+    gap: 2px;
+}
+
+.period-tab {
+    padding: 5px 14px;
+    border-radius: var(--radius-full);
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all var(--t-fast);
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.period-tab.active {
+    background: var(--grad-accent);
+    color: #fff;
+    box-shadow: var(--glow-violet);
+}
+
+.period-tab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-1);
+}
+
 .podium-toggle {
     width: auto;
     margin: 0;
     padding: 8px 18px;
+}
+
+.podium-toggle.active {
+    background: var(--grad-accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--glow-violet);
 }
 
 .podium-views {
@@ -977,7 +1025,14 @@ main.container {
 <!-- ── Podium ─────────────────────────────────────────────────────────────── -->
 <div class="podium-bar">
     <h2>🏆 Most hours studied</h2>
-    <button type="button" class="btn podium-toggle" id="podium-toggle">Overall</button>
+    <div class="podium-controls">
+        <div class="period-tabs">
+            <button class="period-tab active" data-period="overall">Overall</button>
+            <button class="period-tab" data-period="weekly">This week</button>
+            <button class="period-tab" data-period="daily">Today</button>
+        </div>
+        <button type="button" class="btn podium-toggle" id="podium-toggle">Per module</button>
+    </div>
 </div>
 
 <div class="podium-views">
@@ -1244,6 +1299,16 @@ main.container {
     // ── State ─────────────────────────────────────────────────────────────
     let SESSIONS = INITIAL_SESSIONS || [];  // [{username, module, date, seconds}]
     let weekOffset = 0;    // 0 = current week, -1 = previous, ...
+    let podiumPeriod = "overall"; // "overall" | "weekly" | "daily"
+
+    function filteredSessions() {
+        if (podiumPeriod === "overall") return SESSIONS;
+        const todayStr = toDateStr(startOfDay(new Date()));
+        if (podiumPeriod === "daily") return SESSIONS.filter(s => s.date === todayStr);
+        // weekly: Monday of this week → today
+        const weekStartStr = toDateStr(mondayOf(new Date()));
+        return SESSIONS.filter(s => s.date >= weekStartStr && s.date <= todayStr);
+    }
 
     const plotEl    = document.getElementById("chart-plot");
     const yAxisEl   = document.getElementById("chart-yaxis");
@@ -1389,8 +1454,12 @@ main.container {
         return totals;
     }
 
+    const PERIOD_LABELS = { overall: "total studied", weekly: "this week", daily: "today" };
+
     function buildOverallPodium() {
-        const totals = userTotals();
+        const sessions = filteredSessions();
+        const totals = {};
+        sessions.forEach(s => { totals[s.username] = (totals[s.username] || 0) + s.seconds; });
         const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
         const podium = document.getElementById("overall-podium");
         const empty  = document.getElementById("overall-empty");
@@ -1402,6 +1471,7 @@ main.container {
         }
         empty.style.display = "none";
 
+        const sublabel = PERIOD_LABELS[podiumPeriod] || "total studied";
         const top = ranked.slice(0, 3);
         podium.innerHTML = top.map(([username, secs], i) => {
             const rank = i + 1;
@@ -1412,7 +1482,7 @@ main.container {
                     <span class="podium-medal">${rank}</span>
                     <div class="podium-name">${escapeHtml(username)}</div>
                     <div class="podium-score" style="color:${color}">${fmtTime(secs)}</div>
-                    <div class="podium-sub podium-sub-time">total studied</div>
+                    <div class="podium-sub podium-sub-time">${sublabel}</div>
                 </div>
             `;
         }).join("");
@@ -1421,8 +1491,9 @@ main.container {
 
     function buildModulePodiums() {
         // module -> user -> seconds
+        const sessions = filteredSessions();
         const byModule = {};
-        SESSIONS.forEach(s => {
+        sessions.forEach(s => {
             if (!byModule[s.module]) byModule[s.module] = {};
             byModule[s.module][s.username] = (byModule[s.module][s.username] || 0) + s.seconds;
         });
@@ -1485,18 +1556,34 @@ main.container {
     const viewOverall = document.getElementById("podium-overall");
     const viewModules = document.getElementById("podium-modules");
 
-    toggleBtn.addEventListener("click", () => {
+    function switchPodiumView(toModules) {
         const current = showingModules ? viewModules : viewOverall;
-        const next    = showingModules ? viewOverall : viewModules;
+        const next    = toModules      ? viewModules : viewOverall;
+        if (current === next) return;
         current.classList.add("fade-out");
         setTimeout(() => {
             current.style.display = "none";
             next.style.display = "block";
-            // allow layout, then fade in
             requestAnimationFrame(() => next.classList.remove("fade-out"));
         }, 280);
-        showingModules = !showingModules;
-        toggleBtn.textContent = showingModules ? "Per module" : "Overall";
+        showingModules = toModules;
+        toggleBtn.classList.toggle("active", showingModules);
+    }
+
+    toggleBtn.addEventListener("click", () => {
+        switchPodiumView(!showingModules);
+        if (showingModules) buildModulePodiums(); else buildOverallPodium();
+    });
+
+    // ── Period tabs ───────────────────────────────────────────────────────
+    document.querySelectorAll(".period-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            if (tab.dataset.period === podiumPeriod) return;
+            document.querySelectorAll(".period-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            podiumPeriod = tab.dataset.period;
+            if (showingModules) buildModulePodiums(); else buildOverallPodium();
+        });
     });
 
     // ── Data load + full render ───────────────────────────────────────────
