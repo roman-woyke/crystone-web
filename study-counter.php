@@ -462,15 +462,6 @@ main.container {
     flex-wrap: wrap;
 }
 
-.period-tabs {
-    display: flex;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-full);
-    padding: 2px;
-    gap: 2px;
-}
 
 .period-tab {
     display: flex;
@@ -1017,14 +1008,10 @@ main.container {
 <div class="podium-bar">
     <h2>🏆 Most hours studied</h2>
     <div class="podium-controls">
-        <div class="period-tabs">
-            <button class="period-tab active" data-period="overall">Overall</button>
-            <button class="period-tab" data-period="weekly">This week</button>
-            <button class="period-tab" data-period="daily">Today</button>
-        </div>
-        <div class="period-tabs">
-            <button type="button" class="period-tab" id="podium-toggle">Per module</button>
-        </div>
+        <button class="period-tab active" data-period="overall">Overall</button>
+        <button class="period-tab" data-period="weekly">This week</button>
+        <button class="period-tab" data-period="daily">Today</button>
+        <button type="button" class="period-tab" id="podium-toggle">Per module</button>
     </div>
 </div>
 
