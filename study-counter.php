@@ -466,6 +466,8 @@ main.container {
 .period-tab {
     display: inline-flex;
     align-items: center;
+    width: auto;
+    margin: 0;
     padding: 5px 14px;
     border-radius: var(--radius-full);
     font-size: 0.82rem;
