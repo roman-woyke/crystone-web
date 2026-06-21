@@ -464,6 +464,7 @@ main.container {
 
 .period-tabs {
     display: flex;
+    align-items: center;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-full);
@@ -472,6 +473,8 @@ main.container {
 }
 
 .period-tab {
+    display: flex;
+    align-items: center;
     padding: 5px 14px;
     border-radius: var(--radius-full);
     font-size: 0.82rem;
@@ -482,7 +485,7 @@ main.container {
     cursor: pointer;
     transition: all var(--t-fast);
     white-space: nowrap;
-    line-height: 1.4;
+    line-height: 1;
 }
 
 .period-tab.active {
@@ -496,18 +499,6 @@ main.container {
     color: var(--text-1);
 }
 
-.podium-toggle {
-    width: auto;
-    margin: 0;
-    padding: 8px 18px;
-}
-
-.podium-toggle.active {
-    background: var(--grad-accent);
-    border-color: transparent;
-    color: #fff;
-    box-shadow: var(--glow-violet);
-}
 
 .podium-views {
     position: relative;
@@ -1031,7 +1022,9 @@ main.container {
             <button class="period-tab" data-period="weekly">This week</button>
             <button class="period-tab" data-period="daily">Today</button>
         </div>
-        <button type="button" class="btn podium-toggle" id="podium-toggle">Per module</button>
+        <div class="period-tabs">
+            <button type="button" class="period-tab" id="podium-toggle">Per module</button>
+        </div>
     </div>
 </div>
 
