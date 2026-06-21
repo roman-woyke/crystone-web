@@ -464,7 +464,7 @@ main.container {
 
 
 .period-tab {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     padding: 5px 14px;
     border-radius: var(--radius-full);
