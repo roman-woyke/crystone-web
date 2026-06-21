@@ -64,8 +64,16 @@ main.container {
     max-width: 680px;
 }
 
+.study-intro-layout {
+    display: grid;
+    grid-template-columns: 3fr 6fr;
+    gap: 32px;
+    align-items: start;
+    margin-bottom: 36px;
+}
+
 .study-intro {
-    margin-bottom: 28px;
+    margin-bottom: 0;
 }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
@@ -99,6 +107,16 @@ main.container {
 }
 
 @media (max-width: 980px) {
+    .study-intro-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .podium-controls {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+
     .studying-dock {
         order: -1;
     }
@@ -417,25 +435,17 @@ main.container {
 
 /* ── Podium + per-module toggle ─────────────────────────────────────────── */
 
-.podium-bar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 4px;
-}
-
-.podium-bar h2 {
-    margin: 0;
+.podium-heading {
+    margin: 0 0 16px;
     font-size: 1.25rem;
 }
 
 .podium-controls {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 20px;
 }
 
 
@@ -471,7 +481,7 @@ main.container {
 
 .podium-views {
     position: relative;
-    margin-bottom: 36px;
+    margin-bottom: 0;
 }
 
 .podium-view {
@@ -973,34 +983,37 @@ main.container {
 
 <div class="study-main">
 
-<div class="study-intro">
-    <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
-    <p class="study-sub">
-        Time your study sessions live or log ones you did offline. Pick a module from the
-        exam calendar or add your own — custom modules join the shared list for everyone.
-    </p>
-</div>
+<!-- ── Intro + Podium ─────────────────────────────────────────────────────── -->
+<div class="study-intro-layout">
 
-<!-- ── Podium ─────────────────────────────────────────────────────────────── -->
-<div class="podium-bar">
-    <h2>🏆 Most hours studied</h2>
-    <div class="podium-controls">
-        <button class="period-tab active" data-period="overall">Overall</button>
-        <button class="period-tab" data-period="weekly">This week</button>
-        <button class="period-tab" data-period="daily">Today</button>
-        <button type="button" class="period-tab" id="podium-toggle">Per module</button>
+    <div class="study-intro">
+        <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
+        <p class="study-sub">
+            Time your study sessions live or log ones you did offline. Pick a module from the
+            exam calendar or add your own — custom modules join the shared list for everyone.
+        </p>
+        <div class="podium-controls">
+            <button class="period-tab active" data-period="overall">Overall</button>
+            <button class="period-tab" data-period="weekly">This week</button>
+            <button class="period-tab" data-period="daily">Today</button>
+            <button type="button" class="period-tab" id="podium-toggle">Per module</button>
+        </div>
     </div>
-</div>
 
-<div class="podium-views">
-    <div class="podium-view" id="podium-overall">
-        <div class="podium" id="overall-podium" style="display:none;"></div>
-        <p class="muted" id="overall-empty" style="display:none;">No study sessions logged yet.</p>
+    <div>
+        <h2 class="podium-heading">🏆 Most hours studied</h2>
+        <div class="podium-views">
+            <div class="podium-view" id="podium-overall">
+                <div class="podium" id="overall-podium" style="display:none;"></div>
+                <p class="muted" id="overall-empty" style="display:none;">No study sessions logged yet.</p>
+            </div>
+            <div class="podium-view fade-out" id="podium-modules" style="display:none;">
+                <div class="module-podium-grid" id="module-podium-grid"></div>
+                <p class="muted" id="modules-empty" style="display:none;">No study sessions logged yet.</p>
+            </div>
+        </div>
     </div>
-    <div class="podium-view fade-out" id="podium-modules" style="display:none;">
-        <div class="module-podium-grid" id="module-podium-grid"></div>
-        <p class="muted" id="modules-empty" style="display:none;">No study sessions logged yet.</p>
-    </div>
+
 </div>
 
 <!-- ── Logging + chart ────────────────────────────────────────────────────── -->
