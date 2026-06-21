@@ -68,28 +68,18 @@ main.container {
     margin-bottom: 28px;
 }
 
-/* ── Layout: content + sticky "currently studying" sidebar ──────────────── */
-
-.study-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 28px;
-    align-items: stretch;
-}
+/* ── Layout ──────────────────────────────────────────────────────────────── */
 
 .study-main {
-    min-width: 0; /* let wide children (chart) shrink instead of overflowing */
+    min-width: 0;
 }
 
-/* The dock column fills the grid row; the card inside sticks while scrolling. */
 .studying-dock {
     display: flex;
     flex-direction: column;
 }
 
 .dock-card {
-    position: sticky;
-    top: 78px;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -98,7 +88,6 @@ main.container {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
-    max-height: calc(100vh - 100px);
     overflow: hidden;
 }
 
@@ -109,22 +98,9 @@ main.container {
     background: var(--glass-border);
 }
 
-@media (max-width: 900px) {
-    .study-layout {
-        display: flex;
-        flex-direction: column;
-    }
-
+@media (max-width: 980px) {
     .studying-dock {
         order: -1;
-        display: block;
-    }
-
-    .dock-card {
-        position: static;
-        max-height: none;
-        overflow: visible;
-        flex: none;
     }
 
     #dock-timeline {
@@ -584,9 +560,9 @@ main.container {
 
 .log-layout {
     display: grid;
-    grid-template-columns: 380px minmax(0, 1fr);
+    grid-template-columns: 380px minmax(0, 1fr) 320px;
     gap: 24px;
-    align-items: start;
+    align-items: stretch;
     margin-bottom: 36px;
 }
 
@@ -995,7 +971,6 @@ main.container {
 }
 </style>
 
-<div class="study-layout">
 <div class="study-main">
 
 <div class="study-intro">
@@ -1133,38 +1108,35 @@ main.container {
         </div>
     </section>
 
+    <aside class="studying-dock" id="studying-dock">
+        <div class="dock-card">
+
+            <div class="studying-head">
+                <h2><span class="studying-live-dot"></span> Currently studying</h2>
+            </div>
+            <div class="studying-actions">
+                <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+                <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+            </div>
+            <div class="studying-list" id="studying-list">
+                <span class="muted">Loading…</span>
+            </div>
+            <div class="studying-break-box" id="studying-break-box" style="display:none;">
+                <span class="break-label">☕ On break</span>
+                <div class="break-list" id="break-list"></div>
+            </div>
+
+            <div class="dock-divider"></div>
+
+            <span class="tl-label">Heute</span>
+            <div id="dock-timeline"></div>
+
+        </div>
+    </aside>
+
 </div>
 
 </div><!-- /study-main -->
-
-<!-- Sticky "currently studying" dock + day timeline -->
-<aside class="studying-dock" id="studying-dock">
-    <div class="dock-card">
-
-        <div class="studying-head">
-            <h2><span class="studying-live-dot"></span> Currently studying</h2>
-        </div>
-        <div class="studying-actions">
-            <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
-            <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
-        </div>
-        <div class="studying-list" id="studying-list">
-            <span class="muted">Loading…</span>
-        </div>
-        <div class="studying-break-box" id="studying-break-box" style="display:none;">
-            <span class="break-label">☕ On break</span>
-            <div class="break-list" id="break-list"></div>
-        </div>
-
-        <div class="dock-divider"></div>
-
-        <span class="tl-label">Heute</span>
-        <div id="dock-timeline"></div>
-
-    </div>
-</aside>
-
-</div><!-- /study-layout -->
 
 <div class="chart-tooltip" id="chart-tooltip"></div>
 
