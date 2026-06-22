@@ -103,9 +103,22 @@ main.container {
     position: sticky;
     top: 78px;
     perspective: 1800px;
+    /* Clip the hidden, full-height back face so it doesn't add phantom page
+       scroll while the (short) front is showing. */
+    overflow: hidden;
     /* Height tracks the visible face's content (set in JS); animating it makes
        the bottom edge retract/extend smoothly across a flip. */
     transition: height 0.5s var(--ease-out);
+}
+
+/* Front = sticky sidebar that follows the scroll. The recap (back) instead
+   takes the full height it needs and drops stickiness, so a tall day's
+   timeline extends down the page and scrolls normally rather than being
+   pinned at the top and clipped. */
+.dock-card.recap {
+    position: relative;
+    top: auto;
+    overflow: visible;
 }
 
 .flip-inner {
@@ -2030,6 +2043,11 @@ main.container {
         if (tlRangeEnd <= tlRangeStart) tlRangeEnd = Math.min(1440, tlRangeStart + 60);
         const span = tlRangeEnd - tlRangeStart;
 
+        // Give the timeline a real, proportional height (≈ px per hour) so it
+        // never squashes to fit the card — the card sizes to *it*, not the
+        // other way round. A short day stays compact; a long one grows + scrolls.
+        const tlPx = Math.max(220, Math.round((span / 60) * 64));
+
         const pct = (m) => ((m - tlRangeStart) / span * 100).toFixed(2) + "%";
 
         const ticks = [];
@@ -2047,7 +2065,7 @@ main.container {
                     `<div class="tl-col-head" style="color:${userColor[u] || "#8b5cf6"}">${escapeHtml(u)}</div>`
                 ).join("")}
             </div>
-            <div class="tl-body">
+            <div class="tl-body" style="height:${tlPx}px">
                 <div class="tl-axis">
                     ${ticks.map(m =>
                         `<div class="tl-tick" style="top:${pct(m)}"><span class="tl-tick-label">${minsToHHMM(m)}</span></div>`
@@ -2392,14 +2410,15 @@ main.container {
         }
     }
 
-    document.getElementById("flip-to-recap").addEventListener("click", () => {
-        flipInner.classList.add("flipped");
+    function flipDock(showBack) {
+        flipInner.classList.toggle("flipped", showBack);
+        // Front = sticky; back = in-flow so a tall recap can scroll down the page.
+        dockCard.classList.toggle("recap", showBack);
         syncDockHeight();
-    });
-    document.getElementById("flip-to-front").addEventListener("click", () => {
-        flipInner.classList.remove("flipped");
-        syncDockHeight();
-    });
+    }
+
+    document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
+    document.getElementById("flip-to-front").addEventListener("click", () => flipDock(false));
     window.addEventListener("resize", syncDockHeight);
 
     // Tick the studying chips locally every second; re-sync from the server
