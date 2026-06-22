@@ -311,6 +311,36 @@ main.container {
     background: var(--danger);
 }
 
+/* Collapsed-time marker: a thin strip where empty hours were squeezed out. */
+.tl-gap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.tl-gap::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    border-top: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
+.tl-gap-mark {
+    position: relative;
+    padding: 0 6px;
+    font-size: 0.62rem;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    background: var(--solid-glass);
+}
+
 .tl-cols {
     position: absolute;
     inset: 0;
@@ -1984,9 +2014,10 @@ main.container {
     // ── Day timeline ──────────────────────────────────────────────────────────
     // Recap blocks are one-per-study-interval, positioned in minutes from today's
     // midnight (0–1440). Breaks show as the gaps between a session's blocks.
-    let lastRecap    = [];
-    let tlRangeStart = 0;
-    let tlRangeEnd   = 60;
+    let lastRecap = [];
+    // Piecewise axis built each render: only active hours occupy space, runs of
+    // empty hours collapse. Shared with the per-second ticker via tlLayout.
+    let tlLayout  = { hourTop: {}, hourPx: 32, totalPx: 0, lastActiveHour: -1 };
 
     const clampDay  = (m) => Math.max(0, Math.min(1440, m));
     const minsToHHMM = (m) => {
@@ -2033,31 +2064,77 @@ main.container {
 
         assignUserColors(allUsers);
 
-        // Auto-zoom the visible window, but never beyond [00:00, 24:00].
-        const starts   = blocks.map(b => b.startM);
-        const ends     = blocks.map(b => b.endM);
-        const earliest = starts.length ? Math.min(...starts) : Math.max(0, nowMin - 60);
-        const latest   = Math.max(nowMin, ends.length ? Math.max(...ends) : nowMin);
-        tlRangeStart = Math.max(0,    Math.floor(earliest / 60) * 60);
-        tlRangeEnd   = Math.min(1440, Math.ceil(latest / 60) * 60);
-        if (tlRangeEnd <= tlRangeStart) tlRangeEnd = Math.min(1440, tlRangeStart + 60);
-        const span = tlRangeEnd - tlRangeStart;
+        // ── Collapsed time axis ────────────────────────────────────────────
+        // Only hours that actually contain activity get drawn; runs of empty
+        // hours collapse to a thin marker. The axis is piecewise: each shown
+        // hour is a fixed band (HOUR_PX), each collapsed run a small strip.
+        const HOUR_PX = 32;   // height of one shown hour (half the old 64)
+        const GAP_PX  = 18;   // height of a collapsed-time marker
 
-        // Give the timeline a real, proportional height (≈ px per hour) so it
-        // never squashes to fit the card — the card sizes to *it*, not the
-        // other way round. A short day stays compact; a long one grows + scrolls.
-        const tlPx = Math.max(220, Math.round((span / 60) * 64));
+        const activeSet = new Set();
+        blocks.forEach(b => {
+            const h0 = Math.floor(b.startM / 60);
+            const h1 = Math.floor((b.endM - 0.0001) / 60); // last hour the block touches
+            for (let h = h0; h <= h1; h++) activeSet.add(h);
+        });
+        // While someone is live, keep the current hour shown so the now-line and
+        // the growing block have a home (even before the minute count fills it).
+        if (blocks.some(b => b.live)) activeSet.add(Math.floor(nowMin / 60));
+        if (activeSet.size === 0)     activeSet.add(Math.floor(nowMin / 60));
 
-        const pct = (m) => ((m - tlRangeStart) / span * 100).toFixed(2) + "%";
+        const activeHours = [...activeSet].sort((a, b) => a - b);
 
-        const ticks = [];
-        for (let m = tlRangeStart; m <= tlRangeEnd; m += 60) ticks.push(m);
+        const hourTop = {};   // hour index -> y (px) of its :00 line
+        const gaps    = [];   // collapsed runs: {y, fromH, toH}
+        let y = 0;
+        activeHours.forEach((h, i) => {
+            if (i > 0 && h !== activeHours[i - 1] + 1) {
+                gaps.push({ y, fromH: activeHours[i - 1] + 1, toH: h });
+                y += GAP_PX;
+            }
+            hourTop[h] = y;
+            y += HOUR_PX;
+        });
+        const totalPx        = y;
+        const lastActiveHour = activeHours[activeHours.length - 1];
+
+        // Minute -> y (px); null for minutes inside a collapsed gap.
+        const yPx = (m) => {
+            const h = Math.floor(m / 60);
+            if (h in hourTop) return hourTop[h] + (m - h * 60) / 60 * HOUR_PX;
+            // Exact bottom boundary of an active hour (e.g. a block ending at :00).
+            if ((h - 1) in hourTop && Math.abs(m - h * 60) < 0.001) return hourTop[h - 1] + HOUR_PX;
+            return null;
+        };
+        tlLayout = { hourTop, hourPx: HOUR_PX, totalPx, lastActiveHour }; // for the ticker
 
         const byUser = {};
         allUsers.forEach(u => { byUser[u] = []; });
         blocks.forEach(b => { if (byUser[b.username]) byUser[b.username].push(b); });
 
-        const nowPct = pct(Math.min(Math.max(nowMin, tlRangeStart), tlRangeEnd));
+        const dayEnd = (lastActiveHour + 1) * 60;
+        const nowY   = yPx(Math.min(nowMin, dayEnd));
+
+        // A label/line lives at every shown :00, at each run's end boundary
+        // (the top of a collapse marker), and at the final closing boundary.
+        const tick = (yp, m) => `<div class="tl-tick" style="top:${yp}px"><span class="tl-tick-label">${minsToHHMM(m)}</span></div>`;
+        const tickRows =
+            activeHours.map(h => tick(hourTop[h], h * 60)).join("") +
+            gaps.map(g => tick(g.y, g.fromH * 60)).join("") +
+            tick(totalPx, dayEnd);
+
+        const grid = (yp) => `<div class="tl-grid-line" style="top:${yp}px"></div>`;
+        const gridRows =
+            activeHours.map(h => grid(hourTop[h])).join("") +
+            gaps.map(g => grid(g.y)).join("") +
+            grid(totalPx);
+
+        const gapRows = gaps.map(g =>
+            `<div class="tl-gap" style="top:${g.y}px;height:${GAP_PX}px" title="${minsToHHMM(g.fromH * 60)}–${minsToHHMM(g.toH * 60)} ausgeblendet"><span class="tl-gap-mark">⋯</span></div>`
+        ).join("");
+
+        const nowLine = (nowY === null) ? "" :
+            `<div class="tl-now-line" id="tl-now-line" style="top:${nowY}px"><span class="tl-now-dot"></span></div>`;
 
         tl.innerHTML = `
             <div class="tl-user-heads">
@@ -2065,27 +2142,24 @@ main.container {
                     `<div class="tl-col-head" style="color:${userColor[u] || "#8b5cf6"}">${escapeHtml(u)}</div>`
                 ).join("")}
             </div>
-            <div class="tl-body" style="height:${tlPx}px">
-                <div class="tl-axis">
-                    ${ticks.map(m =>
-                        `<div class="tl-tick" style="top:${pct(m)}"><span class="tl-tick-label">${minsToHHMM(m)}</span></div>`
-                    ).join("")}
-                </div>
+            <div class="tl-body" style="height:${totalPx}px">
+                <div class="tl-axis">${tickRows}</div>
                 <div class="tl-cols-wrap">
-                    ${ticks.map(m => `<div class="tl-grid-line" style="top:${pct(m)}"></div>`).join("")}
-                    <div class="tl-now-line" id="tl-now-line" style="top:${nowPct}">
-                        <span class="tl-now-dot"></span>
-                    </div>
+                    ${gridRows}
+                    ${gapRows}
+                    ${nowLine}
                     <div class="tl-cols">
                         ${allUsers.map(u => {
                             return `<div class="tl-col">${(byUser[u] || []).map(s => {
                                 // Colour by module (the column header already identifies the user).
                                 const color    = moduleColor[s.module] || "#64748b";
-                                const blockH   = (Math.max(s.endM - s.startM, 2) / span * 100).toFixed(2) + "%";
+                                const top      = yPx(s.startM);
+                                const bottom   = yPx(Math.min(s.endM, dayEnd));
+                                const blockH   = Math.max((bottom ?? top) - top, 3);
                                 const liveAttr = s.live ? ` data-live-start="${s.startM}"` : "";
                                 const tip = (s.module ? escapeHtml(s.module) + " · " : "") + fmtTime(s.seconds);
                                 return `<div class="tl-block ${s.live ? "live" : ""}"${liveAttr}
-                                     style="top:${pct(s.startM)};height:${blockH};background:${color};"
+                                     style="top:${top}px;height:${blockH}px;background:${color};"
                                      title="${tip}">${s.module ? `<span class="tl-block-label">${escapeHtml(s.module)}</span>` : ""}</div>`;
                             }).join("")}</div>`;
                         }).join("")}
@@ -2097,19 +2171,30 @@ main.container {
     }
 
     function tickTimeline() {
+        const live = document.querySelectorAll(".tl-block[data-live-start]");
         const nowLine = document.getElementById("tl-now-line");
-        if (!nowLine) return;
+        if (live.length === 0 && !nowLine) return;
+
         const now = new Date();
         const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-        // Grew past the current window (e.g. crossed an hour boundary) → re-layout.
-        if (nowMin > tlRangeEnd + 0.5 && tlRangeEnd < 1440) { renderTimeline(lastRecap); return; }
-        const span = tlRangeEnd - tlRangeStart;
-        const pct  = (m) => ((m - tlRangeStart) / span * 100).toFixed(3) + "%";
-        const capped = Math.min(nowMin, tlRangeEnd);
-        nowLine.style.top = pct(capped);
-        document.querySelectorAll(".tl-block[data-live-start]").forEach(el => {
-            const startM = parseFloat(el.dataset.liveStart);
-            el.style.height = Math.max((capped - startM) / span * 100, 0.5).toFixed(3) + "%";
+        const nowHour = Math.floor(nowMin / 60);
+        // A live block grew into a not-yet-shown hour → re-layout to add it.
+        if (live.length && !(nowHour in tlLayout.hourTop)) { renderTimeline(lastRecap); return; }
+
+        const yPx = (m) => {
+            const h = Math.floor(m / 60);
+            if (h in tlLayout.hourTop) return tlLayout.hourTop[h] + (m - h * 60) / 60 * tlLayout.hourPx;
+            if ((h - 1) in tlLayout.hourTop && Math.abs(m - h * 60) < 0.001) return tlLayout.hourTop[h - 1] + tlLayout.hourPx;
+            return null;
+        };
+
+        const cap  = Math.min(nowMin, (tlLayout.lastActiveHour + 1) * 60);
+        const capY = yPx(cap);
+        if (nowLine && capY !== null) nowLine.style.top = capY.toFixed(1) + "px";
+
+        live.forEach(el => {
+            const top = yPx(parseFloat(el.dataset.liveStart));
+            if (top !== null && capY !== null) el.style.height = Math.max(capY - top, 1).toFixed(1) + "px";
         });
     }
 
