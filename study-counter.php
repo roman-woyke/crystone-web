@@ -622,9 +622,9 @@ main.container {
     align-items: center;
     width: auto;
     margin: 0;
-    padding: 5px 14px;
+    padding: 8px 20px;
     border-radius: var(--radius-full);
-    font-size: 0.82rem;
+    font-size: 0.92rem;
     font-weight: 600;
     border: none;
     background: transparent;
@@ -633,6 +633,15 @@ main.container {
     transition: all var(--t-fast);
     white-space: nowrap;
     line-height: 1;
+}
+
+.tab-sep {
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+    margin: 4px 0;
 }
 
 .period-tab.active {
@@ -1161,8 +1170,9 @@ main.container {
             <button class="period-tab active" data-period="overall">Overall</button>
             <button class="period-tab" data-period="weekly">This week</button>
             <button class="period-tab" data-period="daily">Today</button>
+            <span class="tab-sep"></span>
             <button type="button" class="period-tab" id="podium-toggle">Per module</button>
-            <button type="button" class="period-tab" id="library-toggle">📚 Library only</button>
+            <button type="button" class="period-tab" id="library-toggle">Library only</button>
         </div>
     </div>
 
