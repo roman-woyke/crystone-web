@@ -2022,17 +2022,24 @@ main.container {
     const libraryList    = document.getElementById("library-list");
 
     // ── Day timeline ──────────────────────────────────────────────────────────
-    // Recap blocks are one-per-study-interval, positioned in minutes from today's
-    // midnight (0–1440). Breaks show as the gaps between a session's blocks.
+    // Recap blocks are one-per-study-interval, positioned in minutes from the
+    // study day's start (07:00) through 07:00 the next morning (420–1860).
+    // Breaks show as the gaps between a session's blocks.
     let lastRecap = [];
     // Piecewise axis built each render: only active hours occupy space, runs of
     // empty hours collapse. Shared with the per-second ticker via tlLayout.
     let tlLayout  = { hourTop: {}, hourPx: 32, totalPx: 0, lastActiveHour: -1 };
 
-    const clampDay  = (m) => Math.max(0, Math.min(1440, m));
+    // The study day runs 07:00 → 06:00 next morning. Minutes after midnight but
+    // before the start belong to the previous evening's night shift, so they map
+    // to the tail of the window (e.g. 02:00 → 26:00).
+    const DAY_START_MIN = 7 * 60;             // 07:00
+    const DAY_END_MIN   = DAY_START_MIN + 24 * 60; // 07:00 next day (last label 06:00)
+    const toDayMin  = (m) => (m >= 0 && m < DAY_START_MIN ? m + 1440 : m);
+    const clampDay  = (m) => Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, m));
     const minsToHHMM = (m) => {
         m = Math.round(m);
-        const h = Math.floor(m / 60), mm = m % 60;
+        const h = Math.floor(m / 60) % 24, mm = m % 60;
         return String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
     };
 
@@ -2042,13 +2049,14 @@ main.container {
         if (!tl) return;
 
         const now    = new Date();
-        const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        const nowMin = toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
 
-        // Clamp every interval into today's 0–24h; a live block runs up to now.
+        // Clamp every interval into the study day's window (07:00–06:00 next day);
+        // a live block runs up to now.
         const blocks = [];
         lastRecap.forEach(r => {
-            const startM = clampDay(r.start_min);
-            const endM   = clampDay(r.live ? nowMin : r.end_min);
+            const startM = clampDay(toDayMin(r.start_min));
+            const endM   = clampDay(r.live ? nowMin : toDayMin(r.end_min));
             if (endM - startM < 0.5) return; // nothing inside today to draw
             blocks.push({
                 username: r.username,
@@ -2186,7 +2194,7 @@ main.container {
         if (live.length === 0 && !nowLine) return;
 
         const now = new Date();
-        const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        const nowMin = toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
         const nowHour = Math.floor(nowMin / 60);
         // A live block grew into a not-yet-shown hour → re-layout to add it.
         if (live.length && !(nowHour in tlLayout.hourTop)) { renderTimeline(lastRecap); return; }
