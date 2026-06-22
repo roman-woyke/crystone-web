@@ -33,14 +33,8 @@ if (!fwordleIsValidWord($word, $tlen)) {
     exit("Pick a valid $tlen-letter word.");
 }
 
-// No two boards share a word.
-$dup = $pdo->prepare("SELECT 1 FROM fwordle_choices WHERE game_date = ? AND word = ? AND user_id <> ?");
-$dup->execute([$tomorrow, $word, $userId]);
-if ($dup->fetchColumn()) {
-    http_response_code(409);
-    exit("Someone already picked that word — choose another.");
-}
-
+// Duplicates between players are allowed — rejecting a taken word would leak
+// that someone else already picked it (spoiling their word).
 $pdo->prepare("REPLACE INTO fwordle_choices (game_date, user_id, word) VALUES (?, ?, ?)")
     ->execute([$tomorrow, $userId, $word]);
 

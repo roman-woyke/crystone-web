@@ -164,7 +164,9 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
             $choiceStmt->execute([$date, $uid]);
             $chosen = $choiceStmt->fetchColumn();
             $chosen = $chosen !== false ? strtolower($chosen) : null;
-            if ($chosen !== null && fwordleIsValidWord($chosen, $len) && !in_array($chosen, $used, true)) {
+            // Keep a valid chosen word as-is — duplicates between players are
+            // allowed (two boards may share a word); only random backfill dedupes.
+            if ($chosen !== null && fwordleIsValidWord($chosen, $len)) {
                 $used[] = $chosen;
                 $words[] = [$chosen, 'chosen', $uid];
                 continue;
