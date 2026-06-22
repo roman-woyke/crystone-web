@@ -63,7 +63,7 @@ function segClearLive(PDO $pdo, $userId): void
 }
 
 // Current row (if any)
-$stmt = $pdo->prepare("SELECT mode, module_name, started_at, accumulated, session_start FROM study_status WHERE user_id = ?");
+$stmt = $pdo->prepare("SELECT mode, module_name, started_at, accumulated, session_start, at_library FROM study_status WHERE user_id = ?");
 $stmt->execute([$userId]);
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -136,6 +136,17 @@ if ($action === "start") {
         ")->execute([$userId]);
         segClose($pdo, $userId);
     }
+} elseif ($action === "library") {
+    // Toggle the "at the library" flag (BIB) on the current row. Independent
+    // from running/break — you can be at the library while studying or on break.
+    // We explicitly preserve `updated_at` so the break_elapsed timer doesn't
+    // reset when you toggle BIB during a break (the table's ON UPDATE rule only
+    // fires when columns change, but updated_at = updated_at is a no-op).
+    if ($row) {
+        $next = (int) !$row["at_library"];
+        $pdo->prepare("UPDATE study_status SET at_library = ?, updated_at = updated_at WHERE user_id = ?")
+            ->execute([$next, $userId]);
+    }
 } elseif ($action === "reset" || $action === "stop") {
     // Reset (timer) / Stop studying (presence) — discard the session entirely.
     segClearLive($pdo, $userId);
@@ -168,10 +179,12 @@ if ($action === "start") {
         if ($logModule !== null && $elapsed > 0 && $elapsed <= 86400) {
             // started_at = the real session start (with breaks); the recap uses it
             // to draw the true window. Falls back to NULL for pre-migration rows.
+            // at_library is carried over so the "library" podium filter can replay
+            // it later — the flag at log time is what gets stamped on the session.
             $pdo->prepare("
-                INSERT INTO study_sessions (user_id, module_name, seconds, studied_on, started_at)
-                VALUES (?, ?, ?, CURDATE(), ?)
-            ")->execute([$userId, $logModule, $elapsed, $row["session_start"] ?? null]);
+                INSERT INTO study_sessions (user_id, module_name, seconds, studied_on, started_at, at_library)
+                VALUES (?, ?, ?, CURDATE(), ?, ?)
+            ")->execute([$userId, $logModule, $elapsed, $row["session_start"] ?? null, (int) ($row["at_library"] ?? 0)]);
 
             // Attach this session's live segments so the recap can show its
             // exact study intervals (breaks render as the gaps between them).

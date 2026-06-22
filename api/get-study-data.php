@@ -29,22 +29,26 @@ foreach ($customMods as $c) {
     $modules[] = ["name" => $c, "custom" => true];
 }
 
-// ── Sessions aggregated per user + module + day ──────────────────────────
+// ── Sessions aggregated per user + module + day + at_library ─────────────
+// at_library is included in the GROUP BY so the "library" podium filter on the
+// client can split out library-only time; rendering that ignores at_library
+// just sums these rows as before.
 $stmt = $pdo->query("
-    SELECT u.username, s.module_name, s.studied_on, SUM(s.seconds) AS seconds
+    SELECT u.username, s.module_name, s.studied_on, s.at_library, SUM(s.seconds) AS seconds
     FROM study_sessions s
     JOIN users u ON u.id = s.user_id
-    GROUP BY u.username, s.module_name, s.studied_on
+    GROUP BY u.username, s.module_name, s.studied_on, s.at_library
     ORDER BY s.studied_on
 ");
 
 $sessions = [];
 foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
     $sessions[] = [
-        "username" => $r["username"],
-        "module"   => $r["module_name"],
-        "date"     => $r["studied_on"],
-        "seconds"  => (int) $r["seconds"],
+        "username"   => $r["username"],
+        "module"     => $r["module_name"],
+        "date"       => $r["studied_on"],
+        "seconds"    => (int) $r["seconds"],
+        "at_library" => (bool) $r["at_library"],
     ];
 }
 

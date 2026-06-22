@@ -29,19 +29,20 @@ require_once __DIR__ . "/includes/study-status.php";
 $initialStatus = studyStatusPayload($pdo, $_SESSION["user_id"]);
 
 $sessStmt = $pdo->query("
-    SELECT u.username, s.module_name, s.studied_on, SUM(s.seconds) AS seconds
+    SELECT u.username, s.module_name, s.studied_on, s.at_library, SUM(s.seconds) AS seconds
     FROM study_sessions s
     JOIN users u ON u.id = s.user_id
-    GROUP BY u.username, s.module_name, s.studied_on
+    GROUP BY u.username, s.module_name, s.studied_on, s.at_library
     ORDER BY s.studied_on
 ");
 $initialSessions = [];
 foreach ($sessStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
     $initialSessions[] = [
-        "username" => $r["username"],
-        "module"   => $r["module_name"],
-        "date"     => $r["studied_on"],
-        "seconds"  => (int) $r["seconds"],
+        "username"   => $r["username"],
+        "module"     => $r["module_name"],
+        "date"       => $r["studied_on"],
+        "seconds"    => (int) $r["seconds"],
+        "at_library" => (bool) $r["at_library"],
     ];
 }
 
@@ -333,11 +334,67 @@ main.container {
     color: var(--warning);
 }
 
+/* BIB ("at the library") button — small accent button, independent flag. */
+.studying-bib {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    color: var(--info, #38bdf8);
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.studying-bib:hover {
+    background: rgba(56, 189, 248, 0.18);
+    border-color: var(--info, #38bdf8);
+    color: var(--info, #38bdf8);
+}
+
+.studying-bib.active {
+    background: var(--info, #38bdf8);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
+}
+
 /* On-break sub-container */
 .studying-break-box {
     margin-top: 14px;
     padding-top: 12px;
     border-top: 1px dashed var(--glass-border);
+}
+
+/* At-the-library sub-container — same shape as the break box, blue accent. */
+.studying-library-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--glass-border);
+}
+
+.library-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.library-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.studying-chip.library {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.pulse-dot.library {
+    background: var(--info, #38bdf8);
+    box-shadow: none;
+    animation: none;
 }
 
 .break-label {
@@ -997,6 +1054,7 @@ main.container {
             <button class="period-tab" data-period="weekly">This week</button>
             <button class="period-tab" data-period="daily">Today</button>
             <button type="button" class="period-tab" id="podium-toggle">Per module</button>
+            <button type="button" class="period-tab" id="library-toggle">📚 Library only</button>
         </div>
     </div>
 
@@ -1130,6 +1188,7 @@ main.container {
             <div class="studying-actions">
                 <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
                 <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+                <button type="button" class="btn studying-toggle studying-bib" id="studying-bib" style="display:none;">📚 BIB</button>
             </div>
             <div class="studying-list" id="studying-list">
                 <span class="muted">Loading…</span>
@@ -1137,6 +1196,10 @@ main.container {
             <div class="studying-break-box" id="studying-break-box" style="display:none;">
                 <span class="break-label">☕ On break</span>
                 <div class="break-list" id="break-list"></div>
+            </div>
+            <div class="studying-library-box" id="studying-library-box" style="display:none;">
+                <span class="library-label">📚 At the library</span>
+                <div class="library-list" id="library-list"></div>
             </div>
 
             <div class="dock-divider"></div>
@@ -1264,17 +1327,25 @@ main.container {
     }
 
     // ── State ─────────────────────────────────────────────────────────────
-    let SESSIONS = INITIAL_SESSIONS || [];  // [{username, module, date, seconds}]
+    let SESSIONS = INITIAL_SESSIONS || [];  // [{username, module, date, seconds, at_library}]
     let weekOffset = 0;    // 0 = current week, -1 = previous, ...
     let podiumPeriod = "overall"; // "overall" | "weekly" | "daily"
+    let libraryOnly  = false;     // when true, podium counts only at-library sessions
 
     function filteredSessions() {
-        if (podiumPeriod === "overall") return SESSIONS;
-        const todayStr = toDateStr(startOfDay(new Date()));
-        if (podiumPeriod === "daily") return SESSIONS.filter(s => s.date === todayStr);
-        // weekly: Monday of this week → today
-        const weekStartStr = toDateStr(mondayOf(new Date()));
-        return SESSIONS.filter(s => s.date >= weekStartStr && s.date <= todayStr);
+        let out = SESSIONS;
+        if (podiumPeriod !== "overall") {
+            const todayStr = toDateStr(startOfDay(new Date()));
+            if (podiumPeriod === "daily") {
+                out = out.filter(s => s.date === todayStr);
+            } else {
+                // weekly: Monday of this week → today
+                const weekStartStr = toDateStr(mondayOf(new Date()));
+                out = out.filter(s => s.date >= weekStartStr && s.date <= todayStr);
+            }
+        }
+        if (libraryOnly) out = out.filter(s => s.at_library);
+        return out;
     }
 
     const plotEl    = document.getElementById("chart-plot");
@@ -1438,7 +1509,7 @@ main.container {
         }
         empty.style.display = "none";
 
-        const sublabel = PERIOD_LABELS[podiumPeriod] || "total studied";
+        const sublabel = (PERIOD_LABELS[podiumPeriod] || "total studied") + (libraryOnly ? " · at the library" : "");
         const top = ranked.slice(0, 3);
         podium.innerHTML = top.map(([username, secs], i) => {
             const rank = i + 1;
@@ -1539,6 +1610,15 @@ main.container {
 
     toggleBtn.addEventListener("click", () => {
         switchPodiumView(!showingModules);
+        if (showingModules) buildModulePodiums(); else buildOverallPodium();
+    });
+
+    // Library-only filter — applies on top of the period selection. Re-render
+    // whichever podium view (overall/per-module) is currently visible.
+    const libraryToggle = document.getElementById("library-toggle");
+    libraryToggle.addEventListener("click", () => {
+        libraryOnly = !libraryOnly;
+        libraryToggle.classList.toggle("active", libraryOnly);
         if (showingModules) buildModulePodiums(); else buildOverallPodium();
     });
 
@@ -1672,7 +1752,7 @@ main.container {
     const logBtn       = document.getElementById("timer-log");
 
     // Mirrors the server's study_status row for me.
-    let myState = { active: false, mode: null, running: false, elapsed: 0, breakElapsed: 0, module: null };
+    let myState = { active: false, mode: null, running: false, elapsed: 0, breakElapsed: 0, module: null, atLibrary: false };
     let ticker  = null;
 
     function manageTicker() {
@@ -1731,6 +1811,7 @@ main.container {
             elapsed:      me.elapsed || 0,
             breakElapsed: me.break_elapsed || 0,
             module:       me.module || null,
+            atLibrary:    !!me.at_library,
         };
         renderTimerUI();
         manageTicker();
@@ -1802,6 +1883,9 @@ main.container {
     const breakBtn       = document.getElementById("studying-break");
     const breakBox       = document.getElementById("studying-break-box");
     const breakList      = document.getElementById("break-list");
+    const bibBtn         = document.getElementById("studying-bib");
+    const libraryBox     = document.getElementById("studying-library-box");
+    const libraryList    = document.getElementById("library-list");
 
     // ── Day timeline ──────────────────────────────────────────────────────────
     // Recap blocks are one-per-study-interval, positioned in minutes from today's
@@ -1930,8 +2014,9 @@ main.container {
 
     // Last lists from the server + when we synced them, so chips can tick
     // locally between polls instead of sitting frozen for 15s.
-    let studyingEntries = [];  // running — study time ticks
-    let breakEntries    = [];  // paused — break time ticks
+    let studyingEntries = [];  // running, not at library — study time ticks
+    let breakEntries    = [];  // paused, not at library — break time ticks
+    let libraryEntries  = [];  // at library (any state)    — both can tick
     let studyingSyncTs  = Date.now();
 
     function renderPresenceButtons() {
@@ -1962,6 +2047,16 @@ main.container {
         } else {
             breakBtn.style.display = "none";
         }
+
+        // BIB — independent flag, only shown while actively studying.
+        if (active) {
+            bibBtn.style.display = "";
+            bibBtn.classList.toggle("active", !!myState.atLibrary);
+            bibBtn.textContent = myState.atLibrary ? "📚 At library" : "📚 BIB";
+        } else {
+            bibBtn.style.display = "none";
+            bibBtn.classList.remove("active");
+        }
     }
 
     function moduleSuffix(s) {
@@ -1970,16 +2065,24 @@ main.container {
 
     function renderStudying(list) {
         list = list || [];
-        const running = list.filter(s => s.running);   // actively studying
-        const paused  = list.filter(s => !s.running);  // on break
+        // BIB takes precedence as a section — at-library people land in the
+        // library box regardless of running/break, so they don't appear twice.
+        const library = list.filter(s => s.at_library);
+        const running = list.filter(s => !s.at_library && s.running);
+        const paused  = list.filter(s => !s.at_library && !s.running);
 
-        // Indices match the data-idx markup used by tickStudying().
+        // Indices match the data-* markup used by tickStudying().
         studyingEntries = running;
         breakEntries    = paused;
+        libraryEntries  = library;
         studyingSyncTs  = Date.now();
 
         if (running.length === 0) {
-            studyingList.innerHTML = `<span class="muted">Nobody's studying right now.</span>`;
+            // Avoid the misleading "nobody studying" line when people are
+            // actually present in the break or library sections below.
+            studyingList.innerHTML = (paused.length + library.length) > 0
+                ? `<span class="muted">—</span>`
+                : `<span class="muted">Nobody's studying right now.</span>`;
         } else {
             studyingList.innerHTML = running.map((s, i) => {
                 const isMe = s.username === MY_USERNAME;
@@ -2010,13 +2113,36 @@ main.container {
                 `;
             }).join("");
         }
+
+        if (library.length === 0) {
+            libraryBox.style.display = "none";
+            libraryList.innerHTML = "";
+        } else {
+            libraryBox.style.display = "";
+            libraryList.innerHTML = library.map((s, i) => {
+                const isMe   = s.username === MY_USERNAME;
+                const dotCls = s.running ? "pulse-dot" : "pulse-dot paused";
+                // While paused at the library, also show a ☕ break timer.
+                const breakSpan = !s.running
+                    ? `<span class="chip-break" data-libbidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span>`
+                    : "";
+                return `
+                    <span class="studying-chip library ${isMe ? "me" : ""}">
+                        <span class="${dotCls}"></span>
+                        <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
+                        <span class="chip-meta"><span class="chip-time" data-libidx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s)}${breakSpan}</span>
+                    </span>
+                `;
+            }).join("");
+        }
     }
 
     // Tick the chips every second (re-synced to the server on each poll): study
     // time on running chips, break time on paused chips. My own chip mirrors the
-    // main display exactly.
+    // main display exactly. Library chips can tick either side depending on
+    // whether the person is running or on break.
     function tickStudying() {
-        if (studyingEntries.length === 0 && breakEntries.length === 0) return;
+        if (studyingEntries.length === 0 && breakEntries.length === 0 && libraryEntries.length === 0) return;
         const delta = Math.floor((Date.now() - studyingSyncTs) / 1000);
 
         studyingEntries.forEach((s, i) => {
@@ -2036,6 +2162,26 @@ main.container {
                 : (s.break_elapsed || 0) + delta;
             el.textContent = "☕ " + fmtClock(secs);
         });
+
+        libraryEntries.forEach((s, i) => {
+            const timeEl = libraryList.querySelector(`.chip-time[data-libidx="${i}"]`);
+            if (timeEl) {
+                // Study time ticks only while running; it's frozen on break.
+                const secs = s.running
+                    ? ((s.username === MY_USERNAME && myState.active && myState.running) ? myState.elapsed : s.elapsed + delta)
+                    : s.elapsed;
+                timeEl.textContent = fmtClock(secs);
+            }
+            if (!s.running) {
+                const brEl = libraryList.querySelector(`.chip-break[data-libbidx="${i}"]`);
+                if (brEl) {
+                    const secs = (s.username === MY_USERNAME && myState.active && !myState.running)
+                        ? myState.breakElapsed
+                        : (s.break_elapsed || 0) + delta;
+                    brEl.textContent = "☕ " + fmtClock(secs);
+                }
+            }
+        });
     }
 
     // "I'm studying" starts a quick (module-less) timer; "Stop" asks whether to
@@ -2054,6 +2200,13 @@ main.container {
         if (!myState.active) return;
         timerAction(myState.running ? "pause" : "resume")
             .catch(err => setFeedback(err.message, true));
+    });
+
+    // BIB — toggle the at-library flag. Independent from running/break: you
+    // can be at the library while studying, or paused at the library.
+    bibBtn.addEventListener("click", () => {
+        if (!myState.active) return;
+        timerAction("library").catch(err => setFeedback(err.message, true));
     });
 
     // ── Stop → "log this session?" modal (split across modules) ───────────

@@ -109,6 +109,8 @@ CREATE TABLE study_modules (
 -- `seconds` is studied time only; `started_at` is the real wall-clock start
 -- (study + breaks) so the day recap can draw the true window (NULL = manual /
 -- pre-migration → recap falls back to created_at - seconds).
+-- `at_library` is copied from study_status.at_library at log time so the
+-- "library" podium filter can replay history.
 CREATE TABLE study_sessions (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     user_id     INT NOT NULL REFERENCES users(id),
@@ -116,6 +118,7 @@ CREATE TABLE study_sessions (
     seconds     INT NOT NULL,
     started_at  DATETIME NULL,
     studied_on  DATE NOT NULL,
+    at_library  TINYINT(1) NOT NULL DEFAULT 0,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -124,6 +127,8 @@ CREATE TABLE study_sessions (
 -- : 0); a NULL started_at means paused ("on break"). mode='timer' is a loggable
 -- module stopwatch (log-a-session window); mode='presence' is a module-less
 -- "I'm studying" stopwatch. A row existing at all means currently studying.
+-- `at_library` is an independent flag (toggled by the BIB button) — it can be
+-- on regardless of running/break state and is copied onto study_sessions at log.
 CREATE TABLE study_status (
     user_id       INT NOT NULL PRIMARY KEY REFERENCES users(id),
     mode          ENUM('timer','presence') NOT NULL DEFAULT 'presence',
@@ -131,6 +136,7 @@ CREATE TABLE study_status (
     started_at    DATETIME NULL,
     accumulated   INT NOT NULL DEFAULT 0,
     session_start DATETIME NULL,  -- real start of the session, kept across pause/resume
+    at_library    TINYINT(1) NOT NULL DEFAULT 0,
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 

@@ -26,7 +26,8 @@ function studyStatusPayload(PDO $pdo, $userId): array
             s.module_name,
             s.accumulated + IF(s.started_at IS NULL, 0, TIMESTAMPDIFF(SECOND, s.started_at, NOW())) AS elapsed,
             (s.started_at IS NOT NULL) AS running,
-            IF(s.started_at IS NULL, TIMESTAMPDIFF(SECOND, s.updated_at, NOW()), 0) AS break_elapsed
+            IF(s.started_at IS NULL, TIMESTAMPDIFF(SECOND, s.updated_at, NOW()), 0) AS break_elapsed,
+            s.at_library
         FROM study_status s
         JOIN users u ON u.id = s.user_id
         ORDER BY u.username
@@ -43,6 +44,7 @@ function studyStatusPayload(PDO $pdo, $userId): array
             "elapsed"       => (int) $r["elapsed"],
             "running"       => (bool) $r["running"],
             "break_elapsed" => (int) $r["break_elapsed"],
+            "at_library"    => (bool) $r["at_library"],
         ];
         $studying[] = $entry;
 
