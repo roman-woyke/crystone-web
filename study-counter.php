@@ -92,7 +92,8 @@ main.container {
     margin-bottom: 0;
 }
 
-/* The dock column fills the grid row; the card inside sticks while scrolling. */
+/* The dock column reserves space; the card inside sticks while scrolling and
+   flips between "currently studying" (front) and today's timeline (back). */
 .studying-dock {
     display: flex;
     flex-direction: column;
@@ -101,23 +102,60 @@ main.container {
 .dock-card {
     position: sticky;
     top: 78px;
-    flex: 1;
+    height: calc(100vh - 100px);
+    perspective: 1800px;
+}
+
+.flip-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s var(--ease-out);
+    transform-style: preserve-3d;
+}
+
+.flip-inner.flipped {
+    transform: rotateY(180deg);
+}
+
+.flip-face {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
+    overflow: hidden;
+    /* Solid (not backdrop-filter) so the 3D flip stays crisp. */
     background: var(--solid-glass);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
-    max-height: calc(100vh - 100px);
-    overflow: hidden;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
-.dock-divider {
+.flip-back {
+    transform: rotateY(180deg);
+}
+
+.flip-btn {
     flex-shrink: 0;
-    margin: 12px -18px;
-    height: 1px;
-    background: var(--glass-border);
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+/* Front: scrollable body so a long studying/break/library list never clips. */
+.face-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Back: the timeline gets the whole card height to itself (no squashing). */
+.flip-back .face-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 @media (max-width: 980px) {
@@ -141,11 +179,11 @@ main.container {
         display: block;
     }
 
+    /* Flip card needs an explicit height when the faces are absolutely
+       positioned; drop the sticky/viewport sizing on narrow screens. */
     .dock-card {
         position: static;
-        max-height: none;
-        overflow: visible;
-        flex: none;
+        height: 460px;
     }
 
     #dock-timeline {
@@ -1208,32 +1246,46 @@ main.container {
 
 <aside class="studying-dock" id="studying-dock">
     <div class="dock-card">
+        <div class="flip-inner" id="studying-flip">
 
-        <div class="studying-head">
-            <h2><span class="studying-live-dot"></span> Currently studying</h2>
-        </div>
-        <div class="studying-actions">
-            <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
-            <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
-            <button type="button" class="btn studying-toggle studying-bib" id="studying-bib" style="display:none;">📚 BIB</button>
-        </div>
-        <div class="studying-list" id="studying-list">
-            <span class="muted">Loading…</span>
-        </div>
-        <div class="studying-break-box" id="studying-break-box" style="display:none;">
-            <span class="break-label">☕ On break</span>
-            <div class="break-list" id="break-list"></div>
-        </div>
-        <div class="studying-library-box" id="studying-library-box" style="display:none;">
-            <span class="library-label">📚 At the library</span>
-            <div class="library-list" id="library-list"></div>
-        </div>
+            <!-- Front: who's currently studying / on break / at the library -->
+            <div class="flip-face flip-front">
+                <div class="studying-head">
+                    <h2><span class="studying-live-dot"></span> Currently studying</h2>
+                    <button type="button" class="icon-btn flip-btn" id="flip-to-recap" title="Today's timeline" aria-label="Show today's timeline">⇄</button>
+                </div>
+                <div class="studying-actions">
+                    <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
+                    <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+                    <button type="button" class="btn studying-toggle studying-bib" id="studying-bib" style="display:none;">📚 BIB</button>
+                </div>
+                <div class="face-body">
+                    <div class="studying-list" id="studying-list">
+                        <span class="muted">Loading…</span>
+                    </div>
+                    <div class="studying-break-box" id="studying-break-box" style="display:none;">
+                        <span class="break-label">☕ On break</span>
+                        <div class="break-list" id="break-list"></div>
+                    </div>
+                    <div class="studying-library-box" id="studying-library-box" style="display:none;">
+                        <span class="library-label">📚 At the library</span>
+                        <div class="library-list" id="library-list"></div>
+                    </div>
+                </div>
+            </div>
 
-        <div class="dock-divider"></div>
+            <!-- Back: today's timeline, one column per person -->
+            <div class="flip-face flip-back">
+                <div class="studying-head">
+                    <h2>📅 Heute</h2>
+                    <button type="button" class="icon-btn flip-btn" id="flip-to-front" title="Back" aria-label="Back to currently studying">⇄</button>
+                </div>
+                <div class="face-body">
+                    <div id="dock-timeline"></div>
+                </div>
+            </div>
 
-        <span class="tl-label">Heute</span>
-        <div id="dock-timeline"></div>
-
+        </div>
     </div>
 </aside>
 
@@ -2306,6 +2358,11 @@ main.container {
             .then(res => { applyMyState(res.me); renderStudying(res.studying); renderTimeline(res.recap); })
             .catch(() => { /* keep previous state on a transient error */ });
     }
+
+    // ── Dock flip: "currently studying" (front) ⇄ today's timeline (back) ──
+    const flipInner = document.getElementById("studying-flip");
+    document.getElementById("flip-to-recap").addEventListener("click", () => flipInner.classList.add("flipped"));
+    document.getElementById("flip-to-front").addEventListener("click", () => flipInner.classList.remove("flipped"));
 
     // Tick the studying chips locally every second; re-sync from the server
     // every 15s (covers other tabs and other users).
