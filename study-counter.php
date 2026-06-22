@@ -2068,7 +2068,7 @@ main.container {
         // Only hours that actually contain activity get drawn; runs of empty
         // hours collapse to a thin marker. The axis is piecewise: each shown
         // hour is a fixed band (HOUR_PX), each collapsed run a small strip.
-        const HOUR_PX = 32;   // height of one shown hour (half the old 64)
+        const HOUR_PX = 64;   // height of one shown hour
         const GAP_PX  = 18;   // height of a collapsed-time marker
 
         const activeSet = new Set();
