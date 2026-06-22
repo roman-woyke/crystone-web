@@ -99,26 +99,16 @@ main.container {
     flex-direction: column;
 }
 
+/* Both faces are sticky and share one set height (driven in JS). The front is
+   sized to its content; the recap (back) uses a fixed height and scrolls its
+   timeline internally — so the dock always stays pinned while you scroll. */
 .dock-card {
     position: sticky;
     top: 78px;
     perspective: 1800px;
-    /* Clip the hidden, full-height back face so it doesn't add phantom page
-       scroll while the (short) front is showing. */
+    /* Clip the hidden back face so it never adds phantom page scroll. */
     overflow: hidden;
-    /* Height tracks the visible face's content (set in JS); animating it makes
-       the bottom edge retract/extend smoothly across a flip. */
     transition: height 0.5s var(--ease-out);
-}
-
-/* Front = sticky sidebar that follows the scroll. The recap (back) instead
-   takes the full height it needs and drops stickiness, so a tall day's
-   timeline extends down the page and scrolls normally rather than being
-   pinned at the top and clipped. */
-.dock-card.recap {
-    position: relative;
-    top: auto;
-    overflow: visible;
 }
 
 .flip-inner {
@@ -154,6 +144,8 @@ main.container {
 
 .flip-back {
     transform: rotateY(180deg);
+    /* Fill the card height so its body can be a bounded, scrollable area. */
+    bottom: 0;
 }
 
 .flip-btn {
@@ -162,18 +154,12 @@ main.container {
     line-height: 1;
 }
 
-/* Front: scrollable body so a long studying/break/library list never clips. */
+/* Scrollable body — on the front for a long studying/break/library list, on
+   the back so the (taller) timeline scrolls inside the fixed-height card. */
 .face-body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-}
-
-/* Back: the timeline gets the whole card height to itself (no squashing). */
-.flip-back .face-body {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
 }
 
 @media (max-width: 980px) {
@@ -2068,8 +2054,8 @@ main.container {
         // Only hours that actually contain activity get drawn; runs of empty
         // hours collapse to a thin marker. The axis is piecewise: each shown
         // hour is a fixed band (HOUR_PX), each collapsed run a small strip.
-        const HOUR_PX = 64;   // height of one shown hour
-        const GAP_PX  = 18;   // height of a collapsed-time marker
+        const HOUR_PX = 96;   // height of one shown hour (1.5× the old 64)
+        const GAP_PX  = 22;   // height of a collapsed-time marker
 
         const activeSet = new Set();
         blocks.forEach(b => {
@@ -2471,35 +2457,72 @@ main.container {
     }
 
     // ── Dock flip: "currently studying" (front) ⇄ today's timeline (back) ──
-    // The card height tracks whichever face is showing, so the bottom edge
-    // retracts/extends smoothly (CSS height transition) when the faces differ.
+    // Front sizes to its content; the recap (back) uses a fixed height and
+    // scrolls its (taller) timeline internally, so the dock stays sticky.
     const flipInner = document.getElementById("studying-flip");
     const dockCard  = document.querySelector(".dock-card");
     const frontFace = dockCard.querySelector(".flip-front");
     const backFace  = dockCard.querySelector(".flip-back");
 
+    // The recap's set size: a fixed slab capped to the viewport.
+    const recapSetPx = () => Math.min(window.innerHeight - 100, 560);
+
+    // Natural height the back face *wants* (header + timeline). When it's
+    // shorter than the set size we shrink to it instead of showing dead space.
+    function backNaturalPx() {
+        const head  = backFace.querySelector(".studying-head");
+        const heads = backFace.querySelector(".tl-user-heads");
+        const chrome = 32 + (head ? head.offsetHeight + 14 : 0); // padding + header + margin
+        return chrome + (heads ? heads.offsetHeight : 0) + tlLayout.totalPx;
+    }
+
+    function targetDockPx() {
+        return flipInner.classList.contains("flipped")
+            ? Math.min(backNaturalPx(), recapSetPx())
+            : frontFace.offsetHeight;
+    }
+
     let dockHeightInit = false;
-    function syncDockHeight() {
-        const face = flipInner.classList.contains("flipped") ? backFace : frontFace;
-        const h = face.offsetHeight + "px";
-        if (!dockHeightInit) {
-            // First measure: apply instantly so the card doesn't animate up from
-            // zero on page load. Subsequent changes use the CSS height transition.
+    function setDockHeight(px, instant) {
+        if (instant) {
             dockCard.style.transition = "none";
-            dockCard.style.height = h;
-            void dockCard.offsetHeight; // force reflow
+            dockCard.style.height = px + "px";
+            void dockCard.offsetHeight; // force reflow before restoring transition
             dockCard.style.transition = "";
-            dockHeightInit = true;
         } else {
-            dockCard.style.height = h;
+            dockCard.style.height = px + "px";
         }
+    }
+    function syncDockHeight() {
+        setDockHeight(targetDockPx(), !dockHeightInit);
+        dockHeightInit = true;
+    }
+
+    // Where "now" sits (px) on the collapsed axis — used to centre the scroll.
+    function recapNowY() {
+        const now = new Date();
+        const nm  = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+        const cap = Math.min(nm, (tlLayout.lastActiveHour + 1) * 60);
+        const h   = Math.floor(cap / 60);
+        if (h in tlLayout.hourTop)       return tlLayout.hourTop[h] + (cap - h * 60) / 60 * tlLayout.hourPx;
+        if ((h - 1) in tlLayout.hourTop) return tlLayout.hourTop[h - 1] + tlLayout.hourPx;
+        return tlLayout.totalPx / 2;
+    }
+    function centerRecapOnNow() {
+        const body  = backFace.querySelector(".face-body");
+        const heads = backFace.querySelector(".tl-user-heads");
+        if (!body) return;
+        const headsH = heads ? heads.offsetHeight : 0;
+        body.scrollTop = Math.max(0, headsH + recapNowY() - body.clientHeight / 2);
     }
 
     function flipDock(showBack) {
         flipInner.classList.toggle("flipped", showBack);
-        // Front = sticky; back = in-flow so a tall recap can scroll down the page.
-        dockCard.classList.toggle("recap", showBack);
-        syncDockHeight();
+        // Set height instantly — the 3D rotation masks it — so the internal
+        // scroll can be centred against the final size right away.
+        setDockHeight(targetDockPx(), true);
+        dockHeightInit = true;
+        if (showBack) centerRecapOnNow();
     }
 
     document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
