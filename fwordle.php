@@ -630,8 +630,21 @@ main.container { max-width: 1280px; }
                 ? (o.solved ? `solved in ${o.guesses_used}` : `done · ${solvedCount}/${STATE.num_boards}`)
                 : `${o.guesses_used}/${MAX} guesses`;
 
+            const owned = o.owned || [];
             let minis = "";
             for (let b = 0; b < STATE.num_boards; b++) {
+                // A board they chose is auto-solved — show a single green row
+                // (they never guessed it, so there's no winning row to freeze on).
+                if (owned.includes(b)) {
+                    minis += `<div class="fw-mini" style="--cols:${len}">`;
+                    for (let r = 0; r < MAX; r++) {
+                        for (let i = 0; i < len; i++) {
+                            minis += `<div class="fw-mcell ${r === 0 ? "green" : ""}"></div>`;
+                        }
+                    }
+                    minis += `</div>`;
+                    continue;
+                }
                 // Freeze a solved board at its winning (all-green) row.
                 let shown = o.guesses.length;
                 if (o.solved_boards[b]) {

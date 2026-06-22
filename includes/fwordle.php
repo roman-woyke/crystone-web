@@ -383,6 +383,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
             'solved'        => $b['solved'],
             'guesses_used'  => $used,
             'solved_boards' => $b['solved_boards'],
+            'owned'         => $ownedOf($uid), // auto-solved boards (their own pick)
             'guesses'       => array_map(fn($g) => ['boards' => $g['boards']], $b['guesses']),
         ];
     }
