@@ -2023,7 +2023,8 @@ main.container {
 
     // ── Day timeline ──────────────────────────────────────────────────────────
     // Recap blocks are one-per-study-interval, positioned in minutes from the
-    // study day's start (07:00) through 07:00 the next morning (420–1860).
+    // study day's midnight (server-anchored). The study day runs 07:00 → 06:00
+    // the next morning, so post-midnight work lands in the 24:00–30:00 tail.
     // Breaks show as the gaps between a session's blocks.
     let lastRecap = [];
     // Piecewise axis built each render: only active hours occupy space, runs of
@@ -2033,8 +2034,8 @@ main.container {
     // The study day runs 07:00 → 06:00 next morning. Minutes after midnight but
     // before the start belong to the previous evening's night shift, so they map
     // to the tail of the window (e.g. 02:00 → 26:00).
-    const DAY_START_MIN = 7 * 60;             // 07:00
-    const DAY_END_MIN   = DAY_START_MIN + 24 * 60; // 07:00 next day (last label 06:00)
+    const DAY_START_MIN = 7 * 60;              // 07:00 (top of the axis)
+    const DAY_END_MIN   = 30 * 60;             // 06:00 next morning (bottom of the axis)
     const toDayMin  = (m) => (m >= 0 && m < DAY_START_MIN ? m + 1440 : m);
     const clampDay  = (m) => Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, m));
     const minsToHHMM = (m) => {
@@ -2099,6 +2100,10 @@ main.container {
         // the growing block have a home (even before the minute count fills it).
         if (blocks.some(b => b.live)) activeSet.add(Math.floor(nowMin / 60));
         if (activeSet.size === 0)     activeSet.add(Math.floor(nowMin / 60));
+        // Pin the study-day endpoints so the axis always reads 07:00 → 06:00,
+        // regardless of when the first/last session of the day happened.
+        activeSet.add(DAY_START_MIN / 60);          // 07:00 at the top
+        activeSet.add(DAY_END_MIN / 60 - 1);        // 05:00 band → closing tick is 06:00
 
         const activeHours = [...activeSet].sort((a, b) => a - b);
 

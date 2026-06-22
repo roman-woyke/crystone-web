@@ -53,40 +53,49 @@ function studyStatusPayload(PDO $pdo, $userId): array
         }
     }
 
-    // ── Today's recap: one block per study INTERVAL (breaks are the gaps) ────
-    // Positions are minutes from today's midnight (CURDATE()); a block whose
-    // interval started yesterday comes out negative and is clamped client-side.
+    // ── Recap day: 07:00 → 07:00 the next morning ───────────────────────────
+    // The study day starts at 07:00, so before 07:00 we're still on yesterday's
+    // day and post-midnight work (e.g. a 01:00 session) counts toward it. $base
+    // is that day's midnight (today's, or yesterday's when it's before 07:00) —
+    // positions stay minutes-from-midnight so the client maps them onto its
+    // 07:00 → 06:00 axis; $winStart/$winEnd bound the 24h study-day window used
+    // for inclusion (segments are matched by their real timestamp so a session
+    // that crossed midnight stays on the day it started).
     //   1) logged segments (the real intervals of finished sessions)
     //   2) sessions with no segments (manual entries / pre-migration) → one block
     //   3) live segments of an in-progress session (the open one is `live`)
+    $base     = "IF(CURTIME() < '07:00:00', CURDATE() - INTERVAL 1 DAY, CURDATE())";
+    $winStart = "($base + INTERVAL 7 HOUR)";   // 07:00 of the study day
+    $winEnd   = "($base + INTERVAL 31 HOUR)";  // 07:00 the next morning
     $recapRows = $pdo->query("
         SELECT username, module, start_min, end_min, seconds, live, sort_at FROM (
             SELECT
                 u.username,
                 ss.module_name AS module,
-                TIMESTAMPDIFF(MINUTE, CURDATE(), seg.started_at) AS start_min,
-                TIMESTAMPDIFF(MINUTE, CURDATE(), seg.ended_at)   AS end_min,
+                TIMESTAMPDIFF(MINUTE, $base, seg.started_at) AS start_min,
+                TIMESTAMPDIFF(MINUTE, $base, seg.ended_at)   AS end_min,
                 TIMESTAMPDIFF(SECOND, seg.started_at, seg.ended_at) AS seconds,
                 0 AS live,
                 seg.started_at AS sort_at
             FROM study_segments seg
             JOIN study_sessions ss ON ss.id = seg.session_id
             JOIN users u ON u.id = ss.user_id
-            WHERE ss.studied_on = CURDATE() AND seg.ended_at IS NOT NULL
+            WHERE seg.started_at >= $winStart AND seg.started_at < $winEnd
+              AND seg.ended_at IS NOT NULL
 
             UNION ALL
 
             SELECT
                 u.username,
                 ss.module_name AS module,
-                TIMESTAMPDIFF(MINUTE, CURDATE(), COALESCE(ss.started_at, ss.created_at - INTERVAL ss.seconds SECOND)) AS start_min,
-                TIMESTAMPDIFF(MINUTE, CURDATE(), ss.created_at) AS end_min,
+                TIMESTAMPDIFF(MINUTE, $base, COALESCE(ss.started_at, ss.created_at - INTERVAL ss.seconds SECOND)) AS start_min,
+                TIMESTAMPDIFF(MINUTE, $base, ss.created_at) AS end_min,
                 ss.seconds AS seconds,
                 0 AS live,
                 COALESCE(ss.started_at, ss.created_at - INTERVAL ss.seconds SECOND) AS sort_at
             FROM study_sessions ss
             JOIN users u ON u.id = ss.user_id
-            WHERE ss.studied_on = CURDATE()
+            WHERE ss.studied_on = ($base)
               AND NOT EXISTS (SELECT 1 FROM study_segments x WHERE x.session_id = ss.id)
 
             UNION ALL
@@ -94,8 +103,8 @@ function studyStatusPayload(PDO $pdo, $userId): array
             SELECT
                 u.username,
                 st.module_name AS module,
-                TIMESTAMPDIFF(MINUTE, CURDATE(), seg.started_at) AS start_min,
-                TIMESTAMPDIFF(MINUTE, CURDATE(), COALESCE(seg.ended_at, NOW())) AS end_min,
+                TIMESTAMPDIFF(MINUTE, $base, seg.started_at) AS start_min,
+                TIMESTAMPDIFF(MINUTE, $base, COALESCE(seg.ended_at, NOW())) AS end_min,
                 TIMESTAMPDIFF(SECOND, seg.started_at, COALESCE(seg.ended_at, NOW())) AS seconds,
                 (seg.ended_at IS NULL) AS live,
                 seg.started_at AS sort_at
