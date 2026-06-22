@@ -102,8 +102,10 @@ main.container {
 .dock-card {
     position: sticky;
     top: 78px;
-    height: calc(100vh - 100px);
     perspective: 1800px;
+    /* Height tracks the visible face's content (set in JS); animating it makes
+       the bottom edge retract/extend smoothly across a flip. */
+    transition: height 0.5s var(--ease-out);
 }
 
 .flip-inner {
@@ -120,7 +122,10 @@ main.container {
 
 .flip-face {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* No bottom anchor → each face is only as tall as its own content. */
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
@@ -179,11 +184,11 @@ main.container {
         display: block;
     }
 
-    /* Flip card needs an explicit height when the faces are absolutely
-       positioned; drop the sticky/viewport sizing on narrow screens. */
+    /* Drop sticky/viewport sizing on narrow screens; stay a positioned
+       ancestor so the absolute faces anchor here, and let JS drive height. */
     .dock-card {
-        position: static;
-        height: 460px;
+        position: relative;
+        top: auto;
     }
 
     #dock-timeline {
@@ -234,8 +239,7 @@ main.container {
 
 .tl-body {
     position: relative;
-    flex: 1;
-    min-height: 120px;
+    height: 300px;
     display: flex;
     gap: 4px;
 }
@@ -2010,6 +2014,7 @@ main.container {
 
         if (allUsers.length === 0) {
             tl.innerHTML = `<p class="tl-empty">Keine Sessions heute.</p>`;
+            syncDockHeight();
             return;
         }
 
@@ -2070,6 +2075,7 @@ main.container {
                 </div>
             </div>
         `;
+        syncDockHeight();
     }
 
     function tickTimeline() {
@@ -2212,6 +2218,8 @@ main.container {
                 `;
             }).join("");
         }
+
+        syncDockHeight();
     }
 
     // Tick the chips every second (re-synced to the server on each poll): study
@@ -2360,9 +2368,39 @@ main.container {
     }
 
     // ── Dock flip: "currently studying" (front) ⇄ today's timeline (back) ──
+    // The card height tracks whichever face is showing, so the bottom edge
+    // retracts/extends smoothly (CSS height transition) when the faces differ.
     const flipInner = document.getElementById("studying-flip");
-    document.getElementById("flip-to-recap").addEventListener("click", () => flipInner.classList.add("flipped"));
-    document.getElementById("flip-to-front").addEventListener("click", () => flipInner.classList.remove("flipped"));
+    const dockCard  = document.querySelector(".dock-card");
+    const frontFace = dockCard.querySelector(".flip-front");
+    const backFace  = dockCard.querySelector(".flip-back");
+
+    let dockHeightInit = false;
+    function syncDockHeight() {
+        const face = flipInner.classList.contains("flipped") ? backFace : frontFace;
+        const h = face.offsetHeight + "px";
+        if (!dockHeightInit) {
+            // First measure: apply instantly so the card doesn't animate up from
+            // zero on page load. Subsequent changes use the CSS height transition.
+            dockCard.style.transition = "none";
+            dockCard.style.height = h;
+            void dockCard.offsetHeight; // force reflow
+            dockCard.style.transition = "";
+            dockHeightInit = true;
+        } else {
+            dockCard.style.height = h;
+        }
+    }
+
+    document.getElementById("flip-to-recap").addEventListener("click", () => {
+        flipInner.classList.add("flipped");
+        syncDockHeight();
+    });
+    document.getElementById("flip-to-front").addEventListener("click", () => {
+        flipInner.classList.remove("flipped");
+        syncDockHeight();
+    });
+    window.addEventListener("resize", syncDockHeight);
 
     // Tick the studying chips locally every second; re-sync from the server
     // every 15s (covers other tabs and other users).
