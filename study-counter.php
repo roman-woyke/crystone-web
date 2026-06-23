@@ -1853,7 +1853,7 @@ main.container {
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Save failed."); }))
             .then(res => {
                 setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
-                if (onDone) onDone();
+                if (opts.onDone) opts.onDone();
                 // A new custom module changes the shared list — reload to pick up
                 // colors, legend, and the dropdown entry.
                 if (res.custom && moduleSelect.value === "__new__") {
