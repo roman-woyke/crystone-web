@@ -2100,10 +2100,6 @@ main.container {
         // the growing block have a home (even before the minute count fills it).
         if (blocks.some(b => b.live)) activeSet.add(Math.floor(nowMin / 60));
         if (activeSet.size === 0)     activeSet.add(Math.floor(nowMin / 60));
-        // Pin the study-day endpoints so the axis always reads 07:00 → 06:00,
-        // regardless of when the first/last session of the day happened.
-        activeSet.add(DAY_START_MIN / 60);          // 07:00 at the top
-        activeSet.add(DAY_END_MIN / 60 - 1);        // 05:00 band → closing tick is 06:00
 
         const activeHours = [...activeSet].sort((a, b) => a - b);
 
