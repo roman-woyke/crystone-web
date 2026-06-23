@@ -38,7 +38,7 @@
         "calendar.php"    => "Calendar",
         "typing-game.php" => "Typing Battle",
         "study-counter.php" => "Study Counter",
-        "fwordle.php"     => "fWordle",
+        "fwordle.php"     => "Boardle",
         "projects.php"    => "Projects",
     ];
 ?>

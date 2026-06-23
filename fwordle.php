@@ -6,7 +6,7 @@ require_once __DIR__ . "/includes/fwordle.php";
 // Server-render the full state so the grid paints complete on first byte.
 $initialState = fwordleState($pdo, date("Y-m-d"), (int) $_SESSION["user_id"]);
 
-$pageTitle = "fWordle";
+$pageTitle = "Boardle";
 require_once __DIR__ . "/includes/header.php";
 ?>
 
