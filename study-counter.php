@@ -2161,7 +2161,7 @@ main.container {
                     `<div class="tl-col-head" style="color:${userColor[u] || "#8b5cf6"}">${escapeHtml(u)}</div>`
                 ).join("")}
             </div>
-            <div class="tl-body" style="height:${totalPx}px">
+            <div class="tl-body" style="height:${totalPx + 9}px">
                 <div class="tl-axis">${tickRows}</div>
                 <div class="tl-cols-wrap">
                     ${gridRows}
