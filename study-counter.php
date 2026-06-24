@@ -801,7 +801,9 @@ main.container {
 
 .log-layout {
     display: grid;
-    grid-template-columns: 380px minmax(0, 1fr);
+    /* Left card sizes to its content (just two buttons) instead of reserving a
+       fixed-width column; the chart takes the rest. */
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 24px;
     align-items: start;
     margin-bottom: 36px;
@@ -878,19 +880,16 @@ main.container {
 
 .log-feedback.error { color: var(--danger); }
 
-/* Collapsed manual-logging card (live tracking moved to the dock). */
-.log-collapsed h2 { margin: 0 0 8px; font-size: 1.15rem; }
-.log-collapsed-hint { margin: 0 0 16px; font-size: 0.86rem; }
-.log-collapsed-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.log-collapsed-actions .btn { width: auto; margin: 0; }
-.manual-body-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
+/* Session-management card (live tracking lives in the dock; this just opens the
+   manual-logging and history pop-ups). Sized to its content. */
+.log-collapsed-actions { display: flex; flex-direction: column; gap: 8px; }
+.log-collapsed-actions .btn { width: 100%; margin: 0; white-space: nowrap; }
+
+/* Opaque pop-up dialogs (no glass translucency bleeding the page through). */
+.modal-dialog.modal-solid {
+    background: var(--bg-1);
+    backdrop-filter: none;
 }
-.manual-body-head h2 { margin: 0; font-size: 1.15rem; }
-#manual-collapse { font-size: 1.3rem; line-height: 1; }
 
 /* Module button in the studying dock (carries the current module name). */
 .studying-module {
@@ -997,7 +996,11 @@ main.container {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    /* Seamless scroll — no visible scrollbar. */
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* old Edge/IE */
 }
+.manage-list::-webkit-scrollbar { width: 0; height: 0; display: none; } /* WebKit */
 .manage-day-label {
     font-size: 0.72rem;
     font-weight: 700;
@@ -1340,74 +1343,13 @@ main.container {
 <div class="log-layout">
 
     <section class="log-panel glass-card">
-        <!-- Live tracking now lives in the "Currently studying" dock; this panel
-             is just for back-filling a past session by hand, so it starts
-             collapsed behind a button. -->
-        <div class="log-collapsed" id="log-collapsed">
-            <h2>Session Management</h2>
-            <div class="log-collapsed-actions">
-                <button type="button" class="btn" id="manual-toggle">Manual logging</button>
-                <button type="button" class="btn" id="manage-toggle">Manage previous sessions</button>
-            </div>
+        <!-- Live tracking lives in the "Currently studying" dock; this small card
+             just opens the manual-logging and history pop-ups. -->
+        <h2>Session Management</h2>
+        <div class="log-collapsed-actions">
+            <button type="button" class="btn" id="manual-toggle">Manual logging</button>
+            <button type="button" class="btn" id="manage-toggle">Manage previous sessions</button>
         </div>
-
-        <div class="manual-body" id="manual-body" style="display:none;">
-            <div class="manual-body-head">
-                <h2>Manual logging</h2>
-                <button type="button" class="icon-btn" id="manual-collapse" title="Collapse" aria-label="Collapse manual logging">−</button>
-            </div>
-
-            <div class="module-picker">
-                <label for="module-select">Module</label>
-                <select id="module-select">
-                    <?php foreach ($modules as $i => $m): ?>
-                        <option value="<?= htmlspecialchars($m["name"]) ?>">
-                            <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
-                        </option>
-                    <?php endforeach; ?>
-                    <option value="__new__">+ Add new module…</option>
-                </select>
-
-                <div class="new-module-wrap" id="new-module-wrap">
-                    <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
-                    <p class="module-hint">This module will join the shared list for everyone.</p>
-                </div>
-            </div>
-
-            <div id="pane-manual">
-                <label class="manual-today">
-                    <input type="checkbox" id="manual-today" checked>
-                    <span>Today — log exact start &amp; end time</span>
-                </label>
-
-                <div class="manual-grid">
-                    <!-- Exact start/end (Today mode) -->
-                    <div class="manual-exact">
-                        <label for="manual-start">Start</label>
-                        <input type="time" id="manual-start">
-                    </div>
-                    <div class="manual-exact">
-                        <label for="manual-end">End</label>
-                        <input type="time" id="manual-end">
-                    </div>
-                    <!-- Duration (past-day mode) -->
-                    <div class="manual-dur">
-                        <label for="manual-hours">Hours</label>
-                        <input type="number" id="manual-hours" min="0" max="24" step="1" value="0">
-                    </div>
-                    <div class="manual-dur">
-                        <label for="manual-minutes">Minutes</label>
-                        <input type="number" id="manual-minutes" min="0" max="59" step="1" value="30">
-                    </div>
-                    <div class="full">
-                        <label for="manual-date">Date</label>
-                        <input type="date" id="manual-date">
-                    </div>
-                </div>
-                <button type="button" class="btn-primary" id="manual-log">Log session</button>
-            </div>
-        </div>
-
         <p class="log-feedback" id="log-feedback"></p>
     </section>
 
@@ -1543,9 +1485,71 @@ main.container {
     </div>
 </div>
 
+<!-- ── Manual logging modal (back-fill a past session by hand) ──────────────── -->
+<div id="manual-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card modal-solid">
+        <div class="manage-head">
+            <h3>Manual logging</h3>
+            <button type="button" class="icon-btn" id="manual-close" title="Close" aria-label="Close">✕</button>
+        </div>
+
+        <div class="module-picker">
+            <label for="module-select">Module</label>
+            <select id="module-select">
+                <?php foreach ($modules as $i => $m): ?>
+                    <option value="<?= htmlspecialchars($m["name"]) ?>">
+                        <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
+                    </option>
+                <?php endforeach; ?>
+                <option value="__new__">+ Add new module…</option>
+            </select>
+
+            <div class="new-module-wrap" id="new-module-wrap">
+                <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
+                <p class="module-hint">This module will join the shared list for everyone.</p>
+            </div>
+        </div>
+
+        <div id="pane-manual">
+            <label class="manual-today">
+                <input type="checkbox" id="manual-today" checked>
+                <span>Today — log exact start &amp; end time</span>
+            </label>
+
+            <div class="manual-grid">
+                <!-- Exact start/end (Today mode) -->
+                <div class="manual-exact">
+                    <label for="manual-start">Start</label>
+                    <input type="time" id="manual-start">
+                </div>
+                <div class="manual-exact">
+                    <label for="manual-end">End</label>
+                    <input type="time" id="manual-end">
+                </div>
+                <!-- Duration (past-day mode) -->
+                <div class="manual-dur">
+                    <label for="manual-hours">Hours</label>
+                    <input type="number" id="manual-hours" min="0" max="24" step="1" value="0">
+                </div>
+                <div class="manual-dur">
+                    <label for="manual-minutes">Minutes</label>
+                    <input type="number" id="manual-minutes" min="0" max="59" step="1" value="30">
+                </div>
+                <div class="full">
+                    <label for="manual-date">Date</label>
+                    <input type="date" id="manual-date">
+                </div>
+            </div>
+            <button type="button" class="btn-primary" id="manual-log">Log session</button>
+        </div>
+
+        <p class="log-feedback" id="manual-feedback"></p>
+    </div>
+</div>
+
 <!-- ── Manage previous sessions modal (browse a week, delete sessions) ──────── -->
 <div id="manage-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-dialog glass-card manage-dialog">
+    <div class="modal-dialog glass-card manage-dialog modal-solid">
         <div class="manage-head">
             <h3>Manage previous sessions</h3>
             <button type="button" class="icon-btn" id="manage-close" title="Close" aria-label="Close">✕</button>
@@ -2018,16 +2022,23 @@ main.container {
     }
 
     // ── Feedback ──────────────────────────────────────────────────────────
+    // `setFeedback` → the card (dock/session errors); `setManualFeedback` → the
+    // manual-logging pop-up, so its messages stay inside that window.
     const feedback = document.getElementById("log-feedback");
     function setFeedback(msg, isError) {
         feedback.textContent = msg;
         feedback.classList.toggle("error", !!isError);
     }
+    const manualFeedback = document.getElementById("manual-feedback");
+    function setManualFeedback(msg, isError) {
+        manualFeedback.textContent = msg;
+        manualFeedback.classList.toggle("error", !!isError);
+    }
 
     // opts: { startTime, endTime } for exact mode, or { seconds, studiedOn }.
     function submitSession(opts) {
         const mod = selectedModulePayload();
-        if (mod.error) { setFeedback(mod.error, true); return; }
+        if (mod.error) { setManualFeedback(mod.error, true); return; }
 
         const exact = opts.startTime && opts.endTime;
         const body = new FormData();
@@ -2035,18 +2046,18 @@ main.container {
             body.append("start_time", opts.startTime);
             body.append("end_time", opts.endTime);
         } else {
-            if (!opts.seconds || opts.seconds <= 0) { setFeedback("Nothing to log yet.", true); return; }
+            if (!opts.seconds || opts.seconds <= 0) { setManualFeedback("Nothing to log yet.", true); return; }
             body.append("seconds", opts.seconds);
             if (opts.studiedOn) body.append("studied_on", opts.studiedOn);
         }
         if (mod.module)     body.append("module", mod.module);
         if (mod.new_module) body.append("new_module", mod.new_module);
 
-        setFeedback("Saving…", false);
+        setManualFeedback("Saving…", false);
         fetch(BASE_PATH + "/api/log-study-session.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Save failed."); }))
             .then(res => {
-                setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
+                setManualFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
                 if (opts.onDone) opts.onDone();
                 // A new custom module changes the shared list — reload to pick up
                 // colors, legend, and the dropdown entry.
@@ -2056,20 +2067,16 @@ main.container {
                     loadData();
                 }
             })
-            .catch(err => setFeedback(err.message, true));
+            .catch(err => setManualFeedback(err.message, true));
     }
 
-    // ── Manual logging (collapsed by default; − folds it back up) ─────────
-    const logCollapsed = document.getElementById("log-collapsed");
-    const manualBody   = document.getElementById("manual-body");
-    document.getElementById("manual-toggle").addEventListener("click", () => {
-        logCollapsed.style.display = "none";
-        manualBody.style.display = "block";
-    });
-    document.getElementById("manual-collapse").addEventListener("click", () => {
-        manualBody.style.display = "none";
-        logCollapsed.style.display = "block";
-    });
+    // ── Manual logging pop-up ─────────────────────────────────────────────
+    const manualModal = document.getElementById("manual-modal");
+    function openManualModal()  { setManualFeedback("", false); manualModal.style.display = "flex"; }
+    function closeManualModal() { manualModal.style.display = "none"; }
+    document.getElementById("manual-toggle").addEventListener("click", openManualModal);
+    document.getElementById("manual-close").addEventListener("click", closeManualModal);
+    manualModal.addEventListener("click", (e) => { if (e.target === manualModal) closeManualModal(); });
 
     // ── Manage previous sessions (browse a week of my sessions, delete) ────
     const manageModal    = document.getElementById("manage-modal");
