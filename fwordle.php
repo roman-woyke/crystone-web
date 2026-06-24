@@ -476,9 +476,8 @@ main.container { max-width: 1280px; }
     <div class="fw-intro">
         <h1 class="page-heading fw-head">B<span class="gradient-text">oardle</span></h1>
         <p class="fw-sub">
-            One puzzle a day, shared by everyone. Solve every board before the shared guesses run
-            out — nine on a full four-board day, one fewer for each board the group lost. A guess
-            can be any word from 5 letters up to the day's length — use the space bar to place it.
+            4 board puzzle a day. Solve every board before the guesses run out. 
+            A guess can be any word from 5 letters up to the day's length (use the space bar to place it).
             Beat the day and you get to set one of tomorrow's words.
         </p>
     </div>
