@@ -28,6 +28,8 @@
     <div class="orb orb-teal"></div>
 </div>
 
+<canvas id="dot-grid" aria-hidden="true"></canvas>
+
 <?php
     $loggedIn = isset($_SESSION["user_id"]);
     $currentPage = basename($_SERVER["SCRIPT_NAME"]);

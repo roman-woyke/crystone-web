@@ -94,4 +94,83 @@
     document.addEventListener("DOMContentLoaded", function () {
         window.initCountUps(document);
     });
+
+    // Interactive dot-grid background
+    document.addEventListener("DOMContentLoaded", function () {
+        var canvas = document.getElementById("dot-grid");
+        if (!canvas) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+        var ctx = canvas.getContext("2d");
+        var SPACING    = 36;
+        var DOT_R      = 1.5;
+        var REPEL_R    = 120;
+        var REPEL_STR  = 70;
+        var IDLE_AMP   = 4;
+        var IDLE_SPEED = 0.00075;
+
+        var dots = [];
+        var mx = -9999, my = -9999;
+
+        function build() {
+            canvas.width  = window.innerWidth;
+            canvas.height = window.innerHeight;
+            dots = [];
+            var cols = Math.ceil(canvas.width  / SPACING);
+            var rows = Math.ceil(canvas.height / SPACING);
+            for (var r = 0; r <= rows; r++) {
+                for (var c = 0; c <= cols; c++) {
+                    dots.push({
+                        bx: c * SPACING,
+                        by: r * SPACING,
+                        px: Math.random() * Math.PI * 2,
+                        py: Math.random() * Math.PI * 2,
+                        fx: 0.6 + Math.random() * 0.8,
+                        fy: 0.6 + Math.random() * 0.8
+                    });
+                }
+            }
+        }
+
+        document.addEventListener("mousemove", function (e) { mx = e.clientX; my = e.clientY; });
+        document.addEventListener("mouseleave", function ()  { mx = -9999;     my = -9999;     });
+
+        var t0 = null;
+
+        function frame(ts) {
+            if (t0 === null) t0 = ts;
+            var t = ts - t0;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (var i = 0; i < dots.length; i++) {
+                var d    = dots[i];
+                var ix   = Math.sin(t * IDLE_SPEED * d.fx + d.px) * IDLE_AMP;
+                var iy   = Math.sin(t * IDLE_SPEED * d.fy + d.py) * IDLE_AMP;
+                var dx   = d.bx - mx;
+                var dy   = d.by - my;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                var rx   = 0, ry = 0;
+
+                if (dist < REPEL_R && dist > 0) {
+                    var force = (1 - dist / REPEL_R) * REPEL_STR;
+                    rx = (dx / dist) * force;
+                    ry = (dy / dist) * force;
+                }
+
+                ctx.beginPath();
+                ctx.arc(d.bx + ix + rx, d.by + iy + ry, DOT_R, 0, Math.PI * 2);
+                ctx.fillStyle = dist < REPEL_R
+                    ? "rgba(255,255,255," + (0.18 + (1 - dist / REPEL_R) * 0.22) + ")"
+                    : "rgba(255,255,255,0.18)";
+                ctx.fill();
+            }
+
+            requestAnimationFrame(frame);
+        }
+
+        window.addEventListener("resize", build);
+        build();
+        requestAnimationFrame(frame);
+    });
 })();
