@@ -202,6 +202,41 @@ main.container {
 
 /* ── Day timeline ─────────────────────────────────────────────────────────── */
 
+/* Heute / Gestern segmented toggle in the recap header */
+.recap-day-nav {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-full);
+}
+
+.recap-day-btn {
+    width: auto;
+    margin: 0;
+    padding: 4px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.1;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--t-fast);
+}
+
+.recap-day-btn:hover:not(.active) {
+    color: var(--text-1);
+}
+
+.recap-day-btn.active {
+    background: var(--grad-accent);
+    color: #fff;
+    box-shadow: var(--glow-violet);
+}
+
 .tl-label {
     display: block;
     font-size: 0.7rem;
@@ -1317,10 +1352,13 @@ main.container {
                 </div>
             </div>
 
-            <!-- Back: today's timeline, one column per person -->
+            <!-- Back: a day's timeline, one column per person (Heute / Gestern) -->
             <div class="flip-face flip-back">
                 <div class="studying-head">
-                    <h2>📅 Heute</h2>
+                    <div class="recap-day-nav">
+                        <button type="button" class="recap-day-btn active" data-recap="0">📅 Heute</button>
+                        <button type="button" class="recap-day-btn" data-recap="1">Gestern</button>
+                    </div>
                     <button type="button" class="icon-btn flip-btn" id="flip-to-front" title="Back" aria-label="Back to currently studying">⇄</button>
                 </div>
                 <div class="face-body">
@@ -1954,7 +1992,7 @@ main.container {
                 if (res.custom_added) setTimeout(() => window.location.reload(), 400);
                 applyMyState(res.me);
                 renderStudying(res.studying);
-                renderTimeline(res.recap);
+                setRecaps(res);
                 return res;
             });
     }
@@ -2013,9 +2051,20 @@ main.container {
     // the next morning, so post-midnight work lands in the 24:00–30:00 tail.
     // Breaks show as the gaps between a session's blocks.
     let lastRecap = [];
+    // recapByDay[0] = today's study day, recapByDay[1] = yesterday's. recapOffset
+    // selects which the timeline shows (toggled by the Heute / Gestern buttons).
+    let recapByDay  = { 0: [], 1: [] };
+    let recapOffset = 0;
     // Piecewise axis built each render: only active hours occupy space, runs of
     // empty hours collapse. Shared with the per-second ticker via tlLayout.
     let tlLayout  = { hourTop: {}, hourPx: 32, totalPx: 0, lastActiveHour: -1 };
+
+    // Store both days from a status payload, then repaint the selected one.
+    function setRecaps(payload) {
+        recapByDay[0] = payload.recap      || [];
+        recapByDay[1] = payload.recap_prev || [];
+        renderTimeline();
+    }
 
     // The study day runs 07:00 → 06:00 next morning. Minutes after midnight but
     // before the start belong to the previous evening's night shift, so they map
@@ -2030,13 +2079,17 @@ main.container {
         return String(h).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
     };
 
-    function renderTimeline(recap) {
-        lastRecap = recap || [];
+    function renderTimeline() {
+        const isToday = recapOffset === 0;
+        lastRecap = recapByDay[recapOffset] || [];
         const tl = document.getElementById("dock-timeline");
         if (!tl) return;
 
         const now    = new Date();
-        const nowMin = toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
+        // The now-line / live ticking only make sense for the current day.
+        const nowMin = isToday
+            ? toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60)
+            : -1;
 
         // Clamp every interval into the study day's window (07:00–06:00 next day);
         // a live block runs up to now.
@@ -2054,15 +2107,17 @@ main.container {
             });
         });
 
+        // Current live presence only belongs on today's column set; yesterday's
+        // view shows purely its logged blocks.
         const userSet = new Set([
             ...blocks.map(b => b.username),
-            ...studyingEntries.map(s => s.username),
-            ...breakEntries.map(s => s.username),
+            ...(isToday ? studyingEntries.map(s => s.username) : []),
+            ...(isToday ? breakEntries.map(s => s.username) : []),
         ]);
         const allUsers = [...userSet].sort();
 
         if (allUsers.length === 0) {
-            tl.innerHTML = `<p class="tl-empty">Keine Sessions heute.</p>`;
+            tl.innerHTML = `<p class="tl-empty">${isToday ? "Keine Sessions heute." : "Keine Sessions gestern."}</p>`;
             syncDockHeight();
             return;
         }
@@ -2084,8 +2139,8 @@ main.container {
         });
         // While someone is live, keep the current hour shown so the now-line and
         // the growing block have a home (even before the minute count fills it).
-        if (blocks.some(b => b.live)) activeSet.add(Math.floor(nowMin / 60));
-        if (activeSet.size === 0)     activeSet.add(Math.floor(nowMin / 60));
+        if (blocks.some(b => b.live))   activeSet.add(Math.floor(nowMin / 60));
+        if (activeSet.size === 0 && isToday) activeSet.add(Math.floor(nowMin / 60));
 
         const activeHours = [...activeSet].sort((a, b) => a - b);
 
@@ -2138,7 +2193,7 @@ main.container {
             `<div class="tl-gap" style="top:${g.y}px;height:${GAP_PX}px" title="${minsToHHMM(g.fromH * 60)}–${minsToHHMM(g.toH * 60)} ausgeblendet"><span class="tl-gap-mark">⋯</span></div>`
         ).join("");
 
-        const nowLine = (nowY === null) ? "" :
+        const nowLine = (!isToday || nowY === null) ? "" :
             `<div class="tl-now-line" id="tl-now-line" style="top:${nowY}px"><span class="tl-now-dot"></span></div>`;
 
         tl.innerHTML = `
@@ -2176,6 +2231,7 @@ main.container {
     }
 
     function tickTimeline() {
+        if (recapOffset !== 0) return; // yesterday's timeline is static
         const live = document.querySelectorAll(".tl-block[data-live-start]");
         const nowLine = document.getElementById("tl-now-line");
         if (live.length === 0 && !nowLine) return;
@@ -2184,7 +2240,7 @@ main.container {
         const nowMin = toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
         const nowHour = Math.floor(nowMin / 60);
         // A live block grew into a not-yet-shown hour → re-layout to add it.
-        if (live.length && !(nowHour in tlLayout.hourTop)) { renderTimeline(lastRecap); return; }
+        if (live.length && !(nowHour in tlLayout.hourTop)) { renderTimeline(); return; }
 
         const yPx = (m) => {
             const h = Math.floor(m / 60);
@@ -2471,7 +2527,7 @@ main.container {
     function loadStatus() {
         return fetch(BASE_PATH + "/api/get-study-status.php")
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-            .then(res => { applyMyState(res.me); renderStudying(res.studying); renderTimeline(res.recap); })
+            .then(res => { applyMyState(res.me); renderStudying(res.studying); setRecaps(res); })
             .catch(() => { /* keep previous state on a transient error */ });
     }
 
@@ -2510,6 +2566,16 @@ main.container {
     document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
     document.getElementById("flip-to-front").addEventListener("click", () => flipDock(false));
     window.addEventListener("resize", syncDockHeight);
+
+    // Heute / Gestern toggle: switch which study day the timeline shows.
+    document.querySelectorAll(".recap-day-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            recapOffset = parseInt(btn.dataset.recap, 10) || 0;
+            document.querySelectorAll(".recap-day-btn")
+                .forEach(b => b.classList.toggle("active", b === btn));
+            renderTimeline();
+        });
+    });
 
     // Tick the studying chips locally every second; re-sync from the server
     // every 15s (covers other tabs and other users).
@@ -2566,7 +2632,7 @@ main.container {
     renderAll();
     applyMyState(INITIAL_STATUS.me);
     renderStudying(INITIAL_STATUS.studying);
-    renderTimeline(INITIAL_STATUS.recap);
+    setRecaps(INITIAL_STATUS);
 }());
 </script>
 

@@ -53,20 +53,53 @@ function studyStatusPayload(PDO $pdo, $userId): array
         }
     }
 
-    // ── Recap day: 07:00 → 07:00 the next morning ───────────────────────────
-    // The study day starts at 07:00, so before 07:00 we're still on yesterday's
-    // day and post-midnight work (e.g. a 01:00 session) counts toward it. $base
-    // is that day's midnight (today's, or yesterday's when it's before 07:00) —
-    // positions stay minutes-from-midnight so the client maps them onto its
-    // 07:00 → 06:00 axis; $winStart/$winEnd bound the 24h study-day window used
-    // for inclusion (segments are matched by their real timestamp so a session
-    // that crossed midnight stays on the day it started).
-    //   1) logged segments (the real intervals of finished sessions)
-    //   2) sessions with no segments (manual entries / pre-migration) → one block
-    //   3) live segments of an in-progress session (the open one is `live`)
-    $base     = "IF(CURTIME() < '07:00:00', CURDATE() - INTERVAL 1 DAY, CURDATE())";
+    // `recap` is the current study day's timeline; `recap_prev` is the previous
+    // study day's, so the dock can flip to a "Gestern" (yesterday) view.
+    return [
+        "me"        => $me,
+        "studying"  => $studying,
+        "recap"     => studyRecap($pdo, 0),
+        "recap_prev"=> studyRecap($pdo, 1),
+    ];
+}
+
+// Build one study day's recap timeline, $daysBack study days before the current
+// one (0 = today's study day, 1 = the previous one).
+//
+// The study day starts at 07:00, so before 07:00 we're still on yesterday's day
+// and post-midnight work (e.g. a 01:00 session) counts toward it. $base is that
+// day's midnight (today's, or yesterday's when it's before 07:00) shifted back
+// $daysBack days — positions stay minutes-from-midnight so the client maps them
+// onto its 07:00 → 06:00 axis; $winStart/$winEnd bound the 24h study-day window
+// used for inclusion (segments are matched by their real timestamp so a session
+// that crossed midnight stays on the day it started).
+//   1) logged segments (the real intervals of finished sessions)
+//   2) sessions with no segments (manual entries / pre-migration) → one block
+//   3) live segments of an in-progress session (the open one is `live`) — only
+//      on the current study day, since they're happening right now.
+function studyRecap(PDO $pdo, int $daysBack = 0): array
+{
+    $base     = "(IF(CURTIME() < '07:00:00', CURDATE() - INTERVAL 1 DAY, CURDATE()) - INTERVAL $daysBack DAY)";
     $winStart = "($base + INTERVAL 7 HOUR)";   // 07:00 of the study day
     $winEnd   = "($base + INTERVAL 31 HOUR)";  // 07:00 the next morning
+
+    $liveUnion = $daysBack === 0 ? "
+            UNION ALL
+
+            SELECT
+                u.username,
+                st.module_name AS module,
+                TIMESTAMPDIFF(MINUTE, $base, seg.started_at) AS start_min,
+                TIMESTAMPDIFF(MINUTE, $base, COALESCE(seg.ended_at, NOW())) AS end_min,
+                TIMESTAMPDIFF(SECOND, seg.started_at, COALESCE(seg.ended_at, NOW())) AS seconds,
+                (seg.ended_at IS NULL) AS live,
+                seg.started_at AS sort_at
+            FROM study_segments seg
+            JOIN study_status st ON st.user_id = seg.user_id
+            JOIN users u ON u.id = seg.user_id
+            WHERE seg.session_id IS NULL
+    " : "";
+
     $recapRows = $pdo->query("
         SELECT username, module, start_min, end_min, seconds, live, sort_at FROM (
             SELECT
@@ -97,21 +130,7 @@ function studyStatusPayload(PDO $pdo, $userId): array
             JOIN users u ON u.id = ss.user_id
             WHERE ss.studied_on = ($base)
               AND NOT EXISTS (SELECT 1 FROM study_segments x WHERE x.session_id = ss.id)
-
-            UNION ALL
-
-            SELECT
-                u.username,
-                st.module_name AS module,
-                TIMESTAMPDIFF(MINUTE, $base, seg.started_at) AS start_min,
-                TIMESTAMPDIFF(MINUTE, $base, COALESCE(seg.ended_at, NOW())) AS end_min,
-                TIMESTAMPDIFF(SECOND, seg.started_at, COALESCE(seg.ended_at, NOW())) AS seconds,
-                (seg.ended_at IS NULL) AS live,
-                seg.started_at AS sort_at
-            FROM study_segments seg
-            JOIN study_status st ON st.user_id = seg.user_id
-            JOIN users u ON u.id = seg.user_id
-            WHERE seg.session_id IS NULL
+            $liveUnion
         ) blocks
         ORDER BY sort_at
     ")->fetchAll(PDO::FETCH_ASSOC);
@@ -128,5 +147,5 @@ function studyStatusPayload(PDO $pdo, $userId): array
         ];
     }
 
-    return ["me" => $me, "studying" => $studying, "recap" => $recap];
+    return $recap;
 }
