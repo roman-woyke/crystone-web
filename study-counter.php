@@ -484,6 +484,23 @@ main.container {
     box-shadow: var(--glow-violet);
 }
 
+/* Primary dock button: "I'm studying" is green; once active it becomes the red
+   "Stop session". (Id selectors so they win over the generic .active above.) */
+#studying-toggle {
+    background: var(--success);
+    border-color: transparent;
+    color: #06251a;
+    box-shadow: none;
+}
+#studying-toggle:hover { filter: brightness(1.08); }
+
+#studying-toggle.active {
+    background: var(--danger);
+    color: #fff;
+    box-shadow: none;
+}
+#studying-toggle.active:hover { filter: brightness(1.08); }
+
 .studying-toggle:disabled {
     opacity: 0.55;
     cursor: not-allowed;
@@ -514,11 +531,17 @@ main.container {
     color: var(--info, #38bdf8);
 }
 
+/* "Leave library" (active) — a muted, less-saturated red. */
 .studying-bib.active {
-    background: var(--info, #38bdf8);
-    border-color: transparent;
+    background: rgba(239, 68, 68, 0.5);
+    border-color: rgba(239, 68, 68, 0.55);
     color: #fff;
-    box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
+    box-shadow: none;
+}
+.studying-bib.active:hover {
+    background: rgba(239, 68, 68, 0.62);
+    border-color: rgba(239, 68, 68, 0.7);
+    color: #fff;
 }
 
 /* On-break sub-container */
