@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Style rules
+
+- Never use emojis in code, comments, or any output — this project is emoji-free.
+
 ## What this is
 
 A shared PHP/MySQL leaderboard for tracking internship applications. Three people each get their own deployed instance (roman, basti, ben) on the same server, each backed by a separate database. The repo is identical across all three branches — only the database credentials differ.
