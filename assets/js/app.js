@@ -95,76 +95,120 @@
         window.initCountUps(document);
     });
 
-    // Interactive dot-grid background
+    // Interactive dot-grid background — fluid / spring physics
     document.addEventListener("DOMContentLoaded", function () {
         var canvas = document.getElementById("dot-grid");
         if (!canvas) return;
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
         var ctx = canvas.getContext("2d");
-        var SPACING    = 36;
-        var DOT_R      = 1.5;
-        var REPEL_R    = 120;
-        var REPEL_STR  = 70;
-        var IDLE_AMP   = 4;
-        var IDLE_SPEED = 0.00075;
+
+        // Grid
+        var SPACING  = 36;
+        var DOT_R    = 1.5;
+
+        // Spring physics per dot (SI-like: distance in px, time in s)
+        var SPRING   = 18;   // stiffness  (s^-2)   — higher = snappier return
+        var DAMP     = 5.5;  // damping    (s^-1)   — higher = less oscillation
+        // ζ = DAMP / (2*sqrt(SPRING)) ≈ 0.65  →  underdamped, ~1 visible oscillation
+
+        // Cursor drag
+        var DRAG_R   = 160;  // influence radius (px)
+        var DRAG_STR = 5;    // cursor-velocity → dot-velocity multiplier
+
+        // Idle sway (subtle, on top of physics)
+        var IDLE_AMP = 2;
+        var IDLE_SPD = 0.0005;
 
         var dots = [];
         var mx = -9999, my = -9999;
+        var prevMx = -9999, prevMy = -9999;
 
         function build() {
             canvas.width  = window.innerWidth;
             canvas.height = window.innerHeight;
-            dots = [];
             var cols = Math.ceil(canvas.width  / SPACING);
             var rows = Math.ceil(canvas.height / SPACING);
+            dots = [];
             for (var r = 0; r <= rows; r++) {
                 for (var c = 0; c <= cols; c++) {
                     dots.push({
                         bx: c * SPACING,
                         by: r * SPACING,
+                        ox: 0, oy: 0,  // physics offset from base
+                        vx: 0, vy: 0,  // velocity
                         px: Math.random() * Math.PI * 2,
                         py: Math.random() * Math.PI * 2,
-                        fx: 0.6 + Math.random() * 0.8,
-                        fy: 0.6 + Math.random() * 0.8
+                        fx: 0.5 + Math.random() * 0.8,
+                        fy: 0.5 + Math.random() * 0.8
                     });
                 }
             }
         }
 
         document.addEventListener("mousemove", function (e) { mx = e.clientX; my = e.clientY; });
-        document.addEventListener("mouseleave", function ()  { mx = -9999;     my = -9999;     });
+        document.addEventListener("mouseleave", function ()  { mx = -9999;    my = -9999;    });
 
-        var t0 = null;
+        var t0 = null, prevTs = null;
 
         function frame(ts) {
-            if (t0 === null) t0 = ts;
-            var t = ts - t0;
+            if (t0 === null) { t0 = ts; prevTs = ts; }
+            var t  = ts - t0;
+            var dt = Math.min((ts - prevTs) / 1000, 0.05); // seconds, capped at 50 ms
+            prevTs = ts;
+
+            // cursor velocity this frame (px/frame, then scaled by DRAG_STR)
+            var cvx = 0, cvy = 0;
+            if (prevMx > -9000 && mx > -9000) {
+                cvx = (mx - prevMx) * DRAG_STR;
+                cvy = (my - prevMy) * DRAG_STR;
+            }
+            prevMx = mx;
+            prevMy = my;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            for (var i = 0; i < dots.length; i++) {
-                var d    = dots[i];
-                var ix   = Math.sin(t * IDLE_SPEED * d.fx + d.px) * IDLE_AMP;
-                var iy   = Math.sin(t * IDLE_SPEED * d.fy + d.py) * IDLE_AMP;
-                var dx   = d.bx - mx;
-                var dy   = d.by - my;
-                var dist = Math.sqrt(dx * dx + dy * dy);
-                var rx   = 0, ry = 0;
+            // single batched path — all dots same colour, one fill() call
+            ctx.fillStyle = "rgba(255,255,255,0.22)";
+            ctx.beginPath();
 
-                if (dist < REPEL_R && dist > 0) {
-                    var force = (1 - dist / REPEL_R) * REPEL_STR;
-                    rx = (dx / dist) * force;
-                    ry = (dy / dist) * force;
+            for (var i = 0; i < dots.length; i++) {
+                var d = dots[i];
+
+                // --- cursor drag: push dot in the direction the cursor moved ---
+                if (cvx !== 0 || cvy !== 0) {
+                    var dx   = d.bx - mx;
+                    var dy   = d.by - my;
+                    var dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < DRAG_R) {
+                        var inf = 1 - dist / DRAG_R;
+                        inf = inf * inf;          // quadratic falloff
+                        d.vx += cvx * inf;
+                        d.vy += cvy * inf;
+                    }
                 }
 
-                ctx.beginPath();
-                ctx.arc(d.bx + ix + rx, d.by + iy + ry, DOT_R, 0, Math.PI * 2);
-                ctx.fillStyle = dist < REPEL_R
-                    ? "rgba(255,255,255," + (0.18 + (1 - dist / REPEL_R) * 0.22) + ")"
-                    : "rgba(255,255,255,0.18)";
-                ctx.fill();
+                // --- spring: pull offset back toward (0,0) ---
+                // --- damping: resist velocity                ---
+                var ax = -SPRING * d.ox - DAMP * d.vx;
+                var ay = -SPRING * d.oy - DAMP * d.vy;
+                d.vx += ax * dt;
+                d.vy += ay * dt;
+                d.ox += d.vx * dt;
+                d.oy += d.vy * dt;
+
+                // --- idle sway (sinusoidal, independent per dot) ---
+                var ix = Math.sin(t * IDLE_SPD * d.fx + d.px) * IDLE_AMP;
+                var iy = Math.sin(t * IDLE_SPD * d.fy + d.py) * IDLE_AMP;
+
+                var x = d.bx + d.ox + ix;
+                var y = d.by + d.oy + iy;
+
+                ctx.moveTo(x + DOT_R, y);
+                ctx.arc(x, y, DOT_R, 0, Math.PI * 2);
             }
+
+            ctx.fill();
 
             requestAnimationFrame(frame);
         }
