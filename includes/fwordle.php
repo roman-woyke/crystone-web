@@ -90,10 +90,10 @@ function fwordleSuggestions(int $len, int $userId, string $forDate, int $count =
 
 // ── Day length + lifecycle ───────────────────────────────────────────────────
 
-// Weighted random length: 5→50%, 6→25%, 7→15%, 8→6%, 9→3%, 10→1%.
+// Weighted random length: 5→30%, 6→30%, 7→20%, 8→10%, 9→5%, 10→5%.
 function fwordleRollLength(): int
 {
-    $weights = [5 => 50, 6 => 25, 7 => 15, 8 => 6, 9 => 3, 10 => 1];
+    $weights = [5 => 30, 6 => 30, 7 => 20, 8 => 10, 9 => 5, 10 => 5];
     $r = mt_rand(1, 100);
     $cum = 0;
     foreach ($weights as $len => $w) {
