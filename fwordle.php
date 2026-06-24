@@ -818,6 +818,20 @@ main.container { max-width: 1280px; }
 
     function applyHint(type, board) {
         if (busy || STATE.me.finished) return;
+
+        // Warn before spending — armor lands here right after its click, reveal/
+        // place right after a board is picked.
+        const names = { armor: "Armor (+1 guess)", orange: "Reveal (+2 🟨)", green: "Place (+1 🟩)" };
+        const cost = STATE.me.free_joker
+            ? "This uses your one free joker (you have no streak)."
+            : "This costs you 1 🔥 streak.";
+        if (!confirm(`Use ${names[type] || "this joker"}?\n\n${cost}`)) {
+            pendingHint = null;
+            renderJokers();
+            renderBoards();
+            return;
+        }
+
         pendingHint = null;
         busy = true;
         setMsg("");
