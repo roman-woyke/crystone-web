@@ -1344,11 +1344,10 @@ main.container {
              is just for back-filling a past session by hand, so it starts
              collapsed behind a button. -->
         <div class="log-collapsed" id="log-collapsed">
-            <h2>Log a session</h2>
-            <p class="muted log-collapsed-hint">Track time live with <strong>“I'm studying”</strong> in the panel, or add a past session by hand.</p>
+            <h2>Session Management</h2>
             <div class="log-collapsed-actions">
-                <button type="button" class="btn" id="manual-toggle">✍️ Manual logging</button>
-                <button type="button" class="btn" id="manage-toggle">🗂️ Manage previous sessions</button>
+                <button type="button" class="btn" id="manual-toggle">Manual logging</button>
+                <button type="button" class="btn" id="manage-toggle">Manage previous sessions</button>
             </div>
         </div>
 
