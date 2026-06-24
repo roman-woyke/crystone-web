@@ -129,8 +129,10 @@ main.container {
     flex-direction: column;
     padding: 16px 18px;
     overflow: hidden;
-    /* Solid (not backdrop-filter) so the 3D flip stays crisp. */
-    background: var(--solid-glass);
+    /* Fully OPAQUE (not the 0.85 --solid-glass): the 3D flip's backface-visibility
+       isn't honored on every browser/GPU, so a translucent face lets the mirrored
+       other side bleed through. An opaque background blocks that everywhere. */
+    background: var(--bg-1);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
