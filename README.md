@@ -82,19 +82,6 @@ CREATE TABLE user_exams (
     FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
 );
 
--- Typing battle highscores (typing-game.php). WPM and accuracy are
--- computed server-side in api/submit-typing-score.php.
-CREATE TABLE typing_scores (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    user_id       INT NOT NULL REFERENCES users(id),
-    wpm           DECIMAL(6,2) NOT NULL,
-    accuracy      DECIMAL(5,2) NOT NULL,
-    correct_chars INT NOT NULL,
-    typed_chars   INT NOT NULL,
-    duration_ms   INT NOT NULL,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Study counter (study-counter.php). Custom modules added by users join the
 -- shared list; the default modules are the distinct exam titles from `exams`.
 CREATE TABLE study_modules (
@@ -319,13 +306,11 @@ public_html/               ← web root = this repo
 │   ├── get-score-history.php
 │   ├── get-study-data.php      ← study counter: modules + aggregated sessions
 │   ├── get-study-status.php    ← study counter: my timer + who's studying now
-│   ├── get-typing-scores.php   ← typing battle: best WPM per user
 │   ├── log-study-session.php   ← study counter: log a session (timer/manual)
 │   ├── log-time.php            ← project tracker: log time against a project
 │   ├── study-timer.php         ← study counter: persistent timer/presence state machine
 │   ├── patch-application.php
 │   ├── patch-project.php       ← project tracker: edit name/description/colour
-│   ├── submit-typing-score.php ← typing battle: validated score submission
 │   └── toggle-user-exam.php    ← exam calendar checkbox toggle
 ├── assets/
 │   ├── css/style.css      ← design tokens + shared glass components
@@ -338,8 +323,7 @@ public_html/               ← web root = this repo
 │   ├── scoring.php        ← shared scoring logic + SQL helpers
 │   ├── session.php        ← auth guard (redirects to login if not logged in)
 │   ├── start-session.php  ← session config (30-day cookie)
-│   ├── study-status.php   ← shared "currently studying" payload helper
-│   └── typing-sentences.php ← sentence corpus for the typing battle
+│   └── study-status.php   ← shared "currently studying" payload helper
 ├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
 ├── fwordle.php            ← daily multi-board multiplayer Wordle
@@ -351,6 +335,5 @@ public_html/               ← web root = this repo
 ├── register.php
 ├── score-chart.php        ← chart partial (included by leaderboard.php)
 ├── score-table.php        ← table partial (included by leaderboard.php)
-├── study-counter.php      ← study session tracker (timer + manual, weekly chart)
-└── typing-game.php        ← 60-second typing battle with highscores
+└── study-counter.php      ← study session tracker (timer + manual, weekly chart)
 ```

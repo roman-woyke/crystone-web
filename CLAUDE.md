@@ -50,8 +50,6 @@ All return plain text on error (non-200 status) or their payload on success:
 | `api/get-score-history.php` | GET | Daily cumulative scores per user (for the chart line) |
 | `api/get-raw-events.php` | GET | Raw history rows with score deltas (for chart tooltips) |
 | `api/toggle-user-exam.php` | POST | Toggle exam selection for the calendar (uses username, not user_id) |
-| `api/submit-typing-score.php` | POST | Save a typing-battle run; WPM/accuracy computed server-side from raw counters with anti-cheat bounds; returns JSON |
-| `api/get-typing-scores.php` | GET | Best WPM per user plus run counts (typing-battle highscores) |
 | `api/log-study-session.php` | POST | Log a study session (timer or manual); validates duration/date/module, creates the module if `new_module` is new; returns JSON |
 | `api/get-study-data.php` | GET | Study-counter data: module list (exam titles + custom, with `custom` flag) and sessions aggregated per user/module/day |
 | `api/study-timer.php` | POST | Single state machine for `study_status` (`action` = start/presence/pause/resume/set_module/reset/stop/log/library); `presence` starts the "I'm studying" stopwatch and accepts an optional starting `module`/`new_module` (the UI prompts for one up front); `pause`/`resume` work on either mode; `set_module` assigns/switches the running session's module (stamping each `study_segments` interval with its module — the first pick stamps the open interval in place, a real switch closes it and opens a fresh one, so the session splits into per-module sub-sessions); `library` toggles the BIB ("at the library") flag without bumping `updated_at` so a paused break timer keeps ticking; `log` takes `sessions` (JSON array of `{module, seconds}`) and writes **one `study_sessions` row per kept module**, **trimming that module's intervals from the end** down to the requested seconds (so a forgotten tail can be cut), and stamps `at_library`; returns `{me, studying}` (`me.parts` is the per-module live breakdown). `start`/mode=`timer` remain for legacy rows but are no longer triggered by the UI |
@@ -87,10 +85,6 @@ All chart JS is inline in `score-chart.php`; `assets/js/app.js` carries only sit
 ### Landing page
 
 `index.php` at the repo root is a standalone marketing page (it does not use `header.php`/`footer.php`). It is reachable logged-out and renders aggregate stats server-side via direct PDO queries wrapped in `try/catch` (dashes on DB failure). Logged-in visitors see dashboard CTAs instead of being redirected. It does not conflict with the server-root `index.php` outside the repo.
-
-### Typing battle
-
-`typing-game.php` (auth-guarded) runs a 60-second typing round over the sentence corpus in `includes/typing-sentences.php`. The client submits only raw counters (`correct_chars`, `typed_chars`, `duration_ms`); `api/submit-typing-score.php` validates bounds (duration 55–65s, WPM ≤ 220, `correct <= typed`, `typed <= 2500`) and computes WPM/accuracy server-side into the `typing_scores` table.
 
 ### Study counter
 
