@@ -74,63 +74,74 @@ main.container { max-width: 1280px; }
     .fw-boards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* ── Hint row (one cell per board, same columns as the boards) ───────────── */
-.fw-hints {
+/* ── Jokers: one shared bar of 3 buttons (doubles as the legend) ─────────── */
+.fw-jokers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.fw-joker-btn {
+    width: auto;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    text-align: left;
+}
+.fw-joker-btn .sw {
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.fw-joker-btn .jk-sub { color: var(--text-3); font-size: 0.72rem; }
+.fw-joker-btn.grey   .sw { background: var(--fw-grey); }
+.fw-joker-btn.orange .sw { background: var(--fw-orange); }
+.fw-joker-btn.green  .sw { background: var(--fw-green); }
+.fw-joker-btn.active {
+    border-color: var(--violet);
+    box-shadow: var(--glow-violet);
+}
+.fw-joker-btn.used {
+    opacity: 0.45;
+    cursor: default;
+}
+.fw-joker-btn[disabled] { cursor: not-allowed; }
+
+.fw-joker-hint { margin: 2px 0 0; min-height: 1em; font-size: 0.82rem; color: var(--violet); }
+
+/* While picking a board for a joker, boards that can take it light up. */
+.fw-board.pickable {
+    cursor: pointer;
+    border-color: rgba(139, 92, 246, 0.7);
+    box-shadow: var(--glow-violet);
+}
+.fw-board.pickable:hover { background: var(--grad-accent-soft); }
+
+/* ── Per-board hint shown as an extra board row beneath each board ───────── */
+.fw-hint-rows {
     display: grid;
     grid-template-columns: repeat(var(--boards, 4), minmax(0, 1fr));
     gap: 14px;
-    margin-bottom: 8px;
+    margin: -10px 0 22px;
 }
 @media (max-width: 600px) {
-    .fw-hints { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fw-hint-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-.fw-hint-cell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 5px;
-    min-height: 30px;
+.fw-hint-rows .fw-board {
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.02);
 }
-
-.fw-hint-btn {
-    width: auto;
-    margin: 0;
-    padding: 4px 8px;
-    font-size: 0.9rem;
-    line-height: 1;
-    border-radius: 7px;
-    opacity: 0.85;
+.fw-hint-rows .fw-empty-slot { visibility: hidden; }
+.fw-hint-rows .fw-board-head {
+    margin-bottom: 6px;
+    font-size: 0.66rem;
 }
-.fw-hint-btn:hover { opacity: 1; }
-.fw-hint-btn.grey   { border-color: var(--fw-grey); }
-.fw-hint-btn.orange { border-color: var(--fw-orange); }
-.fw-hint-btn.green  { border-color: var(--fw-green); }
-
-.fw-hint-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: var(--radius-full);
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 0.82rem;
-    letter-spacing: 0.06em;
-    color: #fff;
-}
-.fw-hint-chip small {
-    font-family: var(--font-body);
-    font-weight: 500;
-    font-size: 0.62rem;
-    letter-spacing: 0;
-    opacity: 0.85;
-    text-transform: uppercase;
-}
-.fw-hint-chip.grey   { background: var(--fw-grey); }
-.fw-hint-chip.orange { background: var(--fw-orange); }
-.fw-hint-chip.green  { background: var(--fw-green); }
 
 .fw-board {
     padding: 14px;
@@ -474,10 +485,14 @@ main.container { max-width: 1280px; }
 
     <div class="fw-status" id="fw-status"></div>
 
-    <!-- One hint cell per board (aligned above the boards). -->
-    <div class="fw-hints" id="fw-hints"></div>
+    <!-- Shared joker bar (also the legend); click one, then pick a board. -->
+    <div class="fw-jokers" id="fw-jokers"></div>
+    <p class="fw-joker-hint" id="fw-joker-hint"></p>
 
     <div class="fw-boards" id="fw-boards"></div>
+
+    <!-- Per-board hint, shown as an extra board row under each board. -->
+    <div class="fw-hint-rows" id="fw-hint-rows"></div>
 
     <div class="fw-controls" id="fw-controls">
         <div class="fw-kb-wrap">
@@ -513,14 +528,17 @@ main.container { max-width: 1280px; }
     // used to push a shorter word into position). Capped at the day's length.
     let buffer = "";
     let busy = false;
-    let kbBoard = 0;   // which board's letter colours the keyboard shows
+    let kbBoard = 0;       // which board's letter colours the keyboard shows
+    let pendingHint = null; // a joker type awaiting a board pick
 
     const L = () => STATE.length;
 
     // ── DOM refs ───────────────────────────────────────────────────────────
     const statusEl  = document.getElementById("fw-status");
     const boardsEl   = document.getElementById("fw-boards");
-    const hintsEl    = document.getElementById("fw-hints");
+    const jokersEl   = document.getElementById("fw-jokers");
+    const jokerHintEl = document.getElementById("fw-joker-hint");
+    const hintRowsEl = document.getElementById("fw-hint-rows");
     const keyboardEl = document.getElementById("fw-keyboard");
     const selectorEl = document.getElementById("fw-kb-selector");
     const msgEl      = document.getElementById("fw-msg");
@@ -578,12 +596,14 @@ main.container { max-width: 1280px; }
 
         const owned = me.owned || [];
         const answers = me.answers || [];
+        const pickSet = pendingHint ? new Set(eligibleBoards()) : null;
 
         for (let b = 0; b < n; b++) {
             const isOwned = owned.includes(b);
             const solved = me.solved_boards[b];
             const failed = me.finished && !solved;
-            html += `<div class="fw-board ${solved ? "solved" : ""} ${failed ? "failed" : ""}">`;
+            const pickable = pickSet && pickSet.has(b);
+            html += `<div class="fw-board ${solved ? "solved" : ""} ${failed ? "failed" : ""} ${pickable ? "pickable" : ""}" data-board="${b}">`;
             const badge = isOwned
                 ? '<span class="fw-check">★ your word</span>'
                 : (solved ? '<span class="fw-check">✓ solved</span>' : "");
@@ -635,55 +655,108 @@ main.container { max-width: 1280px; }
             html += `</div>`; // board
         }
         boardsEl.innerHTML = html;
+
+        // When a joker is pending, clicking an eligible board applies it.
+        if (pendingHint) {
+            boardsEl.querySelectorAll(".fw-board.pickable").forEach(el =>
+                el.addEventListener("click", () => applyHint(pendingHint, parseInt(el.dataset.board, 10))));
+        }
     }
 
-    // ── Hints (jokers): one cell per board, aligned above the boards ──────
+    // ── Jokers (hints): one shared bar of 3 buttons, doubling as the legend.
+    //    Click a joker, then pick a board to apply it to. ────────────────────
     const HINT_TYPES = [
-        { type: "grey",   icon: "⬛", title: "Grey out 5 absent letters" },
-        { type: "orange", icon: "🟧", title: "Reveal a letter that's in the word" },
-        { type: "green",  icon: "🟩", title: "Reveal a letter in its correct spot" },
+        { type: "grey",   text: "Grey — greys 5 absent letters" },
+        { type: "orange", text: "Orange — a letter in the word" },
+        { type: "green",  text: "Green — a letter in its spot" },
     ];
 
-    function hintChipHtml(h) {
-        if (h.type === "grey")   return `<span class="fw-hint-chip grey">${h.letters.map(c => c.toUpperCase()).join("")}</span>`;
-        if (h.type === "orange") return `<span class="fw-hint-chip orange">${h.letter.toUpperCase()}<small>in word</small></span>`;
-        if (h.type === "green")  return `<span class="fw-hint-chip green">${h.letter.toUpperCase()}<small>spot ${h.pos + 1}</small></span>`;
-        return "";
+    // Boards a joker can still target: unsolved, not yours, no joker yet.
+    function eligibleBoards() {
+        const me = STATE.me;
+        if (me.finished) return [];
+        const usedBoards = me.hint_boards_used || [];
+        const owned = me.owned || [];
+        const out = [];
+        for (let b = 0; b < STATE.num_boards; b++) {
+            if (!me.solved_boards[b] && !owned.includes(b) && !usedBoards.includes(b)) out.push(b);
+        }
+        return out;
     }
 
-    function renderHints() {
+    function renderJokers() {
+        const me = STATE.me;
+        const typesUsed = me.hint_types_used || [];
+        const canPick = eligibleBoards().length > 0;
+
+        // Drop a stale pending pick if it's no longer usable.
+        if (pendingHint && (me.finished || !canPick || typesUsed.includes(pendingHint))) pendingHint = null;
+
+        jokersEl.innerHTML = HINT_TYPES.map(t => {
+            const used = typesUsed.includes(t.type);
+            const active = pendingHint === t.type;
+            const dis = (used || me.finished || !canPick) ? " disabled" : "";
+            return `<button type="button" class="fw-joker-btn ${t.type}${used ? " used" : ""}${active ? " active" : ""}" data-type="${t.type}"${dis}>
+                <span class="sw"></span><span>${used ? "✓ " : ""}${t.text}</span>
+            </button>`;
+        }).join("");
+
+        jokersEl.querySelectorAll(".fw-joker-btn").forEach(btn => {
+            if (!btn.disabled) btn.addEventListener("click", () => selectHint(btn.dataset.type));
+        });
+
+        jokerHintEl.textContent = pendingHint
+            ? `Pick a board for the ${pendingHint} joker (click the joker again to cancel).`
+            : "";
+    }
+
+    function selectHint(type) {
+        if (busy || STATE.me.finished) return;
+        pendingHint = (pendingHint === type) ? null : type; // toggle
+        renderJokers();
+        renderBoards(); // refresh the pickable highlight
+    }
+
+    // The used hint shown as an extra board row beneath the board.
+    function hintRowHtml(h, len) {
+        const cells = new Array(len).fill(null);
+        if (h.type === "green")       cells[h.pos] = { ch: h.letter, cls: "green" };
+        else if (h.type === "orange") cells[0]     = { ch: h.letter, cls: "orange" };
+        else if (h.type === "grey")   h.letters.forEach((c, i) => { if (i < len) cells[i] = { ch: c, cls: "grey" }; });
+        let html = `<div class="fw-grid" style="--cols:${len}">`;
+        for (let i = 0; i < len; i++) {
+            const c = cells[i];
+            html += c ? cell(c.ch.toUpperCase(), c.cls) : cell("", "empty");
+        }
+        return html + `</div>`;
+    }
+
+    function renderHintRows() {
         const me = STATE.me;
         const n = STATE.num_boards;
-        if (n === 0) { hintsEl.innerHTML = ""; return; }
-        hintsEl.style.setProperty("--boards", n);
+        if (n === 0 || !(me.hints || []).length) { hintRowsEl.innerHTML = ""; return; }
+        hintRowsEl.style.setProperty("--boards", n);
 
         const byBoard = {};
         (me.hints || []).forEach(h => { byBoard[h.board] = h; });
-        const typesUsed = me.hint_types_used || [];
-        const owned = me.owned || [];
+        const len = L();
 
         let html = "";
         for (let b = 0; b < n; b++) {
-            html += `<div class="fw-hint-cell">`;
-            if (byBoard[b]) {
-                html += hintChipHtml(byBoard[b]);
-            } else if (!me.finished && !me.solved_boards[b] && !owned.includes(b)) {
-                html += HINT_TYPES
-                    .filter(t => !typesUsed.includes(t.type))
-                    .map(t => `<button type="button" class="fw-hint-btn ${t.type}" data-type="${t.type}" data-board="${b}" title="${t.title}">${t.icon}</button>`)
-                    .join("");
-            }
-            html += `</div>`;
+            const h = byBoard[b];
+            if (!h) { html += `<div class="fw-board fw-empty-slot"></div>`; continue; }
+            const label = h.type === "grey" ? "not in word" : h.type === "orange" ? "in word" : "spot " + (h.pos + 1);
+            html += `<div class="fw-board">
+                <div class="fw-board-head"><span>Board ${b + 1} hint</span><span>${label}</span></div>
+                ${hintRowHtml(h, len)}
+            </div>`;
         }
-        // Nothing to offer or show → collapse the row entirely.
-        hintsEl.innerHTML = /fw-hint-(btn|chip)/.test(html) ? html : "";
-
-        hintsEl.querySelectorAll(".fw-hint-btn").forEach(btn =>
-            btn.addEventListener("click", () => applyHint(btn.dataset.type, parseInt(btn.dataset.board, 10))));
+        hintRowsEl.innerHTML = html;
     }
 
     function applyHint(type, board) {
         if (busy || STATE.me.finished) return;
+        pendingHint = null;
         busy = true;
         setMsg("");
         const body = new FormData();
@@ -1000,7 +1073,7 @@ main.container { max-width: 1280px; }
             .then(state => {
                 // Don't clobber an in-progress guess: the local buffer is kept.
                 STATE = state;
-                renderBoards(); renderStatus(); renderHints();
+                renderStatus(); renderJokers(); renderBoards(); renderHintRows();
                 renderControls(); renderKeyboard(); renderStats(); renderOpponents(); renderChoose();
             })
             .catch(() => {});
@@ -1008,8 +1081,9 @@ main.container { max-width: 1280px; }
 
     function renderAll() {
         renderStatus();
+        renderJokers();
         renderBoards();
-        renderHints();
+        renderHintRows();
         renderControls();
         renderKeyboard();
         renderStats();
