@@ -431,18 +431,44 @@ main.container {
 
 .studying-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
     flex-shrink: 0;
     margin-bottom: 12px;
 }
 
 .studying-toggle {
-    width: auto;
+    width: 100%;
     margin: 0;
-    padding: 7px 14px;
+    padding: 9px 14px;
     font-size: 0.85rem;
     white-space: nowrap;
+}
+
+/* Current-module display above the in-session action buttons. */
+.my-session {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: var(--grad-accent-soft);
+}
+
+.my-session-label {
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.my-session-module {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-1);
 }
 
 .studying-toggle.active {
@@ -469,10 +495,8 @@ main.container {
     color: var(--warning);
 }
 
-/* BIB ("at the library") button — small accent button, independent flag. */
+/* BIB ("at the library") button — accent button, independent flag. */
 .studying-bib {
-    padding: 5px 10px;
-    font-size: 0.78rem;
     color: var(--info, #38bdf8);
     border-color: rgba(56, 189, 248, 0.4);
     background: rgba(56, 189, 248, 0.1);
@@ -851,8 +875,16 @@ main.container {
 /* Collapsed manual-logging card (live tracking moved to the dock). */
 .log-collapsed h2 { margin: 0 0 8px; font-size: 1.15rem; }
 .log-collapsed-hint { margin: 0 0 16px; font-size: 0.86rem; }
-.log-collapsed #manual-toggle { width: auto; margin: 0; }
-.manual-body h2 { margin: 0 0 16px; font-size: 1.15rem; }
+.log-collapsed-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.log-collapsed-actions .btn { width: auto; margin: 0; }
+.manual-body-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+.manual-body-head h2 { margin: 0; font-size: 1.15rem; }
+#manual-collapse { font-size: 1.3rem; line-height: 1; }
 
 /* Module button in the studying dock (carries the current module name). */
 .studying-module {
@@ -884,24 +916,124 @@ main.container {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.03);
-    cursor: pointer;
 }
 
-.stop-part input { width: auto; margin: 0; cursor: pointer; }
 .stop-part .module-dot { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
-.stop-part-name { flex: 1; font-weight: 600; font-size: 0.9rem; }
+.stop-part-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .stop-part-time {
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 0.9rem;
     font-variant-numeric: tabular-nums;
+    min-width: 56px;
+    text-align: right;
 }
 
+/* − (trim time) and × (drop session) controls on a stop row. */
+.stop-part-btn {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+}
+.stop-part-btn.minus { font-size: 1.2rem; }
+.stop-part-btn.remove { color: var(--danger); border-color: rgba(248, 113, 113, 0.4); }
+.stop-part-btn.remove:hover { background: rgba(248, 113, 113, 0.14); }
+
+.stop-part.removed {
+    opacity: 0.45;
+    border-style: dashed;
+}
+.stop-part.removed .stop-part-name { text-decoration: line-through; }
+
 .stop-part.disabled {
-    cursor: default;
     opacity: 0.6;
     border-style: dashed;
 }
+
+/* ── Manage previous sessions modal ─────────────────────────────────────── */
+.manage-dialog { max-width: 560px; width: 100%; }
+.manage-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.manage-head h3 { margin: 0; }
+.manage-week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.manage-week-nav .btn { width: auto; margin: 0; padding: 6px 12px; line-height: 1; }
+.manage-week-nav .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.manage-list {
+    max-height: 52vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.manage-day-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin: 4px 0 6px;
+}
+.manage-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+}
+.manage-row .module-dot { width: 11px; height: 11px; border-radius: 4px; flex-shrink: 0; }
+.manage-row-main { flex: 1; min-width: 0; }
+.manage-row-mod {
+    font-weight: 600;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.manage-row-meta { font-size: 0.74rem; color: var(--text-3); }
+.manage-row-lib { color: var(--info, #38bdf8); }
+.manage-row-time {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+.manage-row-del {
+    width: 28px; height: 28px; flex-shrink: 0; margin: 0; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1rem; line-height: 1; border-radius: var(--radius-sm);
+    color: var(--danger); border-color: rgba(248, 113, 113, 0.4);
+}
+.manage-row-del:hover { background: rgba(248, 113, 113, 0.14); }
+.manage-empty { color: var(--text-3); text-align: center; padding: 24px 0; }
 
 /* ── Chart ──────────────────────────────────────────────────────────────── */
 
@@ -1208,11 +1340,17 @@ main.container {
         <div class="log-collapsed" id="log-collapsed">
             <h2>Log a session</h2>
             <p class="muted log-collapsed-hint">Track time live with <strong>“I'm studying”</strong> in the panel, or add a past session by hand.</p>
-            <button type="button" class="btn" id="manual-toggle">✍️ Manual logging</button>
+            <div class="log-collapsed-actions">
+                <button type="button" class="btn" id="manual-toggle">✍️ Manual logging</button>
+                <button type="button" class="btn" id="manage-toggle">🗂️ Manage previous sessions</button>
+            </div>
         </div>
 
         <div class="manual-body" id="manual-body" style="display:none;">
-            <h2>Manual logging</h2>
+            <div class="manual-body-head">
+                <h2>Manual logging</h2>
+                <button type="button" class="icon-btn" id="manual-collapse" title="Collapse" aria-label="Collapse manual logging">−</button>
+            </div>
 
             <div class="module-picker">
                 <label for="module-select">Module</label>
@@ -1310,11 +1448,15 @@ main.container {
                     <h2><span class="studying-live-dot"></span> Currently studying</h2>
                     <button type="button" class="icon-btn flip-btn" id="flip-to-recap" title="Today's timeline" aria-label="Show today's timeline">⇄</button>
                 </div>
+                <div class="my-session" id="my-session" style="display:none;">
+                    <span class="my-session-label">Current module</span>
+                    <span class="my-session-module" id="my-module-name">—</span>
+                </div>
                 <div class="studying-actions">
                     <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
-                    <button type="button" class="btn studying-toggle studying-module" id="studying-module" style="display:none;">📘 Module</button>
-                    <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">BREAK</button>
-                    <button type="button" class="btn studying-toggle studying-bib" id="studying-bib" style="display:none;">📚 BIB</button>
+                    <button type="button" class="btn studying-toggle studying-module" id="studying-module" style="display:none;">Change module</button>
+                    <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">Take a break</button>
+                    <button type="button" class="btn studying-toggle studying-bib" id="studying-bib" style="display:none;">At the library</button>
                 </div>
                 <div class="face-body">
                     <div class="studying-list" id="studying-list">
@@ -1356,8 +1498,8 @@ main.container {
 <!-- ── Module picker modal (assign/switch the running session's module) ─────── -->
 <div id="module-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card">
-        <h3>Pick a module</h3>
-        <p class="muted">Switching modules keeps the time so far under the old one and starts a fresh session — both show up separately.</p>
+        <h3 id="sess-module-title">Pick a module</h3>
+        <p class="muted" id="sess-module-hint">Switching modules keeps the time so far under the old one and starts a fresh session — both show up separately.</p>
 
         <label for="sess-module-select">Module</label>
         <select id="sess-module-select">
@@ -1380,19 +1522,35 @@ main.container {
     </div>
 </div>
 
-<!-- ── Stop / log-on-stop modal (per-module checklist) ─────────────────────── -->
+<!-- ── Stop / log-on-stop modal (per-module list, trim with − / remove with ×) ── -->
 <div id="stop-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card">
-        <h3>Log this study session?</h3>
-        <p class="muted">Pick which parts of this session to save — each module is its own session. Unchecked parts are discarded.</p>
+        <h3>Log this study session</h3>
+        <p class="muted">Each module is saved as its own session. Use − to trim time (forgot to stop?), or × to drop a session.</p>
 
         <div class="stop-checklist" id="stop-checklist"></div>
 
         <div class="modal-actions">
             <button type="button" class="btn-ghost" id="stop-cancel">Cancel</button>
             <button type="button" class="btn-danger" id="stop-discard">Discard all</button>
-            <button type="button" class="btn-primary" id="stop-log">Log selected</button>
+            <button type="button" class="btn-primary" id="stop-log">Save</button>
         </div>
+    </div>
+</div>
+
+<!-- ── Manage previous sessions modal (browse a week, delete sessions) ──────── -->
+<div id="manage-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card manage-dialog">
+        <div class="manage-head">
+            <h3>Manage previous sessions</h3>
+            <button type="button" class="icon-btn" id="manage-close" title="Close" aria-label="Close">✕</button>
+        </div>
+        <div class="manage-week-nav">
+            <button type="button" class="btn" id="manage-prev" aria-label="Previous week">‹</button>
+            <span class="week-label" id="manage-week-label">This week</span>
+            <button type="button" class="btn" id="manage-next" aria-label="Next week">›</button>
+        </div>
+        <div class="manage-list" id="manage-list"></div>
     </div>
 </div>
 
@@ -1896,11 +2054,112 @@ main.container {
             .catch(err => setFeedback(err.message, true));
     }
 
-    // ── Manual logging (collapsed by default) ─────────────────────────────
+    // ── Manual logging (collapsed by default; − folds it back up) ─────────
+    const logCollapsed = document.getElementById("log-collapsed");
+    const manualBody   = document.getElementById("manual-body");
     document.getElementById("manual-toggle").addEventListener("click", () => {
-        document.getElementById("log-collapsed").style.display = "none";
-        document.getElementById("manual-body").style.display = "block";
+        logCollapsed.style.display = "none";
+        manualBody.style.display = "block";
     });
+    document.getElementById("manual-collapse").addEventListener("click", () => {
+        manualBody.style.display = "none";
+        logCollapsed.style.display = "block";
+    });
+
+    // ── Manage previous sessions (browse a week of my sessions, delete) ────
+    const manageModal    = document.getElementById("manage-modal");
+    const manageListEl   = document.getElementById("manage-list");
+    const manageWeekLbl  = document.getElementById("manage-week-label");
+    let   manageSessions = [];   // [{id, module, seconds, date, started_at, created_at, at_library}]
+    let   manageOffset   = 0;    // 0 = current week, -1 = previous, …
+
+    function openManageModal() {
+        manageOffset = 0;
+        manageListEl.innerHTML = `<p class="manage-empty">Loading…</p>`;
+        manageModal.style.display = "flex";
+        fetch(BASE_PATH + "/api/get-my-study-sessions.php")
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+            .then(res => { manageSessions = res.sessions || []; renderManageWeek(); })
+            .catch(() => { manageListEl.innerHTML = `<p class="manage-empty">Couldn't load your sessions.</p>`; });
+    }
+    function closeManageModal() { manageModal.style.display = "none"; }
+
+    function sessionClock(s) {
+        const raw = s.started_at || s.created_at;
+        if (!raw) return "";
+        const d = new Date(raw.replace(" ", "T"));
+        if (isNaN(d)) return "";
+        return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    function renderManageWeek() {
+        const today     = studyDayStart(new Date());
+        const weekStart = addDays(mondayOf(today), manageOffset * 7);
+        const weekDays  = [];
+        for (let i = 0; i < 7; i++) weekDays.push(addDays(weekStart, i));
+        const todayStr  = toDateStr(today);
+
+        manageWeekLbl.textContent = manageOffset === 0
+            ? "This week"
+            : `${weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${weekDays[6].toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        document.getElementById("manage-next").disabled = manageOffset >= 0;
+
+        // Group this week's sessions by day.
+        const byDay = {};
+        weekDays.forEach(d => { byDay[toDateStr(d)] = []; });
+        manageSessions.forEach(s => { if (s.date in byDay) byDay[s.date].push(s); });
+
+        const blocks = weekDays.map(d => {
+            const ds   = toDateStr(d);
+            const list = byDay[ds].slice().sort((a, b) =>
+                String(a.started_at || a.created_at).localeCompare(String(b.started_at || b.created_at)));
+            if (list.length === 0) return "";
+            const label = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })
+                + (ds === todayStr ? " · today" : "");
+            const rows = list.map(s => {
+                const color = moduleColor[s.module] || "#64748b";
+                const clock = sessionClock(s);
+                const meta  = [clock, s.at_library ? `<span class="manage-row-lib">📚 library</span>` : ""]
+                    .filter(Boolean).join(" · ");
+                return `<div class="manage-row" data-id="${s.id}">
+                    <span class="module-dot" style="background:${color}"></span>
+                    <div class="manage-row-main">
+                        <div class="manage-row-mod">${escapeHtml(s.module || "—")}</div>
+                        <div class="manage-row-meta">${meta}</div>
+                    </div>
+                    <span class="manage-row-time">${fmtTime(s.seconds)}</span>
+                    <button type="button" class="btn manage-row-del" data-id="${s.id}" title="Delete session">✕</button>
+                </div>`;
+            }).join("");
+            return `<div><div class="manage-day-label">${label}</div>${rows}</div>`;
+        }).join("");
+
+        manageListEl.innerHTML = blocks || `<p class="manage-empty">No sessions this week.</p>`;
+    }
+
+    manageListEl.addEventListener("click", (e) => {
+        const btn = e.target.closest(".manage-row-del");
+        if (!btn) return;
+        const id = +btn.dataset.id;
+        if (!confirm("Delete this study session? This can't be undone.")) return;
+        const body = new FormData();
+        body.append("id", id);
+        fetch(BASE_PATH + "/api/delete-study-session.php", { method: "POST", body })
+            .then(r => { if (!r.ok) throw new Error(); return r.text(); })
+            .then(() => {
+                manageSessions = manageSessions.filter(s => s.id !== id);
+                renderManageWeek();
+                loadData();      // refresh chart + podiums
+                loadStatus();    // refresh the dock recap (segments may have gone)
+            })
+            .catch(() => alert("Couldn't delete that session."));
+    });
+
+    document.getElementById("manage-toggle").addEventListener("click", openManageModal);
+    document.getElementById("manage-close").addEventListener("click", closeManageModal);
+    manageModal.addEventListener("click", (e) => { if (e.target === manageModal) closeManageModal(); });
+    document.getElementById("manage-prev").addEventListener("click", () => { manageOffset -= 1; renderManageWeek(); });
+    document.getElementById("manage-next").addEventListener("click", () => { if (manageOffset < 0) { manageOffset += 1; renderManageWeek(); } });
 
     // ── My study state (server-backed presence session) ───────────────────
     // The live stopwatch lives in the `study_status` table (so it survives
@@ -1945,7 +2204,7 @@ main.container {
         if (extra) {
             if (extra.module)     body.append("module", extra.module);
             if (extra.new_module) body.append("new_module", extra.new_module);
-            if (extra.modules)    body.append("modules", JSON.stringify(extra.modules));
+            if (extra.sessions)   body.append("sessions", JSON.stringify(extra.sessions));
         }
         return fetch(BASE_PATH + "/api/study-timer.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Timer error."); }))
@@ -1965,6 +2224,8 @@ main.container {
     const studyingList   = document.getElementById("studying-list");
     const toggleStudyBtn = document.getElementById("studying-toggle");
     const moduleBtn      = document.getElementById("studying-module");
+    const mySession      = document.getElementById("my-session");
+    const myModuleName   = document.getElementById("my-module-name");
     const breakBtn       = document.getElementById("studying-break");
     const breakBox       = document.getElementById("studying-break-box");
     const breakList      = document.getElementById("break-list");
@@ -2199,30 +2460,23 @@ main.container {
 
         // Primary button: start the session, or stop & log it.
         if (!active) {
-            toggleStudyBtn.style.display = "";
             toggleStudyBtn.classList.remove("active");
             toggleStudyBtn.textContent = "I'm studying";
         } else {
-            toggleStudyBtn.style.display = "";
             toggleStudyBtn.classList.add("active");
-            toggleStudyBtn.textContent = "STOP";
+            toggleStudyBtn.textContent = "Stop session";
         }
 
-        // Module button — assign / switch the running session's module. Carries
-        // the current module name once one is picked.
-        if (active) {
-            moduleBtn.style.display = "";
-            moduleBtn.classList.toggle("active", !!myState.module);
-            moduleBtn.textContent = myState.module ? ("📘 " + myState.module) : "📘 Module";
-        } else {
-            moduleBtn.style.display = "none";
-            moduleBtn.classList.remove("active");
-        }
+        // Current-module display (only while active).
+        mySession.style.display = active ? "" : "none";
+        if (active) myModuleName.textContent = myState.module || "—";
 
-        // Break / resume button — works for both presence and module timers.
+        // Module / break / library actions only make sense during a session.
+        moduleBtn.style.display = active ? "" : "none";
+
         if (running) {
             breakBtn.style.display = "";
-            breakBtn.textContent = "BREAK";
+            breakBtn.textContent = "Take a break";
         } else if (active) {
             breakBtn.style.display = "";
             breakBtn.textContent = "Resume";
@@ -2234,7 +2488,7 @@ main.container {
         if (active) {
             bibBtn.style.display = "";
             bibBtn.classList.toggle("active", !!myState.atLibrary);
-            bibBtn.textContent = myState.atLibrary ? "📚 At library" : "📚 BIB";
+            bibBtn.textContent = myState.atLibrary ? "Leave library" : "At the library";
         } else {
             bibBtn.style.display = "none";
             bibBtn.classList.remove("active");
@@ -2368,41 +2622,50 @@ main.container {
         });
     }
 
-    // "I'm studying" starts a quick (module-less) session; "STOP" opens the
-    // checklist to pick which module sub-sessions to log before clearing it.
+    // "I'm studying" prompts for a module first (the session starts with it);
+    // "Stop session" opens the log modal to save/trim each module sub-session.
     toggleStudyBtn.addEventListener("click", () => {
         if (!myState.active) {
-            timerAction("presence").catch(err => setFeedback(err.message, true));
+            openModuleModal();
         } else {
             openStopModal();
         }
     });
 
-    // "BREAK" pauses whatever's running; "Resume" starts it again.
+    // "Take a break" pauses whatever's running; "Resume" starts it again.
     breakBtn.addEventListener("click", () => {
         if (!myState.active) return;
         timerAction(myState.running ? "pause" : "resume")
             .catch(err => setFeedback(err.message, true));
     });
 
-    // BIB — toggle the at-library flag. Independent from running/break: you
-    // can be at the library while studying, or paused at the library.
+    // "At the library" — toggle the at-library flag. Independent from
+    // running/break: you can be at the library while studying, or on break.
     bibBtn.addEventListener("click", () => {
         if (!myState.active) return;
         timerAction("library").catch(err => setFeedback(err.message, true));
     });
 
-    // ── Module picker modal (assign / switch the running session's module) ──
+    // ── Module picker modal (start a session, or switch its module) ─────────
     const moduleModal      = document.getElementById("module-modal");
     const sessModuleSelect = document.getElementById("sess-module-select");
     const sessNewWrap      = document.getElementById("sess-new-module-wrap");
     const sessNewInput     = document.getElementById("sess-new-module-input");
+    const sessTitle        = document.getElementById("sess-module-title");
+    const sessHint         = document.getElementById("sess-module-hint");
+    const sessSetBtn       = document.getElementById("sess-module-set");
 
     function openModuleModal() {
+        const starting = !myState.active;
+        sessTitle.textContent = starting ? "Start studying" : "Change module";
+        sessHint.textContent  = starting
+            ? "Pick a module to track this session."
+            : "Switching keeps the time so far under the old module and starts a fresh session — both show up separately.";
+        sessSetBtn.textContent = starting ? "Start studying" : "Change module";
+
         // Default to the current module when one is set.
-        if (myState.module) {
-            const opt = [...sessModuleSelect.options].find(o => o.value === myState.module);
-            if (opt) sessModuleSelect.value = myState.module;
+        if (myState.module && [...sessModuleSelect.options].some(o => o.value === myState.module)) {
+            sessModuleSelect.value = myState.module;
         }
         sessNewInput.value = "";
         sessNewWrap.classList.toggle("show", sessModuleSelect.value === "__new__");
@@ -2423,7 +2686,7 @@ main.container {
     document.getElementById("sess-module-cancel").addEventListener("click", closeModuleModal);
     moduleModal.addEventListener("click", (e) => { if (e.target === moduleModal) closeModuleModal(); });
 
-    document.getElementById("sess-module-set").addEventListener("click", () => {
+    sessSetBtn.addEventListener("click", () => {
         const extra = {};
         if (sessModuleSelect.value === "__new__") {
             const name = sessNewInput.value.trim();
@@ -2434,35 +2697,61 @@ main.container {
         } else {
             return;
         }
+        // Not studying yet → start the session with this module; otherwise switch.
+        const action = myState.active ? "set_module" : "presence";
         closeModuleModal();
-        timerAction("set_module", extra).catch(err => setFeedback(err.message, true));
+        timerAction(action, extra).catch(err => setFeedback(err.message, true));
     });
 
-    // ── Stop → per-module log checklist ────────────────────────────────────
+    // ── Stop → per-module log modal (− trims time, × drops a session) ───────
     const stopModal     = document.getElementById("stop-modal");
     const stopChecklist = document.getElementById("stop-checklist");
+    const TRIM_STEP     = 300; // seconds removed per − click (5 min)
+    let stopRows        = [];  // [{module, full, secs, removed}]
 
-    function openStopModal() {
-        const parts = myState.parts || [];
-        const rows = parts.map((p) => {
-            if (!p.module) {
+    function renderStopRows() {
+        stopChecklist.innerHTML = stopRows.map((r, i) => {
+            if (!r.module) {
                 return `<div class="stop-part disabled">
-                    <span class="muted">No module · ${fmtTime(p.seconds)} — won't be saved</span>
+                    <span class="muted">No module · ${fmtTime(r.full)} — won't be saved</span>
                 </div>`;
             }
-            const color = moduleColor[p.module] || "#64748b";
-            return `<label class="stop-part">
-                <input type="checkbox" class="stop-part-cb" value="${escapeHtml(p.module)}" checked>
+            const color = moduleColor[r.module] || "#64748b";
+            return `<div class="stop-part ${r.removed ? "removed" : ""}" data-i="${i}">
                 <span class="module-dot" style="background:${color}"></span>
-                <span class="stop-part-name">${escapeHtml(p.module)}</span>
-                <span class="stop-part-time">${fmtTime(p.seconds)}</span>
-            </label>`;
-        }).join("");
-        stopChecklist.innerHTML = rows || `<p class="muted">No study time recorded yet.</p>`;
+                <span class="stop-part-name">${escapeHtml(r.module)}</span>
+                <span class="stop-part-time">${fmtTime(r.secs)}</span>
+                <button type="button" class="btn stop-part-btn minus" data-act="minus" data-i="${i}" title="Trim 5 min" ${r.removed ? "disabled" : ""}>−</button>
+                <button type="button" class="btn stop-part-btn remove" data-act="remove" data-i="${i}" title="${r.removed ? "Restore" : "Drop this session"}">${r.removed ? "↺" : "✕"}</button>
+            </div>`;
+        }).join("") || `<p class="muted">No study time recorded yet.</p>`;
+    }
+
+    function openStopModal() {
+        stopRows = (myState.parts || []).map(p => ({
+            module:  p.module,
+            full:    p.seconds,
+            secs:    p.seconds,
+            removed: false,
+        }));
+        renderStopRows();
         stopModal.style.display = "flex";
     }
 
     function closeStopModal() { stopModal.style.display = "none"; }
+
+    stopChecklist.addEventListener("click", (e) => {
+        const btn = e.target.closest(".stop-part-btn");
+        if (!btn) return;
+        const r = stopRows[+btn.dataset.i];
+        if (!r) return;
+        if (btn.dataset.act === "minus") {
+            r.secs = Math.max(60, r.secs - TRIM_STEP); // floor at 1 min
+        } else {
+            r.removed = !r.removed;
+        }
+        renderStopRows();
+    });
 
     document.getElementById("stop-cancel").addEventListener("click", closeStopModal);
     stopModal.addEventListener("click", (e) => { if (e.target === stopModal) closeStopModal(); });
@@ -2473,14 +2762,15 @@ main.container {
         timerAction("stop").catch(err => setFeedback(err.message, true));
     });
 
-    // Log selected: keep the checked modules (one session each), drop the rest.
+    // Save: keep the non-removed modules (one session each, trimmed seconds).
     document.getElementById("stop-log").addEventListener("click", () => {
-        const modules = [...stopChecklist.querySelectorAll(".stop-part-cb:checked")]
-            .map(cb => cb.value);
+        const sessions = stopRows
+            .filter(r => r.module && !r.removed)
+            .map(r => ({ module: r.module, seconds: r.secs }));
 
         closeStopModal();
         setFeedback("Saving…", false);
-        timerAction("log", { modules })
+        timerAction("log", { sessions })
             .then(res => {
                 if (res.logged) {
                     const n = res.count || res.modules.length;

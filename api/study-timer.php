@@ -108,14 +108,23 @@ if ($action === "start") {
         $extra["custom_added"] = $customAdded;
     }
 } elseif ($action === "presence") {
-    // Quick "I'm studying" stopwatch with no module (not loggable).
+    // "I'm studying" — start a stopwatch. A module is normally picked up front
+    // (the UI prompts for it), but we tolerate a module-less start too.
     if (!$row) {
+        $module    = trim($_POST["module"]     ?? "");
+        $newModule = trim($_POST["new_module"] ?? "");
+        $resolved    = null;
+        $customAdded = false;
+        if ($module !== "" || $newModule !== "") {
+            $resolved = resolveStudyModule($pdo, $userId, $module, $newModule, $customAdded);
+        }
         $pdo->prepare("
             INSERT INTO study_status (user_id, mode, module_name, started_at, accumulated, session_start)
-            VALUES (?, 'presence', NULL, NOW(), 0, NOW())
-        ")->execute([$userId]);
+            VALUES (?, 'presence', ?, NOW(), 0, NOW())
+        ")->execute([$userId, $resolved]);
         segClearLive($pdo, $userId);
-        segOpen($pdo, $userId, null);
+        segOpen($pdo, $userId, $resolved);
+        $extra["custom_added"] = $customAdded;
     } elseif ($row["started_at"] === null) {
         // Resume whatever was paused.
         $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
@@ -199,10 +208,11 @@ if ($action === "start") {
     $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
 } elseif ($action === "log") {
     // Stop & log: the session may span several modules (one sub-session per
-    // module). The client sends `modules` — a JSON array of the module names to
-    // keep — and we write one study_sessions row per kept module, summing that
-    // module's live intervals server-side. Unchecked modules (and any un-mapped
-    // time) are discarded.
+    // module). The client sends `sessions` — a JSON array of `{module, seconds}`
+    // — listing which modules to keep and the (possibly trimmed-down) duration
+    // for each. We write one study_sessions row per kept module and trim its
+    // intervals from the END to match the requested seconds (so "I forgot to
+    // stop the timer" can be corrected). Modules not in the list are discarded.
     $extra["logged"]  = false;
     $extra["count"]   = 0;
     $extra["seconds"] = 0;
@@ -211,56 +221,99 @@ if ($action === "start") {
         // Close the currently-open interval so its elapsed time is captured.
         segClose($pdo, $userId);
 
-        $keep = json_decode($_POST["modules"] ?? "[]", true);
-        if (!is_array($keep)) {
-            $keep = [];
+        $reqList = json_decode($_POST["sessions"] ?? "[]", true);
+        if (!is_array($reqList)) {
+            $reqList = [];
         }
-        // Lower-cased set of module names to keep, for case-insensitive matching.
-        $keepLc = [];
-        foreach ($keep as $k) {
-            $keepLc[mb_strtolower(trim((string) $k))] = true;
+        // module (lower-cased) → requested seconds (0/absent = keep full).
+        $reqByMod = [];
+        foreach ($reqList as $s) {
+            if (!is_array($s)) continue;
+            $m = trim((string) ($s["module"] ?? ""));
+            if ($m === "") continue;
+            $reqByMod[mb_strtolower($m)] = (int) ($s["seconds"] ?? 0);
         }
 
-        // Group this session's live intervals by module.
-        $groups = $pdo->prepare("
-            SELECT module_name,
-                   SUM(TIMESTAMPDIFF(SECOND, started_at, ended_at)) AS seconds,
-                   MIN(started_at) AS start_at
+        // This session's live intervals, with ids/durations, grouped per module.
+        $segStmt = $pdo->prepare("
+            SELECT id, module_name, started_at,
+                   TIMESTAMPDIFF(SECOND, started_at, ended_at) AS dur
             FROM study_segments
             WHERE user_id = ? AND session_id IS NULL AND ended_at IS NOT NULL
-            GROUP BY module_name
+            ORDER BY module_name, started_at
         ");
-        $groups->execute([$userId]);
+        $segStmt->execute([$userId]);
+
+        $byMod = []; // lower => ["module"=>name, "total"=>int, "segs"=>[rows]]
+        foreach ($segStmt->fetchAll(PDO::FETCH_ASSOC) as $sr) {
+            $mod = $sr["module_name"];
+            if ($mod === null) continue; // un-mapped time isn't loggable
+            $k = mb_strtolower($mod);
+            if (!isset($byMod[$k])) {
+                $byMod[$k] = ["module" => $mod, "total" => 0, "segs" => []];
+            }
+            $byMod[$k]["total"] += (int) $sr["dur"];
+            $byMod[$k]["segs"][] = $sr;
+        }
 
         $loggedSeconds = 0;
         $loggedCount   = 0;
         $loggedModules = [];
-        foreach ($groups->fetchAll(PDO::FETCH_ASSOC) as $g) {
-            $mod  = $g["module_name"];
-            $secs = (int) $g["seconds"];
-            if ($mod === null) continue;                                  // un-mapped time isn't loggable
-            if (!isset($keepLc[mb_strtolower($mod)])) continue;            // module not checked
-            if ($secs <= 0 || $secs > 86400) continue;
+        foreach ($byMod as $k => $g) {
+            if (!isset($reqByMod[$k])) continue; // module dropped (× in the modal)
 
-            // started_at = the real sub-session start (with breaks); at_library is
-            // carried over so the "library" podium filter can replay it later.
+            $actual = (int) $g["total"];
+            $req    = (int) $reqByMod[$k];
+            // 0/absent → keep the full amount; otherwise clamp into [1, actual].
+            $target = $req <= 0 ? $actual : max(1, min($req, $actual));
+            if ($target <= 0) continue;
+
+            // Trim from the end to reach $target — drop whole trailing intervals,
+            // then shorten the last partial one (so a forgotten tail disappears
+            // from the recap too, not just from the logged total).
+            $toRemove = $actual - $target;
+            $segs = $g["segs"];
+            for ($i = count($segs) - 1; $i >= 0 && $toRemove > 0; $i--) {
+                $dur = (int) $segs[$i]["dur"];
+                if ($dur <= $toRemove) {
+                    $pdo->prepare("DELETE FROM study_segments WHERE id = ?")->execute([$segs[$i]["id"]]);
+                    $toRemove -= $dur;
+                } else {
+                    $keep   = $dur - $toRemove;
+                    $newEnd = (new DateTime($segs[$i]["started_at"]))
+                        ->modify("+{$keep} seconds")->format("Y-m-d H:i:s");
+                    $pdo->prepare("UPDATE study_segments SET ended_at = ? WHERE id = ?")
+                        ->execute([$newEnd, $segs[$i]["id"]]);
+                    $toRemove = 0;
+                }
+            }
+
+            // started_at = the real sub-session start (of the surviving intervals).
+            $startStmt = $pdo->prepare("
+                SELECT MIN(started_at) FROM study_segments
+                WHERE user_id = ? AND session_id IS NULL AND module_name = ? AND ended_at IS NOT NULL
+            ");
+            $startStmt->execute([$userId, $g["module"]]);
+            $startAt = $startStmt->fetchColumn() ?: $row["session_start"];
+
+            // at_library is carried over so the "library" podium filter can
+            // replay it later.
             $pdo->prepare("
                 INSERT INTO study_sessions (user_id, module_name, seconds, studied_on, started_at, at_library)
                 VALUES (?, ?, ?, CURDATE(), ?, ?)
-            ")->execute([$userId, $mod, $secs, $g["start_at"], (int) ($row["at_library"] ?? 0)]);
+            ")->execute([$userId, $g["module"], $target, $startAt, (int) ($row["at_library"] ?? 0)]);
 
-            // Attach this module's intervals so the recap can draw their exact
-            // spans (breaks render as the gaps between them).
+            // Attach this module's (trimmed) intervals to the new session.
             $sessionId = (int) $pdo->lastInsertId();
             $pdo->prepare("UPDATE study_segments SET session_id = ? WHERE user_id = ? AND session_id IS NULL AND module_name = ?")
-                ->execute([$sessionId, $userId, $mod]);
+                ->execute([$sessionId, $userId, $g["module"]]);
 
-            $loggedSeconds += $secs;
+            $loggedSeconds += $target;
             $loggedCount++;
-            $loggedModules[] = $mod;
+            $loggedModules[] = $g["module"];
         }
 
-        // Drop any remaining unlogged intervals (un-mapped or unchecked modules).
+        // Drop any remaining unlogged intervals (un-mapped or dropped modules).
         segClearLive($pdo, $userId);
         $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
 
