@@ -157,6 +157,12 @@ main.container {
     overflow-y: auto;
 }
 
+/* Front: a clean divider between the action buttons and the user statuses. */
+.flip-front .face-body {
+    border-top: 1px solid var(--glass-border);
+    padding-top: 16px;
+}
+
 /* Back: the timeline gets the whole card height to itself (no squashing). */
 .flip-back .face-body {
     display: flex;
