@@ -6,12 +6,14 @@
     document.addEventListener("DOMContentLoaded", function () {
         var burger = document.getElementById("nav-burger");
         var links = document.getElementById("nav-links");
+        var navbar = burger ? burger.closest(".navbar") : null;
 
         if (burger && links) {
             burger.addEventListener("click", function () {
                 var open = links.classList.toggle("open");
                 burger.classList.toggle("open", open);
                 burger.setAttribute("aria-expanded", open ? "true" : "false");
+                if (navbar) navbar.classList.toggle("nav-open", open);
             });
         }
 

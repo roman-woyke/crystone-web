@@ -404,6 +404,8 @@ textarea {
 
     background: rgba(10, 10, 20, 0.75);
     border-bottom: 1px solid var(--glass-border);
+
+    transition: background var(--t-med) var(--ease-out);
 }
 
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
@@ -532,6 +534,15 @@ textarea {
 
 .nav-logout-mobile {
     display: none;
+}
+
+.nav-links a.nav-logout-mobile {
+    color: #f87171;
+}
+
+.nav-links a.nav-logout-mobile:hover,
+.nav-links a.nav-logout-mobile:focus {
+    color: #ef4444;
 }
 
 /* --------------------------------------------------------------------------
@@ -960,6 +971,12 @@ tbody tr:hover {
 @media (max-width: 768px) {
     .nav-burger {
         display: block;
+    }
+
+    .navbar.nav-open {
+        background: rgb(10, 10, 20);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
     }
 
     .nav-links {
