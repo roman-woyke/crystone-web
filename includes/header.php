@@ -28,7 +28,7 @@
     <div class="orb orb-teal"></div>
 </div>
 
-<canvas id="dot-grid" aria-hidden="true"></canvas>
+<div id="gradient-blinds" aria-hidden="true"></div>
 
 <?php
     $loggedIn = isset($_SESSION["user_id"]);

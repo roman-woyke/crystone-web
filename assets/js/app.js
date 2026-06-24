@@ -95,126 +95,282 @@
         window.initCountUps(document);
     });
 
-    // Interactive dot-grid background — fluid / spring physics
+    // GradientBlinds WebGL background — venetian-blind shader with mouse spotlight
     document.addEventListener("DOMContentLoaded", function () {
-        var canvas = document.getElementById("dot-grid");
-        if (!canvas) return;
+        var container = document.getElementById("gradient-blinds");
+        if (!container) return;
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-        var ctx = canvas.getContext("2d");
+        var dpr = window.devicePixelRatio || 1;
 
-        // Grid
-        var SPACING  = 36;
-        var DOT_R    = 1.5;
+        // Colors: dark violet -> dark blue cycle, matches site accent palette
+        var GRADIENT_COLORS = ["#090714", "#1c0e45", "#0b1e55", "#090714"];
+        var NOISE           = 0.12;
+        var BLIND_COUNT     = 8;
+        var BLIND_MIN_WIDTH = 80;
+        var DAMPENING       = 0.15;
+        var SPOT_RADIUS     = 0.55;
+        var SPOT_SOFTNESS   = 1.0;
+        var SPOT_OPACITY    = 0.75;
+        var MAX_COLORS      = 8;
 
-        // Spring physics per dot (SI-like: distance in px, time in s)
-        var SPRING   = 18;   // stiffness  (s^-2)   — higher = snappier return
-        var DAMP     = 5.5;  // damping    (s^-1)   — higher = less oscillation
-        // ζ = DAMP / (2*sqrt(SPRING)) ≈ 0.65  →  underdamped, ~1 visible oscillation
-
-        // Cursor drag
-        var DRAG_R   = 160;  // influence radius (px)
-        var DRAG_STR = 5;    // cursor-velocity → dot-velocity multiplier
-
-        // Idle sway (subtle, on top of physics)
-        var IDLE_AMP = 2;
-        var IDLE_SPD = 0.0005;
-
-        var dots = [];
-        var mx = -9999, my = -9999;
-        var prevMx = -9999, prevMy = -9999;
-
-        function build() {
-            canvas.width  = window.innerWidth;
-            canvas.height = window.innerHeight;
-            var cols = Math.ceil(canvas.width  / SPACING);
-            var rows = Math.ceil(canvas.height / SPACING);
-            dots = [];
-            for (var r = 0; r <= rows; r++) {
-                for (var c = 0; c <= cols; c++) {
-                    dots.push({
-                        bx: c * SPACING,
-                        by: r * SPACING,
-                        ox: 0, oy: 0,  // physics offset from base
-                        vx: 0, vy: 0,  // velocity
-                        px: Math.random() * Math.PI * 2,
-                        py: Math.random() * Math.PI * 2,
-                        fx: 0.5 + Math.random() * 0.8,
-                        fy: 0.5 + Math.random() * 0.8
-                    });
-                }
-            }
+        function hexToRgb(hex) {
+            var h = hex.replace("#", "").padEnd(6, "0");
+            return [
+                parseInt(h.slice(0, 2), 16) / 255,
+                parseInt(h.slice(2, 4), 16) / 255,
+                parseInt(h.slice(4, 6), 16) / 255
+            ];
         }
 
-        document.addEventListener("mousemove", function (e) { mx = e.clientX; my = e.clientY; });
-        document.addEventListener("mouseleave", function ()  { mx = -9999;    my = -9999;    });
-
-        var t0 = null, prevTs = null;
-
-        function frame(ts) {
-            if (t0 === null) { t0 = ts; prevTs = ts; }
-            var t  = ts - t0;
-            var dt = Math.min((ts - prevTs) / 1000, 0.05); // seconds, capped at 50 ms
-            prevTs = ts;
-
-            // cursor velocity this frame (px/frame, then scaled by DRAG_STR)
-            var cvx = 0, cvy = 0;
-            if (prevMx > -9000 && mx > -9000) {
-                cvx = (mx - prevMx) * DRAG_STR;
-                cvy = (my - prevMy) * DRAG_STR;
-            }
-            prevMx = mx;
-            prevMy = my;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // single batched path — all dots same colour, one fill() call
-            ctx.fillStyle = "rgba(255,255,255,0.22)";
-            ctx.beginPath();
-
-            for (var i = 0; i < dots.length; i++) {
-                var d = dots[i];
-
-                // --- cursor drag: push dot in the direction the cursor moved ---
-                if (cvx !== 0 || cvy !== 0) {
-                    var dx   = d.bx - mx;
-                    var dy   = d.by - my;
-                    var dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < DRAG_R) {
-                        var inf = 1 - dist / DRAG_R;
-                        inf = inf * inf;          // quadratic falloff
-                        d.vx += cvx * inf;
-                        d.vy += cvy * inf;
-                    }
-                }
-
-                // --- spring: pull offset back toward (0,0) ---
-                // --- damping: resist velocity                ---
-                var ax = -SPRING * d.ox - DAMP * d.vx;
-                var ay = -SPRING * d.oy - DAMP * d.vy;
-                d.vx += ax * dt;
-                d.vy += ay * dt;
-                d.ox += d.vx * dt;
-                d.oy += d.vy * dt;
-
-                // --- idle sway (sinusoidal, independent per dot) ---
-                var ix = Math.sin(t * IDLE_SPD * d.fx + d.px) * IDLE_AMP;
-                var iy = Math.sin(t * IDLE_SPD * d.fy + d.py) * IDLE_AMP;
-
-                var x = d.bx + d.ox + ix;
-                var y = d.by + d.oy + iy;
-
-                ctx.moveTo(x + DOT_R, y);
-                ctx.arc(x, y, DOT_R, 0, Math.PI * 2);
-            }
-
-            ctx.fill();
-
-            requestAnimationFrame(frame);
+        function prepStops(stops) {
+            var base = stops.slice(0, MAX_COLORS);
+            if (base.length === 1) base.push(base[0]);
+            while (base.length < MAX_COLORS) base.push(base[base.length - 1]);
+            var arr = [];
+            for (var ci = 0; ci < MAX_COLORS; ci++) arr.push(hexToRgb(base[ci]));
+            return { arr: arr, count: Math.max(2, Math.min(MAX_COLORS, stops.length)) };
         }
 
-        window.addEventListener("resize", build);
-        build();
-        requestAnimationFrame(frame);
+        var canvas = document.createElement("canvas");
+        canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+        container.appendChild(canvas);
+
+        var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+        if (!gl) return;
+
+        var vertSrc = [
+            "attribute vec2 position;",
+            "attribute vec2 uv;",
+            "varying vec2 vUv;",
+            "void main() {",
+            "  vUv = uv;",
+            "  gl_Position = vec4(position, 0.0, 1.0);",
+            "}"
+        ].join("\n");
+
+        // vUv is already in [0,1] x [0,1] (same as fragCoord / iResolution)
+        var fragSrc = [
+            "#ifdef GL_ES",
+            "precision mediump float;",
+            "#endif",
+            "uniform vec3  iResolution;",
+            "uniform vec2  iMouse;",
+            "uniform float iTime;",
+            "uniform float uAngle;",
+            "uniform float uNoise;",
+            "uniform float uBlindCount;",
+            "uniform float uSpotlightRadius;",
+            "uniform float uSpotlightSoftness;",
+            "uniform float uSpotlightOpacity;",
+            "uniform float uMirror;",
+            "uniform float uDistort;",
+            "uniform float uShineFlip;",
+            "uniform vec3  uColor0;",
+            "uniform vec3  uColor1;",
+            "uniform vec3  uColor2;",
+            "uniform vec3  uColor3;",
+            "uniform vec3  uColor4;",
+            "uniform vec3  uColor5;",
+            "uniform vec3  uColor6;",
+            "uniform vec3  uColor7;",
+            "uniform int   uColorCount;",
+            "varying vec2 vUv;",
+            "float rand(vec2 co) {",
+            "  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);",
+            "}",
+            "vec2 rotate2D(vec2 p, float a) {",
+            "  float c = cos(a); float s = sin(a);",
+            "  return mat2(c, -s, s, c) * p;",
+            "}",
+            "vec3 gradColor(float t) {",
+            "  float tt = clamp(t, 0.0, 1.0);",
+            "  int n = uColorCount;",
+            "  if (n < 2) n = 2;",
+            "  float sc = tt * float(n - 1);",
+            "  float sg = floor(sc);",
+            "  float f  = fract(sc);",
+            "  if (sg < 1.0)           return mix(uColor0, uColor1, f);",
+            "  if (sg < 2.0 && n > 2)  return mix(uColor1, uColor2, f);",
+            "  if (sg < 3.0 && n > 3)  return mix(uColor2, uColor3, f);",
+            "  if (sg < 4.0 && n > 4)  return mix(uColor3, uColor4, f);",
+            "  if (sg < 5.0 && n > 5)  return mix(uColor4, uColor5, f);",
+            "  if (sg < 6.0 && n > 6)  return mix(uColor5, uColor6, f);",
+            "  if (sg < 7.0 && n > 7)  return mix(uColor6, uColor7, f);",
+            "  if (n > 7) return uColor7;",
+            "  if (n > 6) return uColor6;",
+            "  if (n > 5) return uColor5;",
+            "  if (n > 4) return uColor4;",
+            "  if (n > 3) return uColor3;",
+            "  if (n > 2) return uColor2;",
+            "  return uColor1;",
+            "}",
+            "void main() {",
+            "  vec2 uv0 = vUv;",
+            "  float aspect = iResolution.x / iResolution.y;",
+            "  vec2 p = uv0 * 2.0 - 1.0;",
+            "  p.x *= aspect;",
+            "  vec2 pr = rotate2D(p, uAngle);",
+            "  pr.x /= aspect;",
+            "  vec2 uv = pr * 0.5 + 0.5;",
+            "  vec2 uvM = uv;",
+            "  if (uDistort > 0.0) {",
+            "    uvM.x += sin(uvM.y * 6.0) * 0.01 * uDistort;",
+            "    uvM.y += cos(uvM.x * 6.0) * 0.01 * uDistort;",
+            "  }",
+            "  float t = uvM.x;",
+            "  if (uMirror > 0.5) t = 1.0 - abs(1.0 - 2.0 * fract(t));",
+            "  vec3 base = gradColor(t);",
+            "  vec2 mo = vec2(iMouse.x / iResolution.x, iMouse.y / iResolution.y);",
+            "  float d  = length(uv0 - mo);",
+            "  float dn = d / max(uSpotlightRadius, 1e-4);",
+            "  float spot = (1.0 - 2.0 * pow(dn, uSpotlightSoftness)) * uSpotlightOpacity;",
+            "  float stripe = fract(uvM.x * max(uBlindCount, 1.0));",
+            "  if (uShineFlip > 0.5) stripe = 1.0 - stripe;",
+            "  vec3 col = vec3(spot) + base - vec3(stripe);",
+            "  col += (rand(gl_FragCoord.xy + iTime) - 0.5) * uNoise;",
+            "  gl_FragColor = vec4(col, 1.0);",
+            "}"
+        ].join("\n");
+
+        function makeShader(type, src) {
+            var sh = gl.createShader(type);
+            gl.shaderSource(sh, src);
+            gl.compileShader(sh);
+            if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                console.warn("GradientBlinds shader:", gl.getShaderInfoLog(sh));
+                gl.deleteShader(sh);
+                return null;
+            }
+            return sh;
+        }
+
+        var vs = makeShader(gl.VERTEX_SHADER, vertSrc);
+        var fs = makeShader(gl.FRAGMENT_SHADER, fragSrc);
+        if (!vs || !fs) return;
+
+        var prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+            console.warn("GradientBlinds link:", gl.getProgramInfoLog(prog));
+            return;
+        }
+        gl.useProgram(prog);
+
+        // Full-screen triangle: pos and uv interleaved (stride 16 bytes)
+        var vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,  0, 0,
+             3, -1,  2, 0,
+            -1,  3,  0, 2
+        ]), gl.STATIC_DRAW);
+
+        var posLoc = gl.getAttribLocation(prog, "position");
+        var uvLoc  = gl.getAttribLocation(prog, "uv");
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(uvLoc);
+        gl.vertexAttribPointer(uvLoc,  2, gl.FLOAT, false, 16, 8);
+
+        var uRes  = gl.getUniformLocation(prog, "iResolution");
+        var uMo   = gl.getUniformLocation(prog, "iMouse");
+        var uT    = gl.getUniformLocation(prog, "iTime");
+        var uN    = gl.getUniformLocation(prog, "uNoise");
+        var uB    = gl.getUniformLocation(prog, "uBlindCount");
+        var uSR   = gl.getUniformLocation(prog, "uSpotlightRadius");
+        var uSS   = gl.getUniformLocation(prog, "uSpotlightSoftness");
+        var uSO   = gl.getUniformLocation(prog, "uSpotlightOpacity");
+        var uCnt  = gl.getUniformLocation(prog, "uColorCount");
+        var uCols = [];
+        for (var ci = 0; ci < 8; ci++) uCols.push(gl.getUniformLocation(prog, "uColor" + ci));
+
+        var cd = prepStops(GRADIENT_COLORS);
+        gl.uniform1f(uN,  NOISE);
+        gl.uniform1f(uSR, SPOT_RADIUS);
+        gl.uniform1f(uSS, SPOT_SOFTNESS);
+        gl.uniform1f(uSO, SPOT_OPACITY);
+        gl.uniform1f(gl.getUniformLocation(prog, "uAngle"),    0.0);
+        gl.uniform1f(gl.getUniformLocation(prog, "uMirror"),   0.0);
+        gl.uniform1f(gl.getUniformLocation(prog, "uDistort"),  0.0);
+        gl.uniform1f(gl.getUniformLocation(prog, "uShineFlip"), 0.0);
+        gl.uniform1i(uCnt, cd.count);
+        cd.arr.forEach(function (c, i) { gl.uniform3fv(uCols[i], c); });
+
+        var mx = 0, my = 0, tx = 0, ty = 0, firstSize = true, lastTs = 0, t0 = null;
+
+        if (window.ResizeObserver) {
+            var ro = new ResizeObserver(function () {
+                var rect = container.getBoundingClientRect();
+                var w = Math.round(rect.width  * dpr);
+                var h = Math.round(rect.height * dpr);
+                canvas.width  = w;
+                canvas.height = h;
+                gl.viewport(0, 0, w, h);
+                gl.uniform3f(uRes, w, h, 1);
+                var eff = BLIND_MIN_WIDTH > 0
+                    ? Math.min(BLIND_COUNT, Math.max(1, Math.floor(rect.width / BLIND_MIN_WIDTH)))
+                    : BLIND_COUNT;
+                gl.uniform1f(uB, Math.max(1, eff));
+                if (firstSize) {
+                    firstSize = false;
+                    tx = w / 2; ty = h / 2;
+                    mx = tx;    my = ty;
+                    gl.uniform2f(uMo, mx, my);
+                }
+            });
+            ro.observe(container);
+        } else {
+            // Fallback for browsers without ResizeObserver
+            var doResize = function () {
+                var w = Math.round(window.innerWidth  * dpr);
+                var h = Math.round(window.innerHeight * dpr);
+                canvas.width  = w;
+                canvas.height = h;
+                gl.viewport(0, 0, w, h);
+                gl.uniform3f(uRes, w, h, 1);
+                var eff = BLIND_MIN_WIDTH > 0
+                    ? Math.min(BLIND_COUNT, Math.max(1, Math.floor(window.innerWidth / BLIND_MIN_WIDTH)))
+                    : BLIND_COUNT;
+                gl.uniform1f(uB, Math.max(1, eff));
+                if (firstSize) {
+                    firstSize = false;
+                    tx = w / 2; ty = h / 2;
+                    mx = tx;    my = ty;
+                    gl.uniform2f(uMo, mx, my);
+                }
+            };
+            window.addEventListener("resize", doResize);
+            doResize();
+        }
+
+        // Listen on document so pointer events still reach page content above
+        document.addEventListener("pointermove", function (e) {
+            tx = e.clientX * dpr;
+            ty = (window.innerHeight - e.clientY) * dpr;
+        });
+
+        function loop(ts) {
+            requestAnimationFrame(loop);
+            if (t0 === null) t0 = ts;
+            var t  = (ts - t0) * 0.001;
+            var dt = lastTs ? (ts - lastTs) / 1000 : 0;
+            lastTs = ts;
+            if (DAMPENING > 0 && dt > 0) {
+                var factor = Math.min(1, 1 - Math.exp(-dt / Math.max(1e-4, DAMPENING)));
+                mx += (tx - mx) * factor;
+                my += (ty - my) * factor;
+            } else {
+                mx = tx; my = ty;
+            }
+            gl.uniform1f(uT, t);
+            gl.uniform2f(uMo, mx, my);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+
+        requestAnimationFrame(loop);
     });
 })();
