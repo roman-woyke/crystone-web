@@ -1014,7 +1014,7 @@ tbody tr:hover {
         bottom: 6px;
     }
 
-    .nav-logout-desktop {
+    .nav-right .nav-logout-desktop {
         display: none;
     }
 
