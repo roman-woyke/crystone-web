@@ -14,6 +14,16 @@
                 burger.setAttribute("aria-expanded", open ? "true" : "false");
             });
         }
+
+        var mobileLogout = document.getElementById("nav-logout-mobile");
+        if (mobileLogout) {
+            mobileLogout.addEventListener("click", function (e) {
+                e.preventDefault();
+                if (window.confirm("Wirklich ausloggen?")) {
+                    window.location.href = mobileLogout.href;
+                }
+            });
+        }
     });
 
     var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");

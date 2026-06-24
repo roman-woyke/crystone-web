@@ -530,6 +530,10 @@ textarea {
 .nav-burger.open span:nth-child(2) { opacity: 0; }
 .nav-burger.open span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
 
+.nav-logout-mobile {
+    display: none;
+}
+
 /* --------------------------------------------------------------------------
    7. Tables
    -------------------------------------------------------------------------- */
@@ -987,7 +991,7 @@ tbody tr:hover {
     }
 
     .nav-links.open {
-        max-height: 320px;
+        max-height: 480px;
         padding: 10px 16px;
         border-bottom-color: var(--glass-border);
     }
@@ -998,6 +1002,26 @@ tbody tr:hover {
 
     .nav-links a.active::after {
         bottom: 6px;
+    }
+
+    .nav-logout-desktop {
+        display: none;
+    }
+
+    .nav-logout-mobile {
+        display: block;
+        margin-top: 6px;
+        padding: 12px;
+        border-top: 1px solid var(--glass-border);
+        color: #f87171;
+        font-weight: 600;
+        text-align: left;
+    }
+
+    .nav-logout-mobile:hover,
+    .nav-logout-mobile:focus {
+        background: rgba(239, 68, 68, 0.15) !important;
+        color: #ef4444 !important;
     }
 
     .podium {

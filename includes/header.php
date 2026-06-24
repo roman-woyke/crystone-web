@@ -57,6 +57,7 @@
                         <?= $currentPage === $file ? 'class="active"' : "" ?>
                     ><?= $label ?></a>
                 <?php endforeach; ?>
+                <a class="nav-logout-mobile" href="<?= BASE_PATH ?>/logout.php" id="nav-logout-mobile">Logout</a>
             </div>
         <?php endif; ?>
     </div>
@@ -69,7 +70,7 @@
                 </span>
             <?php endif; ?>
 
-            <a class="btn btn-ghost" href="<?= BASE_PATH ?>/logout.php">Logout</a>
+            <a class="btn btn-ghost nav-logout-desktop" href="<?= BASE_PATH ?>/logout.php">Logout</a>
 
             <button class="nav-burger" id="nav-burger" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
                 <span></span>
