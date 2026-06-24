@@ -58,18 +58,20 @@ function studyStatusPayload(PDO $pdo, $userId): array
     // stop checklist uses this to let me pick which parts to log. A null module
     // is the time studied before any module was assigned (not loggable).
     if ($me["active"]) {
+        // Pre-assignment intervals (module_name NULL) fall back to the session's
+        // current module, so they don't show up as orphaned "No module" time.
         $p = $pdo->prepare("
-            SELECT module_name,
+            SELECT COALESCE(module_name, ?) AS module,
                    SUM(TIMESTAMPDIFF(SECOND, started_at, COALESCE(ended_at, NOW()))) AS seconds
             FROM study_segments
             WHERE user_id = ? AND session_id IS NULL
-            GROUP BY module_name
+            GROUP BY module
             ORDER BY MIN(started_at)
         ");
-        $p->execute([$userId]);
+        $p->execute([$me["module"] ?? null, $userId]);
         $parts = [];
         foreach ($p->fetchAll(PDO::FETCH_ASSOC) as $pr) {
-            $parts[] = ["module" => $pr["module_name"], "seconds" => (int) $pr["seconds"]];
+            $parts[] = ["module" => $pr["module"], "seconds" => (int) $pr["seconds"]];
         }
         $me["parts"] = $parts;
     }
@@ -109,13 +111,14 @@ function studyRecap(PDO $pdo, int $daysBack = 0): array
 
             SELECT
                 u.username,
-                seg.module_name AS module,
+                COALESCE(seg.module_name, st.module_name) AS module,
                 TIMESTAMPDIFF(MINUTE, $base, seg.started_at) AS start_min,
                 TIMESTAMPDIFF(MINUTE, $base, COALESCE(seg.ended_at, NOW())) AS end_min,
                 TIMESTAMPDIFF(SECOND, seg.started_at, COALESCE(seg.ended_at, NOW())) AS seconds,
                 (seg.ended_at IS NULL) AS live,
                 seg.started_at AS sort_at
             FROM study_segments seg
+            JOIN study_status st ON st.user_id = seg.user_id
             JOIN users u ON u.id = seg.user_id
             WHERE seg.session_id IS NULL
     " : "";

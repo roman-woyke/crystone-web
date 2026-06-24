@@ -167,9 +167,11 @@ if ($action === "start") {
 
     if ($open) {
         if ($open["module_name"] === null) {
-            // First assignment — stamp the running interval in place.
-            $pdo->prepare("UPDATE study_segments SET module_name = ? WHERE id = ?")
-                ->execute([$resolved, $open["id"]]);
+            // First assignment — stamp every still-unstamped interval of this
+            // session (the open one plus any pre-pick intervals split off by
+            // breaks), so none of that time shows up as an orphaned grey block.
+            $pdo->prepare("UPDATE study_segments SET module_name = ? WHERE user_id = ? AND session_id IS NULL AND module_name IS NULL")
+                ->execute([$resolved, $userId]);
         } elseif (strcasecmp($open["module_name"], $resolved) !== 0) {
             // Switching modules — close the current interval, open a fresh one.
             segClose($pdo, $userId);
