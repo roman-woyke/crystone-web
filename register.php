@@ -4,7 +4,7 @@ require_once __DIR__ . "/includes/start-session.php";
 require_once __DIR__ . "/../config.php";
 
 if (isset($_SESSION["user_id"])) {
-    header("Location: " . BASE_PATH . "/dashboard.php");
+    header("Location: " . BASE_PATH . "/study-counter.php");
     exit;
 }
 

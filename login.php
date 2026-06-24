@@ -5,8 +5,8 @@ require_once __DIR__ . "/../config.php";
 
 // Only accept `next` if it's a same-app relative path (prevents open redirect).
 function safeNext(?string $next): string {
-    if ($next === null || $next === "") return BASE_PATH . "/dashboard.php";
-    if (strpos($next, BASE_PATH . "/") !== 0) return BASE_PATH . "/dashboard.php";
+    if ($next === null || $next === "") return BASE_PATH . "/study-counter.php";
+    if (strpos($next, BASE_PATH . "/") !== 0) return BASE_PATH . "/study-counter.php";
     return $next;
 }
 
