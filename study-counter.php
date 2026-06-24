@@ -29,7 +29,7 @@ require_once __DIR__ . "/includes/study-status.php";
 require_once __DIR__ . "/includes/study-sessions.php";
 $initialStatus = studyStatusPayload($pdo, $_SESSION["user_id"]);
 
-// Sessions spanning midnight are split across days (see studySessionsByDay).
+// Each session is charted on the study day it started in (see studySessionsByDay).
 $initialSessions = studySessionsByDay($pdo);
 
 $pageTitle = "Study Counter";
@@ -1438,6 +1438,14 @@ main.container {
         const dow = (x.getDay() + 6) % 7; // 0 = Monday
         return addDays(x, -dow);
     }
+    // Start (midnight) of the study day a moment belongs to. A study day runs
+    // 07:00 → 07:00 the next morning, so before 07:00 we're still on the
+    // previous day — matching the recap and the server's session bucketing, so
+    // a night session counts toward the evening it started.
+    function studyDayStart(d) {
+        const x = startOfDay(d);
+        return d.getHours() < 7 ? addDays(x, -1) : x;
+    }
 
     function fmtTime(seconds) {
         const h = Math.floor(seconds / 3600);
@@ -1493,12 +1501,14 @@ main.container {
     function filteredSessions() {
         let out = SESSIONS;
         if (podiumPeriod !== "overall") {
-            const todayStr = toDateStr(startOfDay(new Date()));
+            // "today" = the current study day (07:00 boundary), matching the chart.
+            const today = studyDayStart(new Date());
+            const todayStr = toDateStr(today);
             if (podiumPeriod === "daily") {
                 out = out.filter(s => s.date === todayStr);
             } else {
-                // weekly: Monday of this week → today
-                const weekStartStr = toDateStr(mondayOf(new Date()));
+                // weekly: Monday of this study week → today
+                const weekStartStr = toDateStr(mondayOf(today));
                 out = out.filter(s => s.date >= weekStartStr && s.date <= todayStr);
             }
         }
@@ -1528,10 +1538,13 @@ main.container {
 
     // ── Chart render ──────────────────────────────────────────────────────
     function renderChart() {
-        const weekStart = addDays(mondayOf(new Date()), weekOffset * 7);
+        // Anchor the week on the current study day (07:00 boundary) so a session
+        // logged after midnight stays grouped with the evening it started.
+        const today = studyDayStart(new Date());
+        const weekStart = addDays(mondayOf(today), weekOffset * 7);
         const weekDays = [];
         for (let i = 0; i < 7; i++) weekDays.push(addDays(weekStart, i));
-        const todayStr = toDateStr(startOfDay(new Date()));
+        const todayStr = toDateStr(today);
 
         // Week label
         const wkEnd = weekDays[6];

@@ -31,9 +31,9 @@ foreach ($customMods as $c) {
 }
 
 // ── Sessions aggregated per user + module + day + at_library ─────────────
-// Sessions spanning midnight are split across days by their real clock window
-// (see studySessionsByDay). at_library is kept so the client "library" podium
-// filter can split out library-only time; rendering that ignores it just sums.
+// Each session is charted on the study day it started in (07:00 boundary, like
+// the recap), so night sessions stay on the evening they began. at_library is
+// kept so the client "library" podium filter can split out library-only time.
 $sessions = studySessionsByDay($pdo);
 
 header("Content-Type: application/json");
