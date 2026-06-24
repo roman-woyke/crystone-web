@@ -1551,12 +1551,14 @@ main.container {
             <div class="manual-grid">
                 <!-- Exact start/end (Today mode) -->
                 <div class="manual-exact">
-                    <label for="manual-start">Start</label>
-                    <input type="time" id="manual-start">
+                    <label for="manual-start">Start <span class="muted">(24h)</span></label>
+                    <input type="text" id="manual-start" inputmode="numeric" maxlength="5"
+                           pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="HH:MM" autocomplete="off">
                 </div>
                 <div class="manual-exact">
-                    <label for="manual-end">End</label>
-                    <input type="time" id="manual-end">
+                    <label for="manual-end">End <span class="muted">(24h)</span></label>
+                    <input type="text" id="manual-end" inputmode="numeric" maxlength="5"
+                           pattern="([01]\d|2[0-3]):[0-5]\d" placeholder="HH:MM" autocomplete="off">
                 </div>
                 <!-- Duration (past-day mode) -->
                 <div class="manual-dur">
@@ -2903,6 +2905,17 @@ main.container {
     manualDate.max    = todayStr;
 
     const fmtHM = (d) => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/; // strict 24h HH:MM
+
+    // Keep the text time fields as 24h HH:MM: digits only, auto-insert the colon.
+    function bindTimeField(el) {
+        el.addEventListener("input", () => {
+            let d = el.value.replace(/\D/g, "").slice(0, 4);
+            el.value = d.length > 2 ? d.slice(0, 2) + ":" + d.slice(2) : d;
+        });
+    }
+    bindTimeField(manualStart);
+    bindTimeField(manualEnd);
 
     // "Today" → exact start/end + date locked to today; otherwise duration + date.
     function applyManualMode() {
@@ -2920,8 +2933,12 @@ main.container {
 
     document.getElementById("manual-log").addEventListener("click", () => {
         if (manualToday.checked) {
-            if (!manualStart.value || !manualEnd.value) { setFeedback("Enter a start and end time.", true); return; }
-            submitSession({ startTime: manualStart.value, endTime: manualEnd.value });
+            const start = manualStart.value.trim(), end = manualEnd.value.trim();
+            if (!TIME_RE.test(start) || !TIME_RE.test(end)) {
+                setManualFeedback("Enter start and end as 24h HH:MM.", true);
+                return;
+            }
+            submitSession({ startTime: start, endTime: end });
         } else {
             const h = parseInt(document.getElementById("manual-hours").value, 10) || 0;
             const m = parseInt(document.getElementById("manual-minutes").value, 10) || 0;
