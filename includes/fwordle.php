@@ -459,5 +459,15 @@ function fwordleStats(PDO $pdo, string $date): array
             'avg_guesses'  => ($a && $a['avg_g'] !== null) ? round((float) $a['avg_g'], 1) : null,
         ];
     }
+
+    // Biggest streak first; then more solves, then the better (lower) average.
+    usort($stats, function ($x, $y) {
+        if ($x['streak'] !== $y['streak']) return $y['streak'] <=> $x['streak'];
+        if ($x['solves'] !== $y['solves']) return $y['solves'] <=> $x['solves'];
+        $ax = $x['avg_guesses'] ?? INF;
+        $ay = $y['avg_guesses'] ?? INF;
+        return $ax <=> $ay;
+    });
+
     return $stats;
 }
