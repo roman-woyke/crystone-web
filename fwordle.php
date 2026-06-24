@@ -666,9 +666,9 @@ main.container { max-width: 1280px; }
     // ── Jokers (hints): one shared bar of 3 buttons, doubling as the legend.
     //    Click a joker, then pick a board to apply it to. ────────────────────
     const HINT_TYPES = [
-        { type: "grey",   text: "Grey — greys 5 absent letters" },
-        { type: "orange", text: "Orange — a letter in the word" },
-        { type: "green",  text: "Green — a letter in its spot" },
+        { type: "grey",   text: "Grey joker (5x letters" },
+        { type: "orange", text: "Orange joker (1x letter)" },
+        { type: "green",  text: "Green joker (1x letter)" },
     ];
 
     // Boards a joker can still target: unsolved, not yours, no joker yet.
