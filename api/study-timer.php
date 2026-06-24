@@ -44,12 +44,15 @@ function resolveStudyModule(PDO $pdo, $userId, string $module, string $newModule
 // open one (ended_at IS NULL) is the interval currently running. Pausing closes
 // it; resuming opens a new one. On log they're attached to the session so the
 // day recap can draw the real intervals with breaks shown as gaps.
-function segOpen(PDO $pdo, $userId): void
+function segOpen(PDO $pdo, $userId, ?string $module = null): void
 {
     $has = $pdo->prepare("SELECT 1 FROM study_segments WHERE user_id = ? AND session_id IS NULL AND ended_at IS NULL LIMIT 1");
     $has->execute([$userId]);
     if (!$has->fetchColumn()) {
-        $pdo->prepare("INSERT INTO study_segments (user_id, started_at) VALUES (?, NOW())")->execute([$userId]);
+        // Stamp the interval with the module that's active right now, so a
+        // session split across modules keeps each interval's own module.
+        $pdo->prepare("INSERT INTO study_segments (user_id, module_name, started_at) VALUES (?, ?, NOW())")
+            ->execute([$userId, $module]);
     }
 }
 function segClose(PDO $pdo, $userId): void
@@ -75,7 +78,7 @@ if ($action === "start") {
         if ($row["started_at"] === null) {
             $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
                 ->execute([$userId]);
-            segOpen($pdo, $userId);
+            segOpen($pdo, $userId, $row["module_name"]);
         }
     } else {
         // Fresh start (replaces any manual presence) — a module is required.
@@ -100,7 +103,7 @@ if ($action === "start") {
         ")->execute([$userId, $resolved]);
 
         segClearLive($pdo, $userId);
-        segOpen($pdo, $userId);
+        segOpen($pdo, $userId, $resolved);
 
         $extra["custom_added"] = $customAdded;
     }
@@ -112,20 +115,63 @@ if ($action === "start") {
             VALUES (?, 'presence', NULL, NOW(), 0, NOW())
         ")->execute([$userId]);
         segClearLive($pdo, $userId);
-        segOpen($pdo, $userId);
+        segOpen($pdo, $userId, null);
     } elseif ($row["started_at"] === null) {
         // Resume whatever was paused.
         $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
             ->execute([$userId]);
-        segOpen($pdo, $userId);
+        segOpen($pdo, $userId, $row["module_name"]);
     }
 } elseif ($action === "resume") {
     // Come back from a break — works for both timer and presence rows.
     if ($row && $row["started_at"] === null) {
         $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
             ->execute([$userId]);
-        segOpen($pdo, $userId);
+        segOpen($pdo, $userId, $row["module_name"]);
     }
+} elseif ($action === "set_module") {
+    // Assign or switch the module of the current "I'm studying" session. The
+    // first assignment stamps the running interval in place (so the pre-pick
+    // time isn't orphaned); a real switch closes the interval under the old
+    // module and opens a fresh one — both then show as separate sub-sessions in
+    // the recap and the stop checklist.
+    if (!$row) {
+        http_response_code(400);
+        exit("Not studying.");
+    }
+    $module    = trim($_POST["module"]     ?? "");
+    $newModule = trim($_POST["new_module"] ?? "");
+    $customAdded = false;
+    $resolved = resolveStudyModule($pdo, $userId, $module, $newModule, $customAdded);
+    if ($resolved === null) {
+        http_response_code(400);
+        exit("Pick a module first.");
+    }
+
+    // The currently-open (running) interval, if any.
+    $openStmt = $pdo->prepare("SELECT id, module_name FROM study_segments WHERE user_id = ? AND session_id IS NULL AND ended_at IS NULL ORDER BY id DESC LIMIT 1");
+    $openStmt->execute([$userId]);
+    $open = $openStmt->fetch(PDO::FETCH_ASSOC);
+
+    $pdo->prepare("UPDATE study_status SET module_name = ? WHERE user_id = ?")
+        ->execute([$resolved, $userId]);
+
+    if ($open) {
+        if ($open["module_name"] === null) {
+            // First assignment — stamp the running interval in place.
+            $pdo->prepare("UPDATE study_segments SET module_name = ? WHERE id = ?")
+                ->execute([$resolved, $open["id"]]);
+        } elseif (strcasecmp($open["module_name"], $resolved) !== 0) {
+            // Switching modules — close the current interval, open a fresh one.
+            segClose($pdo, $userId);
+            segOpen($pdo, $userId, $resolved);
+        }
+        // Same module re-selected → nothing to do.
+    }
+    // Paused (no open interval): the module is just updated; the next resume
+    // opens a fresh interval under it.
+
+    $extra["custom_added"] = $customAdded;
 } elseif ($action === "pause") {
     // "I'm on break" — pauses whatever is running (timer or presence).
     if ($row && $row["started_at"] !== null) {
@@ -152,55 +198,76 @@ if ($action === "start") {
     segClearLive($pdo, $userId);
     $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
 } elseif ($action === "log") {
-    $extra["logged"] = false;
+    // Stop & log: the session may span several modules (one sub-session per
+    // module). The client sends `modules` — a JSON array of the module names to
+    // keep — and we write one study_sessions row per kept module, summing that
+    // module's live intervals server-side. Unchecked modules (and any un-mapped
+    // time) are discarded.
+    $extra["logged"]  = false;
+    $extra["count"]   = 0;
+    $extra["seconds"] = 0;
+    $extra["modules"] = [];
     if ($row) {
-        // Module: an explicit override (stopping a module-less presence session
-        // and choosing what to log it as) takes precedence over the row's module.
-        $module    = trim($_POST["module"]     ?? "");
-        $newModule = trim($_POST["new_module"] ?? "");
-        if ($module !== "" || $newModule !== "") {
-            $customAdded = false;
-            $logModule = resolveStudyModule($pdo, $userId, $module, $newModule, $customAdded);
-            $extra["custom_added"] = $customAdded;
-        } else {
-            $logModule = $row["module_name"]; // null for an un-mapped presence row
-        }
-
-        // Close the currently-open interval so the elapsed time is captured.
+        // Close the currently-open interval so its elapsed time is captured.
         segClose($pdo, $userId);
 
-        $e = $pdo->prepare("
-            SELECT accumulated + IF(started_at IS NULL, 0, TIMESTAMPDIFF(SECOND, started_at, NOW()))
-            FROM study_status WHERE user_id = ?
-        ");
-        $e->execute([$userId]);
-        $elapsed = (int) $e->fetchColumn();
+        $keep = json_decode($_POST["modules"] ?? "[]", true);
+        if (!is_array($keep)) {
+            $keep = [];
+        }
+        // Lower-cased set of module names to keep, for case-insensitive matching.
+        $keepLc = [];
+        foreach ($keep as $k) {
+            $keepLc[mb_strtolower(trim((string) $k))] = true;
+        }
 
-        if ($logModule !== null && $elapsed > 0 && $elapsed <= 86400) {
-            // started_at = the real session start (with breaks); the recap uses it
-            // to draw the true window. Falls back to NULL for pre-migration rows.
-            // at_library is carried over so the "library" podium filter can replay
-            // it later — the flag at log time is what gets stamped on the session.
+        // Group this session's live intervals by module.
+        $groups = $pdo->prepare("
+            SELECT module_name,
+                   SUM(TIMESTAMPDIFF(SECOND, started_at, ended_at)) AS seconds,
+                   MIN(started_at) AS start_at
+            FROM study_segments
+            WHERE user_id = ? AND session_id IS NULL AND ended_at IS NOT NULL
+            GROUP BY module_name
+        ");
+        $groups->execute([$userId]);
+
+        $loggedSeconds = 0;
+        $loggedCount   = 0;
+        $loggedModules = [];
+        foreach ($groups->fetchAll(PDO::FETCH_ASSOC) as $g) {
+            $mod  = $g["module_name"];
+            $secs = (int) $g["seconds"];
+            if ($mod === null) continue;                                  // un-mapped time isn't loggable
+            if (!isset($keepLc[mb_strtolower($mod)])) continue;            // module not checked
+            if ($secs <= 0 || $secs > 86400) continue;
+
+            // started_at = the real sub-session start (with breaks); at_library is
+            // carried over so the "library" podium filter can replay it later.
             $pdo->prepare("
                 INSERT INTO study_sessions (user_id, module_name, seconds, studied_on, started_at, at_library)
                 VALUES (?, ?, ?, CURDATE(), ?, ?)
-            ")->execute([$userId, $logModule, $elapsed, $row["session_start"] ?? null, (int) ($row["at_library"] ?? 0)]);
+            ")->execute([$userId, $mod, $secs, $g["start_at"], (int) ($row["at_library"] ?? 0)]);
 
-            // Attach this session's live segments so the recap can show its
-            // exact study intervals (breaks render as the gaps between them).
+            // Attach this module's intervals so the recap can draw their exact
+            // spans (breaks render as the gaps between them).
             $sessionId = (int) $pdo->lastInsertId();
-            $pdo->prepare("UPDATE study_segments SET session_id = ? WHERE user_id = ? AND session_id IS NULL")
-                ->execute([$sessionId, $userId]);
+            $pdo->prepare("UPDATE study_segments SET session_id = ? WHERE user_id = ? AND session_id IS NULL AND module_name = ?")
+                ->execute([$sessionId, $userId, $mod]);
 
-            $extra["logged"]  = true;
-            $extra["seconds"] = $elapsed;
-            $extra["module"]  = $logModule;
-        } else {
-            // Nothing logged — drop the orphan segments.
-            segClearLive($pdo, $userId);
+            $loggedSeconds += $secs;
+            $loggedCount++;
+            $loggedModules[] = $mod;
         }
 
+        // Drop any remaining unlogged intervals (un-mapped or unchecked modules).
+        segClearLive($pdo, $userId);
         $pdo->prepare("DELETE FROM study_status WHERE user_id = ?")->execute([$userId]);
+
+        $extra["logged"]  = $loggedCount > 0;
+        $extra["count"]   = $loggedCount;
+        $extra["seconds"] = $loggedSeconds;
+        $extra["modules"] = $loggedModules;
     }
 } else {
     http_response_code(400);

@@ -431,6 +431,7 @@ main.container {
 
 .studying-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     flex-shrink: 0;
     margin-bottom: 12px;
@@ -809,83 +810,10 @@ main.container {
     color: var(--text-3);
 }
 
-/* Stop modal */
-#stop-modal select {
+/* Module / stop modal: the dropdown sits below the label. */
+#module-modal select {
     margin: 16px 0 8px;
 }
-
-.mode-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 18px;
-}
-
-.mode-tab {
-    flex: 1;
-    width: auto;
-    margin: 0;
-}
-
-.mode-tab.active {
-    background: var(--grad-accent);
-    border-color: transparent;
-    color: #fff;
-    box-shadow: var(--glow-violet);
-}
-
-.mode-pane { display: none; }
-.mode-pane.active { display: block; }
-
-.timer-display {
-    font-family: var(--font-display);
-    font-size: 3.4rem;
-    font-weight: 700;
-    line-height: 1.1;
-    text-align: center;
-    letter-spacing: 0.01em;
-    margin: 6px 0 4px;
-    font-variant-numeric: tabular-nums; /* fixed-width digits so ticking doesn't reflow */
-}
-
-.timer-note {
-    margin: 0 0 16px;
-    min-height: 1.1em;
-    text-align: center;
-    font-size: 0.82rem;
-    color: var(--text-3);
-}
-
-.timer-note .tn-mod {
-    color: var(--text-2);
-    font-weight: 600;
-}
-
-.timer-note .tn-live {
-    color: var(--success);
-    font-weight: 600;
-}
-
-.timer-break {
-    margin: -8px 0 12px;
-    text-align: center;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--warning);
-    font-variant-numeric: tabular-nums;
-}
-
-.timer-break .tb-time {
-    font-family: var(--font-display);
-    font-weight: 700;
-}
-
-.timer-controls {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.timer-controls button { margin: 0; flex: 1; }
 
 .manual-today {
     display: flex;
@@ -919,6 +847,61 @@ main.container {
 }
 
 .log-feedback.error { color: var(--danger); }
+
+/* Collapsed manual-logging card (live tracking moved to the dock). */
+.log-collapsed h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.log-collapsed-hint { margin: 0 0 16px; font-size: 0.86rem; }
+.log-collapsed #manual-toggle { width: auto; margin: 0; }
+.manual-body h2 { margin: 0 0 16px; font-size: 1.15rem; }
+
+/* Module button in the studying dock (carries the current module name). */
+.studying-module {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.studying-module.active {
+    background: var(--grad-accent);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--glow-violet);
+}
+
+/* Stop modal: per-module checklist */
+.stop-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 16px 0 8px;
+}
+
+.stop-part {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+}
+
+.stop-part input { width: auto; margin: 0; cursor: pointer; }
+.stop-part .module-dot { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+.stop-part-name { flex: 1; font-weight: 600; font-size: 0.9rem; }
+.stop-part-time {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.stop-part.disabled {
+    cursor: default;
+    opacity: 0.6;
+    border-style: dashed;
+}
 
 /* ── Chart ──────────────────────────────────────────────────────────────── */
 
@@ -1219,74 +1202,67 @@ main.container {
 <div class="log-layout">
 
     <section class="log-panel glass-card">
-        <h2>Log a session</h2>
-
-        <div class="module-picker">
-            <label for="module-select">Module</label>
-            <select id="module-select">
-                <?php foreach ($modules as $i => $m): ?>
-                    <option value="<?= htmlspecialchars($m["name"]) ?>">
-                        <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
-                    </option>
-                <?php endforeach; ?>
-                <option value="__new__">+ Add new module…</option>
-            </select>
-
-            <div class="new-module-wrap" id="new-module-wrap">
-                <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
-                <p class="module-hint">This module will join the shared list for everyone.</p>
-            </div>
+        <!-- Live tracking now lives in the "Currently studying" dock; this panel
+             is just for back-filling a past session by hand, so it starts
+             collapsed behind a button. -->
+        <div class="log-collapsed" id="log-collapsed">
+            <h2>Log a session</h2>
+            <p class="muted log-collapsed-hint">Track time live with <strong>“I'm studying”</strong> in the panel, or add a past session by hand.</p>
+            <button type="button" class="btn" id="manual-toggle">✍️ Manual logging</button>
         </div>
 
-        <div class="mode-tabs">
-            <button type="button" class="btn mode-tab active" data-mode="timer">Timer</button>
-            <button type="button" class="btn mode-tab" data-mode="manual">Manual</button>
-        </div>
+        <div class="manual-body" id="manual-body" style="display:none;">
+            <h2>Manual logging</h2>
 
-        <!-- Timer -->
-        <div class="mode-pane active" id="pane-timer">
-            <div class="timer-display" id="timer-display">00:00</div>
-            <p class="timer-break" id="timer-break" style="display:none;"></p>
-            <p class="timer-note" id="timer-note">Keeps running even if you close the page.</p>
-            <div class="timer-controls">
-                <button type="button" class="btn-primary" id="timer-start">Start</button>
-                <button type="button" class="btn" id="timer-reset">Reset</button>
-            </div>
-            <button type="button" class="btn-primary" id="timer-log">Log this session</button>
-        </div>
+            <div class="module-picker">
+                <label for="module-select">Module</label>
+                <select id="module-select">
+                    <?php foreach ($modules as $i => $m): ?>
+                        <option value="<?= htmlspecialchars($m["name"]) ?>">
+                            <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <option value="__new__">+ Add new module…</option>
+                </select>
 
-        <!-- Manual -->
-        <div class="mode-pane" id="pane-manual">
-            <label class="manual-today">
-                <input type="checkbox" id="manual-today" checked>
-                <span>Today — log exact start &amp; end time</span>
-            </label>
-
-            <div class="manual-grid">
-                <!-- Exact start/end (Today mode) -->
-                <div class="manual-exact">
-                    <label for="manual-start">Start</label>
-                    <input type="time" id="manual-start">
-                </div>
-                <div class="manual-exact">
-                    <label for="manual-end">End</label>
-                    <input type="time" id="manual-end">
-                </div>
-                <!-- Duration (past-day mode) -->
-                <div class="manual-dur">
-                    <label for="manual-hours">Hours</label>
-                    <input type="number" id="manual-hours" min="0" max="24" step="1" value="0">
-                </div>
-                <div class="manual-dur">
-                    <label for="manual-minutes">Minutes</label>
-                    <input type="number" id="manual-minutes" min="0" max="59" step="1" value="30">
-                </div>
-                <div class="full">
-                    <label for="manual-date">Date</label>
-                    <input type="date" id="manual-date">
+                <div class="new-module-wrap" id="new-module-wrap">
+                    <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
+                    <p class="module-hint">This module will join the shared list for everyone.</p>
                 </div>
             </div>
-            <button type="button" class="btn-primary" id="manual-log">Log session</button>
+
+            <div id="pane-manual">
+                <label class="manual-today">
+                    <input type="checkbox" id="manual-today" checked>
+                    <span>Today — log exact start &amp; end time</span>
+                </label>
+
+                <div class="manual-grid">
+                    <!-- Exact start/end (Today mode) -->
+                    <div class="manual-exact">
+                        <label for="manual-start">Start</label>
+                        <input type="time" id="manual-start">
+                    </div>
+                    <div class="manual-exact">
+                        <label for="manual-end">End</label>
+                        <input type="time" id="manual-end">
+                    </div>
+                    <!-- Duration (past-day mode) -->
+                    <div class="manual-dur">
+                        <label for="manual-hours">Hours</label>
+                        <input type="number" id="manual-hours" min="0" max="24" step="1" value="0">
+                    </div>
+                    <div class="manual-dur">
+                        <label for="manual-minutes">Minutes</label>
+                        <input type="number" id="manual-minutes" min="0" max="59" step="1" value="30">
+                    </div>
+                    <div class="full">
+                        <label for="manual-date">Date</label>
+                        <input type="date" id="manual-date">
+                    </div>
+                </div>
+                <button type="button" class="btn-primary" id="manual-log">Log session</button>
+            </div>
         </div>
 
         <p class="log-feedback" id="log-feedback"></p>
@@ -1336,7 +1312,8 @@ main.container {
                 </div>
                 <div class="studying-actions">
                     <button type="button" class="btn studying-toggle" id="studying-toggle">I'm studying</button>
-                    <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">I'm on break</button>
+                    <button type="button" class="btn studying-toggle studying-module" id="studying-module" style="display:none;">📘 Module</button>
+                    <button type="button" class="btn studying-toggle studying-break" id="studying-break" style="display:none;">BREAK</button>
                     <button type="button" class="btn studying-toggle studying-bib" id="studying-bib" style="display:none;">📚 BIB</button>
                 </div>
                 <div class="face-body">
@@ -1376,14 +1353,14 @@ main.container {
 
 <div class="chart-tooltip" id="chart-tooltip"></div>
 
-<!-- ── Stop / log-on-stop modal ────────────────────────────────────────────── -->
-<div id="stop-modal" class="modal-overlay" style="display:none;">
+<!-- ── Module picker modal (assign/switch the running session's module) ─────── -->
+<div id="module-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card">
-        <h3>Log this study session?</h3>
-        <p class="muted" id="stop-modal-sub">You studied <strong id="stop-modal-time">0m</strong>. Pick a module to save it, or discard it.</p>
+        <h3>Pick a module</h3>
+        <p class="muted">Switching modules keeps the time so far under the old one and starts a fresh session — both show up separately.</p>
 
-        <label for="stop-module-select">Module</label>
-        <select id="stop-module-select">
+        <label for="sess-module-select">Module</label>
+        <select id="sess-module-select">
             <?php foreach ($modules as $m): ?>
                 <option value="<?= htmlspecialchars($m["name"]) ?>">
                     <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
@@ -1391,15 +1368,30 @@ main.container {
             <?php endforeach; ?>
             <option value="__new__">+ Add new module…</option>
         </select>
-        <div class="new-module-wrap" id="stop-new-module-wrap">
-            <input type="text" id="stop-new-module-input" maxlength="255" placeholder="New module name">
+        <div class="new-module-wrap" id="sess-new-module-wrap">
+            <input type="text" id="sess-new-module-input" maxlength="255" placeholder="New module name">
             <p class="module-hint">This module will join the shared list for everyone.</p>
         </div>
 
         <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="sess-module-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="sess-module-set">Set module</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Stop / log-on-stop modal (per-module checklist) ─────────────────────── -->
+<div id="stop-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card">
+        <h3>Log this study session?</h3>
+        <p class="muted">Pick which parts of this session to save — each module is its own session. Unchecked parts are discarded.</p>
+
+        <div class="stop-checklist" id="stop-checklist"></div>
+
+        <div class="modal-actions">
             <button type="button" class="btn-ghost" id="stop-cancel">Cancel</button>
-            <button type="button" class="btn-danger" id="stop-discard">Discard</button>
-            <button type="button" class="btn-primary" id="stop-log">Log session</button>
+            <button type="button" class="btn-danger" id="stop-discard">Discard all</button>
+            <button type="button" class="btn-primary" id="stop-log">Log selected</button>
         </div>
     </div>
 </div>
@@ -1904,28 +1896,17 @@ main.container {
             .catch(err => setFeedback(err.message, true));
     }
 
-    // ── Mode tabs ─────────────────────────────────────────────────────────
-    document.querySelectorAll(".mode-tab").forEach(tab => {
-        tab.addEventListener("click", () => {
-            document.querySelectorAll(".mode-tab").forEach(t => t.classList.remove("active"));
-            document.querySelectorAll(".mode-pane").forEach(p => p.classList.remove("active"));
-            tab.classList.add("active");
-            document.getElementById("pane-" + tab.dataset.mode).classList.add("active");
-        });
+    // ── Manual logging (collapsed by default) ─────────────────────────────
+    document.getElementById("manual-toggle").addEventListener("click", () => {
+        document.getElementById("log-collapsed").style.display = "none";
+        document.getElementById("manual-body").style.display = "block";
     });
 
-    // ── Timer (server-backed & persistent) ────────────────────────────────
-    // The stopwatch lives in the `study_status` table, so closing or reloading
-    // the page never stops it — we just re-sync from the server.
-    const timerDisplay = document.getElementById("timer-display");
-    const timerNote    = document.getElementById("timer-note");
-    const timerBreak   = document.getElementById("timer-break");
-    const startBtn     = document.getElementById("timer-start");
-    const resetBtn     = document.getElementById("timer-reset");
-    const logBtn       = document.getElementById("timer-log");
-
+    // ── My study state (server-backed presence session) ───────────────────
+    // The live stopwatch lives in the `study_status` table (so it survives
+    // reloads); the page drives it through the "Currently studying" dock.
     // Mirrors the server's study_status row for me.
-    let myState = { active: false, mode: null, running: false, elapsed: 0, breakElapsed: 0, module: null, atLibrary: false };
+    let myState = { active: false, mode: null, running: false, elapsed: 0, breakElapsed: 0, module: null, atLibrary: false, parts: [] };
     let ticker  = null;
 
     function manageTicker() {
@@ -1934,45 +1915,12 @@ main.container {
         if (!myState.active) return;
         ticker = setInterval(() => {
             if (myState.running) {
-                myState.elapsed += 1; // advances for any mode (keeps my chip live)
-                // The big display only reflects the loggable module timer.
-                if (myState.mode === "timer") timerDisplay.textContent = fmtClock(myState.elapsed);
+                myState.elapsed += 1; // keeps my chip ticking live
             } else {
                 // On break — the study time is frozen, the break time ticks up.
                 myState.breakElapsed += 1;
-                renderBreakLine();
             }
         }, 1000);
-    }
-
-    // The break line under the big display (module timer only — a presence
-    // break is shown in the panel chip instead).
-    function renderBreakLine() {
-        const onBreak = myState.active && !myState.running && myState.mode === "timer";
-        if (onBreak) {
-            timerBreak.style.display = "";
-            timerBreak.innerHTML = `☕ On break · <span class="tb-time">${fmtClock(myState.breakElapsed)}</span>`;
-        } else {
-            timerBreak.style.display = "none";
-        }
-    }
-
-    function renderTimerUI() {
-        const timing = myState.active && myState.mode === "timer";
-        timerDisplay.textContent = fmtClock(timing ? myState.elapsed : 0);
-
-        if (timing && myState.running) {
-            startBtn.textContent = "Pause";
-            timerNote.innerHTML = `<span class="tn-live">● Running</span> · <span class="tn-mod">${escapeHtml(myState.module || "")}</span>`;
-        } else if (timing) {
-            startBtn.textContent = "Resume";
-            timerNote.innerHTML = `Paused · <span class="tn-mod">${escapeHtml(myState.module || "")}</span>`;
-        } else {
-            startBtn.textContent = "Start";
-            timerNote.textContent = "Keeps running even if you close the page.";
-        }
-
-        renderBreakLine();
     }
 
     // Apply the `me` object returned by any status endpoint.
@@ -1985,8 +1933,8 @@ main.container {
             breakElapsed: me.break_elapsed || 0,
             module:       me.module || null,
             atLibrary:    !!me.at_library,
+            parts:        me.parts || [],
         };
-        renderTimerUI();
         manageTicker();
         renderPresenceButtons();
     }
@@ -1997,12 +1945,13 @@ main.container {
         if (extra) {
             if (extra.module)     body.append("module", extra.module);
             if (extra.new_module) body.append("new_module", extra.new_module);
+            if (extra.modules)    body.append("modules", JSON.stringify(extra.modules));
         }
         return fetch(BASE_PATH + "/api/study-timer.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Timer error."); }))
             .then(res => {
                 // A brand-new custom module changes the shared list — reload so the
-                // dropdown, colors and legend pick it up. The timer is persistent,
+                // dropdown, colors and legend pick it up. The session is persistent,
                 // so it simply resumes after the reload.
                 if (res.custom_added) setTimeout(() => window.location.reload(), 400);
                 applyMyState(res.me);
@@ -2012,47 +1961,10 @@ main.container {
             });
     }
 
-    startBtn.addEventListener("click", () => {
-        if (myState.active && myState.mode === "timer" && myState.running) {
-            timerAction("pause").catch(err => setFeedback(err.message, true));
-            return;
-        }
-        // Resume a paused module timer, or start a fresh one (needs a module).
-        const extra = {};
-        if (!(myState.active && myState.mode === "timer")) {
-            const mod = selectedModulePayload();
-            if (mod.error) { setFeedback(mod.error, true); return; }
-            Object.assign(extra, mod);
-        }
-        timerAction("start", extra).catch(err => setFeedback(err.message, true));
-    });
-
-    resetBtn.addEventListener("click", () => {
-        if (!myState.active) return;
-        timerAction("reset").catch(err => setFeedback(err.message, true));
-    });
-
-    logBtn.addEventListener("click", () => {
-        if (!myState.active || myState.mode !== "timer") {
-            setFeedback("Start the timer first.", true);
-            return;
-        }
-        setFeedback("Saving…", false);
-        timerAction("log")
-            .then(res => {
-                if (res.logged) {
-                    setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
-                    loadData();
-                } else {
-                    setFeedback("Nothing to log yet.", true);
-                }
-            })
-            .catch(err => setFeedback(err.message, true));
-    });
-
     // ── Currently studying ────────────────────────────────────────────────
     const studyingList   = document.getElementById("studying-list");
     const toggleStudyBtn = document.getElementById("studying-toggle");
+    const moduleBtn      = document.getElementById("studying-module");
     const breakBtn       = document.getElementById("studying-break");
     const breakBox       = document.getElementById("studying-break-box");
     const breakList      = document.getElementById("break-list");
@@ -2285,24 +2197,32 @@ main.container {
         const active  = myState.active;
         const running = active && myState.running;
 
-        // Primary button: start a quick session / stop a presence session.
-        // (A module timer is started & stopped from the log-a-session window.)
+        // Primary button: start the session, or stop & log it.
         if (!active) {
             toggleStudyBtn.style.display = "";
             toggleStudyBtn.classList.remove("active");
             toggleStudyBtn.textContent = "I'm studying";
-        } else if (myState.mode === "presence") {
+        } else {
             toggleStudyBtn.style.display = "";
             toggleStudyBtn.classList.add("active");
-            toggleStudyBtn.textContent = "Stop";
+            toggleStudyBtn.textContent = "STOP";
+        }
+
+        // Module button — assign / switch the running session's module. Carries
+        // the current module name once one is picked.
+        if (active) {
+            moduleBtn.style.display = "";
+            moduleBtn.classList.toggle("active", !!myState.module);
+            moduleBtn.textContent = myState.module ? ("📘 " + myState.module) : "📘 Module";
         } else {
-            toggleStudyBtn.style.display = "none";
+            moduleBtn.style.display = "none";
+            moduleBtn.classList.remove("active");
         }
 
         // Break / resume button — works for both presence and module timers.
         if (running) {
             breakBtn.style.display = "";
-            breakBtn.textContent = "I'm on break";
+            breakBtn.textContent = "BREAK";
         } else if (active) {
             breakBtn.style.display = "";
             breakBtn.textContent = "Resume";
@@ -2322,7 +2242,7 @@ main.container {
     }
 
     function moduleSuffix(s) {
-        return (s.mode === "timer" && s.module) ? " · " + escapeHtml(s.module) : "";
+        return s.module ? " · " + escapeHtml(s.module) : "";
     }
 
     function renderStudying(list) {
@@ -2448,18 +2368,17 @@ main.container {
         });
     }
 
-    // "I'm studying" starts a quick (module-less) timer; "Stop" asks whether to
-    // log the session before clearing it.
+    // "I'm studying" starts a quick (module-less) session; "STOP" opens the
+    // checklist to pick which module sub-sessions to log before clearing it.
     toggleStudyBtn.addEventListener("click", () => {
         if (!myState.active) {
             timerAction("presence").catch(err => setFeedback(err.message, true));
-        } else if (myState.mode === "presence") {
+        } else {
             openStopModal();
         }
     });
 
-    // "I'm on break" pauses whatever's running (presence OR the log-window
-    // module timer); "Resume" starts it again.
+    // "BREAK" pauses whatever's running; "Resume" starts it again.
     breakBtn.addEventListener("click", () => {
         if (!myState.active) return;
         timerAction(myState.running ? "pause" : "resume")
@@ -2473,67 +2392,102 @@ main.container {
         timerAction("library").catch(err => setFeedback(err.message, true));
     });
 
-    // ── Stop → "log this session?" modal (split across modules) ───────────
-    // ── Stop → "log this session?" modal ──────────────────────────────────
-    const stopModal        = document.getElementById("stop-modal");
-    const stopModuleSelect = document.getElementById("stop-module-select");
-    const stopNewWrap      = document.getElementById("stop-new-module-wrap");
-    const stopNewInput     = document.getElementById("stop-new-module-input");
-    const stopTimeEl       = document.getElementById("stop-modal-time");
+    // ── Module picker modal (assign / switch the running session's module) ──
+    const moduleModal      = document.getElementById("module-modal");
+    const sessModuleSelect = document.getElementById("sess-module-select");
+    const sessNewWrap      = document.getElementById("sess-new-module-wrap");
+    const sessNewInput     = document.getElementById("sess-new-module-input");
+
+    function openModuleModal() {
+        // Default to the current module when one is set.
+        if (myState.module) {
+            const opt = [...sessModuleSelect.options].find(o => o.value === myState.module);
+            if (opt) sessModuleSelect.value = myState.module;
+        }
+        sessNewInput.value = "";
+        sessNewWrap.classList.toggle("show", sessModuleSelect.value === "__new__");
+        moduleModal.style.display = "flex";
+    }
+    function closeModuleModal() { moduleModal.style.display = "none"; }
+
+    sessModuleSelect.addEventListener("change", () => {
+        const isNew = sessModuleSelect.value === "__new__";
+        sessNewWrap.classList.toggle("show", isNew);
+        if (isNew) sessNewInput.focus();
+    });
+
+    moduleBtn.addEventListener("click", () => {
+        if (!myState.active) return;
+        openModuleModal();
+    });
+    document.getElementById("sess-module-cancel").addEventListener("click", closeModuleModal);
+    moduleModal.addEventListener("click", (e) => { if (e.target === moduleModal) closeModuleModal(); });
+
+    document.getElementById("sess-module-set").addEventListener("click", () => {
+        const extra = {};
+        if (sessModuleSelect.value === "__new__") {
+            const name = sessNewInput.value.trim();
+            if (name === "") { sessNewInput.focus(); return; }
+            extra.new_module = name;
+        } else if (sessModuleSelect.value) {
+            extra.module = sessModuleSelect.value;
+        } else {
+            return;
+        }
+        closeModuleModal();
+        timerAction("set_module", extra).catch(err => setFeedback(err.message, true));
+    });
+
+    // ── Stop → per-module log checklist ────────────────────────────────────
+    const stopModal     = document.getElementById("stop-modal");
+    const stopChecklist = document.getElementById("stop-checklist");
 
     function openStopModal() {
-        stopTimeEl.textContent = fmtTime(myState.elapsed);
-        // Default to the module picked in the log window, when it's a real one.
-        if (moduleSelect.value && moduleSelect.value !== "__new__") {
-            stopModuleSelect.value = moduleSelect.value;
-        }
-        stopNewInput.value = "";
-        stopNewWrap.classList.toggle("show", stopModuleSelect.value === "__new__");
+        const parts = myState.parts || [];
+        const rows = parts.map((p) => {
+            if (!p.module) {
+                return `<div class="stop-part disabled">
+                    <span class="muted">No module · ${fmtTime(p.seconds)} — won't be saved</span>
+                </div>`;
+            }
+            const color = moduleColor[p.module] || "#64748b";
+            return `<label class="stop-part">
+                <input type="checkbox" class="stop-part-cb" value="${escapeHtml(p.module)}" checked>
+                <span class="module-dot" style="background:${color}"></span>
+                <span class="stop-part-name">${escapeHtml(p.module)}</span>
+                <span class="stop-part-time">${fmtTime(p.seconds)}</span>
+            </label>`;
+        }).join("");
+        stopChecklist.innerHTML = rows || `<p class="muted">No study time recorded yet.</p>`;
         stopModal.style.display = "flex";
     }
 
-    function closeStopModal() {
-        stopModal.style.display = "none";
-    }
-
-    stopModuleSelect.addEventListener("change", () => {
-        const isNew = stopModuleSelect.value === "__new__";
-        stopNewWrap.classList.toggle("show", isNew);
-        if (isNew) stopNewInput.focus();
-    });
+    function closeStopModal() { stopModal.style.display = "none"; }
 
     document.getElementById("stop-cancel").addEventListener("click", closeStopModal);
     stopModal.addEventListener("click", (e) => { if (e.target === stopModal) closeStopModal(); });
 
-    // Discard: stop studying without recording a session.
+    // Discard all: stop studying without recording anything.
     document.getElementById("stop-discard").addEventListener("click", () => {
         closeStopModal();
         timerAction("stop").catch(err => setFeedback(err.message, true));
     });
 
-    // Log: record the elapsed study time against the chosen module, then clear.
+    // Log selected: keep the checked modules (one session each), drop the rest.
     document.getElementById("stop-log").addEventListener("click", () => {
-        const extra = {};
-        if (stopModuleSelect.value === "__new__") {
-            const name = stopNewInput.value.trim();
-            if (name === "") { stopNewInput.focus(); return; }
-            extra.new_module = name;
-        } else if (stopModuleSelect.value) {
-            extra.module = stopModuleSelect.value;
-        } else {
-            stopNewInput.focus();
-            return;
-        }
+        const modules = [...stopChecklist.querySelectorAll(".stop-part-cb:checked")]
+            .map(cb => cb.value);
 
         closeStopModal();
         setFeedback("Saving…", false);
-        timerAction("log", extra)
+        timerAction("log", { modules })
             .then(res => {
                 if (res.logged) {
-                    setFeedback(`Logged ${fmtTime(res.seconds)} of ${res.module}.`, false);
+                    const n = res.count || res.modules.length;
+                    setFeedback(`Logged ${n} session${n === 1 ? "" : "s"} · ${fmtTime(res.seconds)}.`, false);
                     loadData();
                 } else {
-                    setFeedback("Session stopped — nothing to log.", false);
+                    setFeedback("Session stopped — nothing logged.", false);
                 }
             })
             .catch(err => setFeedback(err.message, true));

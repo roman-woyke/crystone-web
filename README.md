@@ -144,14 +144,18 @@ CREATE TABLE study_status (
 -- NULL = the interval running now); pause/log closes it. While a session is
 -- in progress the rows have session_id NULL; on log they're attached to the
 -- study_sessions row. The day recap draws one block per interval, so breaks
--- show as the gaps between them.
+-- show as the gaps between them. `module_name` is the module active when the
+-- interval was opened (NULL = before any module was picked), so an "I'm
+-- studying" session split across modules keeps each interval's own module and
+-- can be logged as one study_sessions row per module.
 CREATE TABLE study_segments (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    user_id    INT NOT NULL REFERENCES users(id),
-    session_id INT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
-    started_at DATETIME NOT NULL,
-    ended_at   DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id),
+    session_id  INT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
+    module_name VARCHAR(255) NULL,
+    started_at  DATETIME NOT NULL,
+    ended_at    DATETIME NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Project time tracker (projects.php). Per-user projects with a colour and
@@ -261,6 +265,13 @@ CREATE TABLE fwordle_hints (
 > ```sql
 > DROP TABLE IF EXISTS fwordle_hints;
 > -- then run the CREATE TABLE above
+> ```
+>
+> **study_segments migration:** the "I'm studying" session can now be split
+> across modules, so each interval stores the module that was active when it
+> opened:
+> ```sql
+> ALTER TABLE study_segments ADD COLUMN module_name VARCHAR(255) NULL AFTER session_id;
 > ```
 
 ---

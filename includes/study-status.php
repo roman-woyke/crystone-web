@@ -53,6 +53,27 @@ function studyStatusPayload(PDO $pdo, $userId): array
         }
     }
 
+    // `me.parts` — my in-progress session broken down per module (one entry per
+    // module sub-session), summing each module's live intervals up to now. The
+    // stop checklist uses this to let me pick which parts to log. A null module
+    // is the time studied before any module was assigned (not loggable).
+    if ($me["active"]) {
+        $p = $pdo->prepare("
+            SELECT module_name,
+                   SUM(TIMESTAMPDIFF(SECOND, started_at, COALESCE(ended_at, NOW()))) AS seconds
+            FROM study_segments
+            WHERE user_id = ? AND session_id IS NULL
+            GROUP BY module_name
+            ORDER BY MIN(started_at)
+        ");
+        $p->execute([$userId]);
+        $parts = [];
+        foreach ($p->fetchAll(PDO::FETCH_ASSOC) as $pr) {
+            $parts[] = ["module" => $pr["module_name"], "seconds" => (int) $pr["seconds"]];
+        }
+        $me["parts"] = $parts;
+    }
+
     // `recap` is the current study day's timeline; `recap_prev` is the previous
     // study day's, so the dock can flip to a "Gestern" (yesterday) view.
     return [
@@ -88,14 +109,13 @@ function studyRecap(PDO $pdo, int $daysBack = 0): array
 
             SELECT
                 u.username,
-                st.module_name AS module,
+                seg.module_name AS module,
                 TIMESTAMPDIFF(MINUTE, $base, seg.started_at) AS start_min,
                 TIMESTAMPDIFF(MINUTE, $base, COALESCE(seg.ended_at, NOW())) AS end_min,
                 TIMESTAMPDIFF(SECOND, seg.started_at, COALESCE(seg.ended_at, NOW())) AS seconds,
                 (seg.ended_at IS NULL) AS live,
                 seg.started_at AS sort_at
             FROM study_segments seg
-            JOIN study_status st ON st.user_id = seg.user_id
             JOIN users u ON u.id = seg.user_id
             WHERE seg.session_id IS NULL
     " : "";
