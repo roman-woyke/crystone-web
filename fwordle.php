@@ -720,7 +720,7 @@ main.container { max-width: 1280px; }
     function hintRowHtml(h, len) {
         const cells = new Array(len).fill(null);
         if (h.type === "green")       cells[h.pos] = { ch: h.letter, cls: "green" };
-        else if (h.type === "orange") cells[0]     = { ch: h.letter, cls: "orange" };
+        else if (h.type === "orange") cells[h.pos != null ? h.pos : 0] = { ch: h.letter, cls: "orange" };
         else if (h.type === "grey")   h.letters.forEach((c, i) => { if (i < len) cells[i] = { ch: c, cls: "grey" }; });
         let html = `<div class="fw-grid" style="--cols:${len}">`;
         for (let i = 0; i < len; i++) {

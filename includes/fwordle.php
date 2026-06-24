@@ -293,7 +293,8 @@ function fwordleBoardKnowledge(array $guesses, string $answer): array
 // Compute a hint payload of the given type for a board, or null if there's
 // nothing new to reveal. payload encodings:
 //   grey   → 5 absent letters, e.g. "qzxwk"
-//   orange → one present letter, e.g. "r"
+//   orange → "letter:position" — letter is in the word but NOT at that shown
+//            position (so it reads as a true orange cell), e.g. "r:2"
 //   green  → "letter:position" (0-indexed), e.g. "r:3"
 function fwordleComputeHint(string $answer, array $guesses, string $type): ?string
 {
@@ -317,7 +318,12 @@ function fwordleComputeHint(string $answer, array $guesses, string $type): ?stri
             if (!isset($k['present'][$ch])) $cands[] = $ch;
         }
         if (!$cands) return null;
-        return $cands[array_rand($cands)];
+        $ch = $cands[array_rand($cands)];
+        // Show it on a cell where this letter ISN'T, so the orange is truthful.
+        $spots = [];
+        for ($i = 0; $i < $len; $i++) if ($answer[$i] !== $ch) $spots[] = $i;
+        if (!$spots) return null;
+        return $ch . ':' . $spots[array_rand($spots)];
     }
 
     if ($type === 'green') {
@@ -338,9 +344,20 @@ function fwordleParseHint(array $h): array
 {
     $type = $h['type'];
     $out  = ['board' => (int) $h['board_pos'], 'type' => $type];
-    if ($type === 'grey')        $out['letters'] = str_split($h['payload']);
-    elseif ($type === 'orange')  $out['letter']  = $h['payload'];
-    elseif ($type === 'green')   { [$l, $p] = explode(':', $h['payload']); $out['letter'] = $l; $out['pos'] = (int) $p; }
+    if ($type === 'grey') {
+        $out['letters'] = str_split($h['payload']);
+    } elseif ($type === 'orange' || $type === 'green') {
+        // Both encode "letter:position". Tolerate a legacy orange payload that's
+        // just a letter (no position) by defaulting it to spot 0.
+        if (strpos($h['payload'], ':') !== false) {
+            [$l, $p] = explode(':', $h['payload']);
+            $out['letter'] = $l;
+            $out['pos']    = (int) $p;
+        } else {
+            $out['letter'] = $h['payload'];
+            $out['pos']    = 0;
+        }
+    }
     return $out;
 }
 

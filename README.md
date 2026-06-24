@@ -237,7 +237,8 @@ CREATE TABLE fwordle_guesses (
 -- Hints (jokers): 3 per player per day (one each of grey/orange/green), at most
 -- one per board, and each only reveals NEW info. PK enforces one-per-board; the
 -- unique key enforces one-of-each-type. payload encodes the reveal (grey = 5
--- absent letters; orange = a present letter; green = "letter:position").
+-- absent letters; orange/green = "letter:position" — for orange the letter is
+-- in the word but NOT at that shown spot, for green it IS at that spot).
 CREATE TABLE fwordle_hints (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
