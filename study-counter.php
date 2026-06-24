@@ -26,25 +26,11 @@ foreach ($customMods as $c) {
 // ── Initial state, rendered server-side so the page paints complete on the
 //    first byte (no fetch round-trip, no "Loading…" flash on every visit). ──
 require_once __DIR__ . "/includes/study-status.php";
+require_once __DIR__ . "/includes/study-sessions.php";
 $initialStatus = studyStatusPayload($pdo, $_SESSION["user_id"]);
 
-$sessStmt = $pdo->query("
-    SELECT u.username, s.module_name, s.studied_on, s.at_library, SUM(s.seconds) AS seconds
-    FROM study_sessions s
-    JOIN users u ON u.id = s.user_id
-    GROUP BY u.username, s.module_name, s.studied_on, s.at_library
-    ORDER BY s.studied_on
-");
-$initialSessions = [];
-foreach ($sessStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $initialSessions[] = [
-        "username"   => $r["username"],
-        "module"     => $r["module_name"],
-        "date"       => $r["studied_on"],
-        "seconds"    => (int) $r["seconds"],
-        "at_library" => (bool) $r["at_library"],
-    ];
-}
+// Sessions spanning midnight are split across days (see studySessionsByDay).
+$initialSessions = studySessionsByDay($pdo);
 
 $pageTitle = "Study Counter";
 require_once __DIR__ . "/includes/header.php";
