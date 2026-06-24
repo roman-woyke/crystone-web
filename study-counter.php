@@ -487,19 +487,28 @@ main.container {
 /* Primary dock button: "I'm studying" is green; once active it becomes the red
    "Stop session". (Id selectors so they win over the generic .active above.) */
 #studying-toggle {
-    background: var(--success);
-    border-color: transparent;
-    color: #06251a;
+    background: rgba(52, 211, 153, 0.12);
+    border-color: rgba(52, 211, 153, 0.35);
+    color: var(--success);
     box-shadow: none;
 }
-#studying-toggle:hover { filter: brightness(1.08); }
+#studying-toggle:hover {
+    background: rgba(52, 211, 153, 0.22);
+    border-color: var(--success);
+}
 
+/* "Stop session" — same red as the .btn-danger "Discard all" button. */
 #studying-toggle.active {
-    background: var(--danger);
-    color: #fff;
+    background: rgba(248, 113, 113, 0.12);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: var(--danger);
     box-shadow: none;
+    filter: none;
 }
-#studying-toggle.active:hover { filter: brightness(1.08); }
+#studying-toggle.active:hover {
+    background: rgba(248, 113, 113, 0.22);
+    border-color: var(--danger);
+}
 
 .studying-toggle:disabled {
     opacity: 0.55;
@@ -531,17 +540,17 @@ main.container {
     color: var(--info, #38bdf8);
 }
 
-/* "Leave library" (active) — a muted, less-saturated red. */
+/* "Leave library" (active) — same red as the .btn-danger "Discard all" button. */
 .studying-bib.active {
-    background: rgba(239, 68, 68, 0.5);
-    border-color: rgba(239, 68, 68, 0.55);
-    color: #fff;
+    background: rgba(248, 113, 113, 0.12);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: var(--danger);
     box-shadow: none;
 }
 .studying-bib.active:hover {
-    background: rgba(239, 68, 68, 0.62);
-    border-color: rgba(239, 68, 68, 0.7);
-    color: #fff;
+    background: rgba(248, 113, 113, 0.22);
+    border-color: var(--danger);
+    color: var(--danger);
 }
 
 /* On-break sub-container */
