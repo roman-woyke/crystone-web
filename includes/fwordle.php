@@ -132,20 +132,12 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
     $len  = (int) $day['word_length'];
     $prev = date('Y-m-d', strtotime($date . ' -1 day'));
 
-    // Players who used ALL their guesses without solving → each removes one
-    // board. (finished = ran out of guesses; someone who guessed a bit and left
-    // without exhausting them doesn't count.)
-    $failStmt = $pdo->prepare("
-        SELECT COUNT(*) FROM fwordle_results
-        WHERE game_date = ? AND solved = 0 AND finished = 1
-    ");
-    $failStmt->execute([$prev]);
-    $failed = (int) $failStmt->fetchColumn();
-    $numBoards = max(1, FWORDLE_MAX_WORDS - $failed);
+    // Always a fixed FWORDLE_MAX_WORDS boards — failing to solve carries enough
+    // intrinsic penalty (no word pick, lost streak) without also shrinking the grid.
+    $numBoards = FWORDLE_MAX_WORDS;
 
     // Solvers each get a slot to fill + own. Boards are ordered by a FIXED player
     // rank (roman/ben/basti/lorenz), not solve time, so the numbering is stable.
-    // Because solvers + failers ≤ players ≤ 4, the solver count never exceeds numBoards.
     $solverStmt = $pdo->prepare("
         SELECT r.user_id, u.username FROM fwordle_results r
         JOIN users u ON u.id = r.user_id
