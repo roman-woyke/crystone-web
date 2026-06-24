@@ -140,7 +140,7 @@ main.container { max-width: 1280px; }
 }
 .fw-joker-btn[disabled] { cursor: not-allowed; }
 
-.fw-joker-hint { margin: 7px 0 0; min-height: 1em; font-size: 0.82rem; color: var(--violet); }
+.fw-joker-hint { margin: 2px 0 7px; min-height: 1em; font-size: 0.82rem; color: var(--violet); }
 
 /* While picking a board for a joker, boards that can take it light up. */
 .fw-board.pickable {
@@ -709,7 +709,7 @@ main.container { max-width: 1280px; }
     const HINT_TYPES = [
         { type: "armor",  board: false, swatch: '<span class="sw emoji">🛡️</span>', text: "Armor (+1 guess)" },
         { type: "orange", board: true,  swatch: '<span class="sw emoji">🔍</span>', text: "Reveal (+2 🟨)" },
-        { type: "green",  board: true,  swatch: '<span class="sw emoji">🧩</span>', text: "Place (+1 letter)" },
+        { type: "green",  board: true,  swatch: '<span class="sw emoji">🧩</span>', text: "Place (+1 🟩)" },
     ];
 
     // Boards a board-joker can target: unsolved and not yours. (Different joker
