@@ -15,15 +15,53 @@ $date   = date("Y-m-d");
 $type  = $_POST["type"] ?? "";
 $board = filter_var($_POST["board"] ?? null, FILTER_VALIDATE_INT);
 
-if (!in_array($type, ["grey", "orange", "green"], true)) {
+if (!in_array($type, ["armor", "orange", "green"], true)) {
     http_response_code(400);
-    exit("Bad hint type.");
+    exit("Bad joker type.");
 }
 
 fwordleEnsureDay($pdo, $date);
 fwordleFinalizeWords($pdo, $date);
 
-// Answers for today (board positions).
+// Done for the day? No more jokers.
+$rStmt = $pdo->prepare("SELECT finished FROM fwordle_results WHERE game_date = ? AND user_id = ?");
+$rStmt->execute([$date, $userId]);
+if ((int) $rStmt->fetchColumn() === 1) {
+    http_response_code(409);
+    exit("You're already done for today.");
+}
+
+// Each joker is once per day.
+$hStmt = $pdo->prepare("SELECT type FROM fwordle_hints WHERE game_date = ? AND user_id = ? AND type = ?");
+$hStmt->execute([$date, $userId, $type]);
+if ($hStmt->fetchColumn() !== false) {
+    http_response_code(409);
+    exit("You've already used your $type joker.");
+}
+
+// Every joker costs 1 streak — you must have streak left to spend.
+if (fwordleStreakInfo($pdo, $date, $userId)['effective'] < 1) {
+    http_response_code(409);
+    exit("Not enough streak to spend a joker.");
+}
+
+// ── Armor: +1 guess overall, no board, no reveal. ──
+if ($type === "armor") {
+    try {
+        $pdo->prepare("
+            INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload)
+            VALUES (?, ?, NULL, 'armor', '1')
+        ")->execute([$date, $userId]);
+    } catch (Throwable $e) {
+        http_response_code(409);
+        exit("Joker conflict — reload and try again.");
+    }
+    header("Content-Type: application/json");
+    echo json_encode(fwordleState($pdo, $date, $userId));
+    exit;
+}
+
+// ── Board jokers (orange / green) ──
 $aStmt = $pdo->prepare("SELECT position, word, chooser_id FROM fwordle_words WHERE game_date = ? ORDER BY position");
 $aStmt->execute([$date]);
 $answers = [];
@@ -44,28 +82,6 @@ if ($chooser[$board] === $userId) {
     exit("That's your own board.");
 }
 
-// Done for the day? No more hints.
-$rStmt = $pdo->prepare("SELECT finished FROM fwordle_results WHERE game_date = ? AND user_id = ?");
-$rStmt->execute([$date, $userId]);
-if ((int) $rStmt->fetchColumn() === 1) {
-    http_response_code(409);
-    exit("You're already done for today.");
-}
-
-// One joker per board, and each type only once.
-$hStmt = $pdo->prepare("SELECT board_pos, type FROM fwordle_hints WHERE game_date = ? AND user_id = ?");
-$hStmt->execute([$date, $userId]);
-foreach ($hStmt->fetchAll(PDO::FETCH_ASSOC) as $h) {
-    if ((int) $h["board_pos"] === $board) {
-        http_response_code(409);
-        exit("This board already has a hint.");
-    }
-    if ($h["type"] === $type) {
-        http_response_code(409);
-        exit("You've already used your $type hint.");
-    }
-}
-
 // My guesses so far (to avoid revealing anything I already know).
 $gStmt = $pdo->prepare("SELECT guess FROM fwordle_guesses WHERE game_date = ? AND user_id = ? ORDER BY guess_index");
 $gStmt->execute([$date, $userId]);
@@ -84,7 +100,7 @@ try {
     ")->execute([$date, $userId, $board, $type, $payload]);
 } catch (Throwable $e) {
     http_response_code(409);
-    exit("Hint conflict — reload and try again.");
+    exit("Joker conflict — reload and try again.");
 }
 
 header("Content-Type: application/json");

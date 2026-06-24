@@ -20,7 +20,8 @@ $lenStmt->execute([$date]);
 $len = (int) $lenStmt->fetchColumn();
 
 $numBoards  = (int) $pdo->query("SELECT COUNT(*) FROM fwordle_words WHERE game_date = " . $pdo->quote($date))->fetchColumn();
-$maxGuesses = fwordleMaxGuesses($numBoards, $len);
+// The armor joker grants this player +1 guess overall.
+$maxGuesses = fwordleMaxGuesses($numBoards, $len) + (fwordleHasArmor($pdo, $date, $userId) ? 1 : 0);
 
 // Already finished today? No more guesses.
 $rStmt = $pdo->prepare("SELECT finished, solved, solved_at FROM fwordle_results WHERE game_date = ? AND user_id = ?");

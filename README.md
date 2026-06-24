@@ -234,26 +234,34 @@ CREATE TABLE fwordle_guesses (
     PRIMARY KEY (game_date, user_id, guess_index)
 );
 
--- Hints (jokers): 3 per player per day (one each of grey/orange/green), at most
--- one per board, and each only reveals NEW info. PK enforces one-per-board; the
--- unique key enforces one-of-each-type. payload encodes the reveal (grey = 5
--- absent letters; orange/green = "letter:position" — for orange the letter is
--- in the word but NOT at that shown spot, for green it IS at that spot).
+-- Jokers: 3 per player per day, one of each type, each costing 1 streak.
+--   armor  → +1 guess overall; board-less (board_pos NULL), payload = '1'.
+--   orange → +2 present letters on a board; payload = up to 2 "letter:position"
+--            cells (letter is in the word but NOT at that shown spot), comma-joined.
+--   green  → +1 correctly-placed letter on a board; payload = one "letter:position".
+-- PK enforces one-of-each-type per day; armor/orange/green may share a board.
 CREATE TABLE fwordle_hints (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
-    board_pos  TINYINT UNSIGNED NOT NULL,
-    type       ENUM('grey','orange','green') NOT NULL,
+    type       ENUM('armor','orange','green') NOT NULL,
+    board_pos  TINYINT UNSIGNED NULL,
     payload    VARCHAR(64) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (game_date, user_id, board_pos),
-    UNIQUE KEY uniq_type (game_date, user_id, type)
+    PRIMARY KEY (game_date, user_id, type)
 );
 ```
 
 > **Deploy note:** run the corresponding `CREATE TABLE` on the database
 > **before** pushing code that uses a new table, otherwise pages hitting it
 > will 500.
+>
+> **fwordle_hints migration:** the joker rework changed this table (new `type`
+> enum, nullable `board_pos`, new PK). Jokers are throwaway daily state, so the
+> simplest migration is to recreate it:
+> ```sql
+> DROP TABLE IF EXISTS fwordle_hints;
+> -- then run the CREATE TABLE above
+> ```
 
 ---
 

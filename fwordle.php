@@ -100,7 +100,8 @@ main.container { max-width: 1280px; }
     flex-shrink: 0;
 }
 .fw-joker-btn .jk-sub { color: var(--text-3); font-size: 0.72rem; }
-.fw-joker-btn.grey   .sw { background: var(--fw-grey); }
+.fw-joker-btn .sw.emoji { background: none; font-size: 15px; line-height: 1; }
+.fw-joker-btn.armor  .sw { background: none; }
 .fw-joker-btn.orange .sw { background: var(--fw-orange); }
 .fw-joker-btn.green  .sw { background: var(--fw-green); }
 .fw-joker-btn.active {
@@ -206,6 +207,14 @@ main.container { max-width: 1280px; }
 .fw-cell.green  { background: var(--fw-green); }
 .fw-cell.orange { background: var(--fw-orange); }
 .fw-cell.grey   { background: var(--fw-grey); }
+
+/* The bonus guess row unlocked by the 🛡️ armor joker — tinted so it's clearly
+   an added row. The tint rides on top of any colour the cell already has. */
+.fw-cell.bonus {
+    border: 2px solid var(--sky, #38bdf8);
+    box-shadow: inset 0 0 0 2px rgba(56, 189, 248, 0.25);
+}
+.fw-cell.bonus.empty { border-style: dashed; }
 
 .fw-answer {
     margin-top: 8px;
@@ -520,7 +529,9 @@ main.container { max-width: 1280px; }
     const BASE_PATH = "<?= BASE_PATH ?>";
     let STATE = <?= json_encode($initialState) ?>;
 
-    const MAX = STATE.max_guesses;
+    // My guess limit is personal: the base day limit plus the armor joker (+1).
+    // It can change mid-game (when armor is bought), so always read it live.
+    const myMax = () => STATE.me.max_guesses;
 
     // ── Local input state (never lives on the server until submitted) ──────
     // `buffer` is the row as typed: letters plus spaces (a space = a blank cell
@@ -569,7 +580,7 @@ main.container { max-width: 1280px; }
             <span class="fw-pill">📅 <strong>${escapeHtml(STATE.date)}</strong></span>
             <span class="fw-pill"><strong>${L()}</strong>-letter words</span>
             <span class="fw-pill"><strong>${STATE.num_boards}</strong> board${STATE.num_boards === 1 ? "" : "s"}</span>
-            <span class="fw-pill">Guess <strong>${Math.min(me.guesses_used + (me.finished ? 0 : 1), MAX)}</strong>/${MAX}</span>
+            <span class="fw-pill">Guess <strong>${Math.min(me.guesses_used + (me.finished ? 0 : 1), myMax())}</strong>/${myMax()}${me.armor ? " 🛡️" : ""}</span>
             ${result}
         `;
     }
@@ -590,7 +601,11 @@ main.container { max-width: 1280px; }
         }
 
         boardsEl.style.setProperty("--boards", n);
+        const max = myMax();
         const activeRowIndex = me.finished ? -1 : me.guesses_used;
+        // The armor joker adds exactly one row — the last one — which we tint.
+        const bonusRow = me.armor ? max - 1 : -1;
+        const bcls = (base, r) => base + (r === bonusRow ? " bonus" : "");
         let html = "";
 
         const owned = me.owned || [];
@@ -612,9 +627,9 @@ main.container { max-width: 1280px; }
             if (isOwned) {
                 // You chose this word — it's revealed and counts as solved.
                 const ans = answers[b] || "";
-                for (let r = 0; r < MAX; r++) {
+                for (let r = 0; r < max; r++) {
                     for (let i = 0; i < len; i++) {
-                        html += (r === 0) ? cell(ans[i] || "", "green") : cell("", "empty");
+                        html += (r === 0) ? cell(ans[i] || "", "green") : cell("", bcls("empty", r));
                     }
                 }
             } else {
@@ -627,22 +642,22 @@ main.container { max-width: 1280px; }
                         if (me.guesses[r].boards[b].every(c => c === "green")) { shown = r + 1; break; }
                     }
                 }
-                for (let r = 0; r < MAX; r++) {
+                for (let r = 0; r < max; r++) {
                     if (r < shown) {
                         const g = me.guesses[r];
                         const colors = g.boards[b];
                         for (let i = 0; i < len; i++) {
                             const ch = g.text[i] === "_" ? "" : g.text[i];
-                            html += cell(ch, colors[i]);
+                            html += cell(ch, bcls(colors[i], r));
                         }
                     } else if (r === activeRowIndex && !solved) {
                         for (let i = 0; i < len; i++) {
                             const ch = buffer[i];
-                            if (ch && ch !== " ") html += cell(ch, "active");
-                            else html += cell("", buffer.length ? "blank" : "empty");
+                            if (ch && ch !== " ") html += cell(ch, bcls("active", r));
+                            else html += cell("", bcls(buffer.length ? "blank" : "empty", r));
                         }
                     } else {
-                        for (let i = 0; i < len; i++) html += cell("", "empty");
+                        for (let i = 0; i < len; i++) html += cell("", bcls("empty", r));
                     }
                 }
             }
@@ -662,23 +677,24 @@ main.container { max-width: 1280px; }
         }
     }
 
-    // ── Jokers (hints): one shared bar of 3 buttons, doubling as the legend.
-    //    Click a joker, then pick a board to apply it to. ────────────────────
+    // ── Jokers: one shared bar of 3 buttons, doubling as the legend. Each costs
+    //    1 streak. Armor applies instantly (no board); orange/green need a board
+    //    pick. ─────────────────────────────────────────────────────────────────
     const HINT_TYPES = [
-        { type: "grey",   text: "Grey joker (5x letters)" },
-        { type: "orange", text: "Orange joker (1x letter)" },
-        { type: "green",  text: "Green joker (1x letter)" },
+        { type: "armor",  board: false, swatch: '<span class="sw emoji">🛡️</span>', text: "Armor (+1 guess)" },
+        { type: "orange", board: true,  swatch: '<span class="sw"></span>',         text: "Orange (+2 letters)" },
+        { type: "green",  board: true,  swatch: '<span class="sw"></span>',         text: "Green (+1 letter)" },
     ];
 
-    // Boards a joker can still target: unsolved, not yours, no joker yet.
+    // Boards a board-joker can target: unsolved and not yours. (Different joker
+    // types may stack on the same board; each type is still once-per-day.)
     function eligibleBoards() {
         const me = STATE.me;
         if (me.finished) return [];
-        const usedBoards = me.hint_boards_used || [];
         const owned = me.owned || [];
         const out = [];
         for (let b = 0; b < STATE.num_boards; b++) {
-            if (!me.solved_boards[b] && !owned.includes(b) && !usedBoards.includes(b)) out.push(b);
+            if (!me.solved_boards[b] && !owned.includes(b)) out.push(b);
         }
         return out;
     }
@@ -687,16 +703,21 @@ main.container { max-width: 1280px; }
         const me = STATE.me;
         const typesUsed = me.hint_types_used || [];
         const canPick = eligibleBoards().length > 0;
+        const broke = (me.streak || 0) < 1; // no streak left to spend
 
         // Drop a stale pending pick if it's no longer usable.
-        if (pendingHint && (me.finished || !canPick || typesUsed.includes(pendingHint))) pendingHint = null;
+        if (pendingHint) {
+            const t = HINT_TYPES.find(x => x.type === pendingHint);
+            if (me.finished || broke || typesUsed.includes(pendingHint) || (t && t.board && !canPick)) pendingHint = null;
+        }
 
         jokersEl.innerHTML = HINT_TYPES.map(t => {
             const used = typesUsed.includes(t.type);
             const active = pendingHint === t.type;
-            const dis = (used || me.finished || !canPick) ? " disabled" : "";
+            // Board jokers also need an eligible board; armor doesn't.
+            const dis = (used || me.finished || broke || (t.board && !canPick)) ? " disabled" : "";
             return `<button type="button" class="fw-joker-btn ${t.type}${used ? " used" : ""}${active ? " active" : ""}" data-type="${t.type}"${dis}>
-                <span class="sw"></span><span>${used ? "✓ " : ""}${t.text}</span>
+                ${t.swatch}<span>${used ? "✓ " : ""}${t.text}</span>
             </button>`;
         }).join("");
 
@@ -706,22 +727,25 @@ main.container { max-width: 1280px; }
 
         jokerHintEl.textContent = pendingHint
             ? `Pick a board for the ${pendingHint} joker (click the joker again to cancel).`
-            : "";
+            : broke ? "Need at least 1 🔥 streak to spend a joker (each one costs 1)."
+            : "Each joker costs 1 streak.";
     }
 
     function selectHint(type) {
         if (busy || STATE.me.finished) return;
-        pendingHint = (pendingHint === type) ? null : type; // toggle
+        const t = HINT_TYPES.find(x => x.type === type);
+        if (t && !t.board) { applyHint(type, null); return; } // armor: instant
+        pendingHint = (pendingHint === type) ? null : type;   // board jokers: toggle pick
         renderJokers();
         renderBoards(); // refresh the pickable highlight
     }
 
-    // The used hint shown as an extra board row beneath the board.
+    // A used board-joker shown as an extra board row beneath the board (armor
+    // isn't board-attached, so it never shows here).
     function hintRowHtml(h, len) {
         const cells = new Array(len).fill(null);
-        if (h.type === "green")       cells[h.pos] = { ch: h.letter, cls: "green" };
-        else if (h.type === "orange") cells[h.pos != null ? h.pos : 0] = { ch: h.letter, cls: "orange" };
-        else if (h.type === "grey")   h.letters.forEach((c, i) => { if (i < len) cells[i] = { ch: c, cls: "grey" }; });
+        const cls = h.type === "green" ? "green" : "orange";
+        (h.cells || []).forEach(c => { if (c.pos >= 0 && c.pos < len) cells[c.pos] = { ch: c.letter, cls }; });
         let html = `<div class="fw-grid" style="--cols:${len}">`;
         for (let i = 0; i < len; i++) {
             const c = cells[i];
@@ -733,18 +757,19 @@ main.container { max-width: 1280px; }
     function renderHintRows() {
         const me = STATE.me;
         const n = STATE.num_boards;
-        if (n === 0 || !(me.hints || []).length) { hintRowsEl.innerHTML = ""; return; }
+        const boardHints = (me.hints || []).filter(h => h.type !== "armor");
+        if (n === 0 || !boardHints.length) { hintRowsEl.innerHTML = ""; return; }
         hintRowsEl.style.setProperty("--boards", n);
 
         const byBoard = {};
-        (me.hints || []).forEach(h => { byBoard[h.board] = h; });
+        boardHints.forEach(h => { byBoard[h.board] = h; });
         const len = L();
 
         let html = "";
         for (let b = 0; b < n; b++) {
             const h = byBoard[b];
             if (!h) { html += `<div class="fw-board fw-empty-slot"></div>`; continue; }
-            const label = h.type === "grey" ? "not in word" : h.type === "orange" ? "in word" : "spot " + (h.pos + 1);
+            const label = h.type === "orange" ? "in word" : "in spot";
             html += `<div class="fw-board">
                 <div class="fw-board-head"><span>Board ${b + 1} hint</span><span>${label}</span></div>
                 ${hintRowHtml(h, len)}
@@ -760,9 +785,9 @@ main.container { max-width: 1280px; }
         setMsg("");
         const body = new FormData();
         body.append("type", type);
-        body.append("board", board);
+        if (board !== null && board !== undefined) body.append("board", board);
         fetch(BASE_PATH + "/api/fwordle-hint.php", { method: "POST", body })
-            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Hint failed."); }))
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Joker failed."); }))
             .then(state => { STATE = state; renderAll(); })
             .catch(err => setMsg(err.message))
             .finally(() => { busy = false; });
@@ -808,9 +833,8 @@ main.container { max-width: 1280px; }
             }
         }
         (STATE.me.hints || []).filter(h => h.board === b).forEach(h => {
-            if (h.type === "grey")        h.letters.forEach(c => bump(c, "grey"));
-            else if (h.type === "orange") bump(h.letter, "orange");
-            else if (h.type === "green")  bump(h.letter, "green");
+            const c = h.type === "green" ? "green" : "orange";
+            (h.cells || []).forEach(cell => bump(cell.letter, c));
         });
         return st;
     }
@@ -873,11 +897,12 @@ main.container { max-width: 1280px; }
         }
         const len = L();
         oppEl.innerHTML = opp.map(o => {
+            const oMax = o.max_guesses;
             const solvedCount = o.solved_boards.filter(Boolean).length;
             const jokerTxt = o.jokers_used > 0 ? ` · 🃏${o.jokers_used}` : "";
             const statusTxt = (o.finished
                 ? (o.solved ? `solved in ${o.guesses_used}` : `done · ${solvedCount}/${STATE.num_boards}`)
-                : `${o.guesses_used}/${MAX} guesses`) + jokerTxt;
+                : `${o.guesses_used}/${oMax} guesses`) + jokerTxt;
 
             const owned = o.owned || [];
             let minis = "";
@@ -886,7 +911,7 @@ main.container { max-width: 1280px; }
                 // (they never guessed it, so there's no winning row to freeze on).
                 if (owned.includes(b)) {
                     minis += `<div class="fw-mini" style="--cols:${len}">`;
-                    for (let r = 0; r < MAX; r++) {
+                    for (let r = 0; r < oMax; r++) {
                         for (let i = 0; i < len; i++) {
                             minis += `<div class="fw-mcell ${r === 0 ? "green" : ""}"></div>`;
                         }
@@ -902,7 +927,7 @@ main.container { max-width: 1280px; }
                     }
                 }
                 minis += `<div class="fw-mini" style="--cols:${len}">`;
-                for (let r = 0; r < MAX; r++) {
+                for (let r = 0; r < oMax; r++) {
                     for (let i = 0; i < len; i++) {
                         const c = (r < shown) ? o.guesses[r].boards[b][i] : "";
                         const cls = (c === "green" || c === "orange" || c === "grey") ? c : "";

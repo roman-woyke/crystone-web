@@ -260,8 +260,11 @@ function fwordlePlayerRank(string $username): int
 }
 
 // ── Hints (jokers) ───────────────────────────────────────────────────────────
-// 3 jokers per day (one each of grey/orange/green), at most one per board. Each
-// only ever reveals NEW info beyond what the player's own guesses already show.
+// 3 jokers per day, one each: ARMOR (🛡️ +1 guess overall, no board), ORANGE
+// (+2 present letters on a board) and GREEN (+1 correctly-placed letter on a
+// board). Each costs 1 streak, so a player can shed at most 3 streak/day, and
+// can only buy one while they still have streak to spend. The board jokers only
+// ever reveal NEW info beyond what the player's own guesses already show.
 
 // What a player already knows about one board, derived from their guesses.
 function fwordleBoardKnowledge(array $guesses, string $answer): array
@@ -282,40 +285,42 @@ function fwordleBoardKnowledge(array $guesses, string $answer): array
     return ['present' => $present, 'absent' => $absent, 'greenPos' => $greenPos];
 }
 
-// Compute a hint payload of the given type for a board, or null if there's
-// nothing new to reveal. payload encodings:
-//   grey   → 5 absent letters, e.g. "qzxwk"
-//   orange → "letter:position" — letter is in the word but NOT at that shown
-//            position (so it reads as a true orange cell), e.g. "r:2"
-//   green  → "letter:position" (0-indexed), e.g. "r:3"
+// Compute a board-joker reveal, or null if there's nothing new to reveal.
+// ARMOR carries no board reveal (handled by the endpoint). payload encodes one
+// or more "letter:position" cells joined by commas:
+//   orange → up to 2 cells, each a present letter shown on a spot it ISN'T (so
+//            it reads as a true orange cell), e.g. "r:2,t:5"
+//   green  → 1 cell, the correct letter at its spot (0-indexed), e.g. "r:3"
 function fwordleComputeHint(string $answer, array $guesses, string $type): ?string
 {
     $answer = strtolower($answer);
     $len = strlen($answer);
     $k = fwordleBoardKnowledge($guesses, $answer);
 
-    if ($type === 'grey') {
-        $cands = [];
-        foreach (range('a', 'z') as $ch) {
-            if (strpos($answer, $ch) === false && !isset($k['absent'][$ch])) $cands[] = $ch;
-        }
-        if (count($cands) < 5) return null;
-        shuffle($cands);
-        return implode('', array_slice($cands, 0, 5));
-    }
-
     if ($type === 'orange') {
+        // Present letters the player doesn't yet know are present.
         $cands = [];
         foreach (array_unique(str_split($answer)) as $ch) {
             if (!isset($k['present'][$ch])) $cands[] = $ch;
         }
         if (!$cands) return null;
-        $ch = $cands[array_rand($cands)];
-        // Show it on a cell where this letter ISN'T, so the orange is truthful.
-        $spots = [];
-        for ($i = 0; $i < $len; $i++) if ($answer[$i] !== $ch) $spots[] = $i;
-        if (!$spots) return null;
-        return $ch . ':' . $spots[array_rand($spots)];
+        shuffle($cands);
+        $cands = array_slice($cands, 0, 2); // reveal up to 2
+        $usedPos = [];
+        $cells = [];
+        foreach ($cands as $ch) {
+            // Show each on a (still free) cell where this letter ISN'T, so the
+            // orange is truthful and the two reveals don't collide.
+            $spots = [];
+            for ($i = 0; $i < $len; $i++) {
+                if ($answer[$i] !== $ch && !isset($usedPos[$i])) $spots[] = $i;
+            }
+            if (!$spots) continue;
+            $p = $spots[array_rand($spots)];
+            $usedPos[$p] = true;
+            $cells[] = $ch . ':' . $p;
+        }
+        return $cells ? implode(',', $cells) : null;
     }
 
     if ($type === 'green') {
@@ -331,26 +336,64 @@ function fwordleComputeHint(string $answer, array $guesses, string $type): ?stri
     return null;
 }
 
-// Parse a stored hint row into the client shape.
+// Parse a stored hint row into the client shape. Armor is board-less; orange and
+// green carry a `cells` array of {letter, pos} (orange up to 2, green 1).
 function fwordleParseHint(array $h): array
 {
     $type = $h['type'];
-    $out  = ['board' => (int) $h['board_pos'], 'type' => $type];
-    if ($type === 'grey') {
-        $out['letters'] = str_split($h['payload']);
-    } elseif ($type === 'orange' || $type === 'green') {
-        // Both encode "letter:position". Tolerate a legacy orange payload that's
-        // just a letter (no position) by defaulting it to spot 0.
-        if (strpos($h['payload'], ':') !== false) {
-            [$l, $p] = explode(':', $h['payload']);
-            $out['letter'] = $l;
-            $out['pos']    = (int) $p;
+    if ($type === 'armor') {
+        return ['type' => 'armor'];
+    }
+    $cells = [];
+    foreach (explode(',', $h['payload']) as $part) {
+        if ($part === '') continue;
+        if (strpos($part, ':') !== false) {
+            [$l, $p] = explode(':', $part);
+            $cells[] = ['letter' => $l, 'pos' => (int) $p];
         } else {
-            $out['letter'] = $h['payload'];
-            $out['pos']    = 0;
+            $cells[] = ['letter' => $part, 'pos' => 0];
         }
     }
-    return $out;
+    return ['board' => (int) $h['board_pos'], 'type' => $type, 'cells' => $cells];
+}
+
+// Did this user buy the armor joker today? (it grants +1 guess overall.)
+function fwordleHasArmor(PDO $pdo, string $date, int $userId): bool
+{
+    $s = $pdo->prepare("SELECT 1 FROM fwordle_hints WHERE game_date = ? AND user_id = ? AND type = 'armor'");
+    $s->execute([$date, $userId]);
+    return (bool) $s->fetchColumn();
+}
+
+// Current solve streak for a user, net of the joker streak-cost.
+//   base      = run of consecutive solved days (today if solved, else through
+//               yesterday, so an unplayed today doesn't break it).
+//   penalty   = jokers used within that window INCLUDING today, so a joker bought
+//               today drops the streak immediately even before today is solved.
+//   effective = max(0, base - penalty).
+function fwordleStreakInfo(PDO $pdo, string $date, int $userId): array
+{
+    $s = $pdo->prepare("SELECT game_date FROM fwordle_results WHERE user_id = ? AND solved = 1");
+    $s->execute([$userId]);
+    $solved = [];
+    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $d) $solved[$d] = true;
+
+    $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
+    $cursor = isset($solved[$date]) ? $date : $yesterday;
+    $base = 0;
+    $oldest = $date;
+    while (isset($solved[$cursor])) {
+        $base++;
+        $oldest = $cursor;
+        $cursor = date('Y-m-d', strtotime($cursor . ' -1 day'));
+    }
+    $start = $base > 0 ? $oldest : $date; // window floor (today when no streak)
+
+    $p = $pdo->prepare("SELECT COUNT(*) FROM fwordle_hints WHERE user_id = ? AND game_date BETWEEN ? AND ?");
+    $p->execute([$userId, $start, $date]);
+    $penalty = (int) $p->fetchColumn();
+
+    return ['base' => $base, 'penalty' => $penalty, 'effective' => max(0, $base - $penalty)];
 }
 
 // Board positions whose word this user chose (auto-solved for them).
@@ -431,13 +474,28 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     $unStmt->execute([$userId]);
     $myName = $unStmt->fetchColumn() ?: '';
 
+    // ── Hints (jokers) used today, grouped by user (needed for per-user max
+    //    guesses, since the armor joker grants +1). ──
+    $hintStmt = $pdo->prepare("SELECT user_id, board_pos, type, payload FROM fwordle_hints WHERE game_date = ?");
+    $hintStmt->execute([$date]);
+    $hintsByUser = [];
+    foreach ($hintStmt->fetchAll(PDO::FETCH_ASSOC) as $h) {
+        $hintsByUser[(int) $h['user_id']][] = $h;
+    }
+    $armorOf = function (int $uid) use ($hintsByUser): bool {
+        foreach ($hintsByUser[$uid] ?? [] as $h) if ($h['type'] === 'armor') return true;
+        return false;
+    };
+    $maxGuessesOf = fn(int $uid): int => $maxGuesses + ($armorOf($uid) ? 1 : 0);
+
     // ── Me (computed even with zero guesses, so an owned board still shows) ──
     $myGuesses = $byUser[$userId]['guesses'] ?? [];
     $myOwned   = $ownedOf($userId);
     $mb        = fwordleUserBoards($myGuesses, $answers, $myOwned);
     $myUsed    = count($myGuesses);
     $myRes     = $results[$userId] ?? null;
-    $myFinished = $myRes ? (bool) $myRes['finished'] : ($mb['solved'] || $myUsed >= $maxGuesses);
+    $myMax     = $maxGuessesOf($userId);
+    $myFinished = $myRes ? (bool) $myRes['finished'] : ($mb['solved'] || $myUsed >= $myMax);
 
     // Persist a result when solved/finished isn't recorded yet — covers an
     // auto-win on a board you chose (no guess ever submitted).
@@ -458,13 +516,6 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $reveal[$p] = ($myFinished || in_array($p, $myOwned, true)) ? $answers[$p] : null;
     }
 
-    // ── Hints (jokers) used today, grouped by user ──
-    $hintStmt = $pdo->prepare("SELECT user_id, board_pos, type, payload FROM fwordle_hints WHERE game_date = ?");
-    $hintStmt->execute([$date]);
-    $hintsByUser = [];
-    foreach ($hintStmt->fetchAll(PDO::FETCH_ASSOC) as $h) {
-        $hintsByUser[(int) $h['user_id']][] = $h;
-    }
     $myHints = $hintsByUser[$userId] ?? [];
 
     $me = [
@@ -472,13 +523,16 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'finished'         => $myFinished,
         'solved'           => $mb['solved'],
         'guesses_used'     => $myUsed,
+        'max_guesses'      => $myMax,
+        'base_max_guesses' => $maxGuesses,
+        'armor'            => $armorOf($userId),
+        'streak'           => fwordleStreakInfo($pdo, $date, $userId)['effective'],
         'solved_boards'    => $mb['solved_boards'],
         'owned'            => $myOwned,
         'guesses'          => $mb['guesses'],
         'answers'          => $reveal,
         'hints'            => array_map('fwordleParseHint', $myHints),
         'hint_types_used'  => array_values(array_unique(array_map(fn($h) => $h['type'], $myHints))),
-        'hint_boards_used' => array_map(fn($h) => (int) $h['board_pos'], $myHints),
         'jokers_used'      => count($myHints),
         'jokers_total'     => 3,
     ];
@@ -490,12 +544,14 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $b = fwordleUserBoards($info['guesses'], $answers, $ownedOf($uid));
         $used = count($info['guesses']);
         $res = $results[$uid] ?? null;
-        $finished = $res ? (bool) $res['finished'] : ($b['solved'] || $used >= $maxGuesses);
+        $oppMax = $maxGuessesOf($uid);
+        $finished = $res ? (bool) $res['finished'] : ($b['solved'] || $used >= $oppMax);
         $opponents[] = [
             'username'      => $info['username'],
             'finished'      => $finished,
             'solved'        => $b['solved'],
             'guesses_used'  => $used,
+            'max_guesses'   => $oppMax,
             'solved_boards' => $b['solved_boards'],
             'owned'         => $ownedOf($uid), // auto-solved boards (their own pick)
             'jokers_used'   => count($hintsByUser[$uid] ?? []),
@@ -532,8 +588,9 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
 }
 
 // Per-user season stats: current solve streak (consecutive days solved, ending
-// today or — if today isn't solved yet — yesterday, so it stays alive) and the
-// average guesses used on solved days. One entry per user (empty if never won).
+// today or — if today isn't solved yet — yesterday, so it stays alive) NET of the
+// joker streak-cost, and the average guesses used on solved days. One entry per
+// user (empty if never won).
 function fwordleStats(PDO $pdo, string $date): array
 {
     $users = $pdo->query("SELECT id, username FROM users ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
@@ -545,24 +602,13 @@ function fwordleStats(PDO $pdo, string $date): array
     $agg = [];
     foreach ($aggStmt->fetchAll(PDO::FETCH_ASSOC) as $r) $agg[(int) $r['user_id']] = $r;
 
-    $solvedStmt = $pdo->query("SELECT user_id, game_date FROM fwordle_results WHERE solved = 1");
-    $solved = [];
-    foreach ($solvedStmt->fetchAll(PDO::FETCH_ASSOC) as $r) $solved[(int) $r['user_id']][$r['game_date']] = true;
-
-    $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
-
     $stats = [];
     foreach ($users as $u) {
-        $uid   = (int) $u['id'];
-        $dates = $solved[$uid] ?? [];
+        $uid = (int) $u['id'];
 
-        // Anchor on today if solved today, else yesterday (grace for an unplayed today).
-        $cursor = isset($dates[$date]) ? $date : $yesterday;
-        $streak = 0;
-        while (isset($dates[$cursor])) {
-            $streak++;
-            $cursor = date('Y-m-d', strtotime($cursor . ' -1 day'));
-        }
+        // Effective streak = consecutive solved days minus jokers spent within
+        // that window (each joker costs 1 streak).
+        $streak = fwordleStreakInfo($pdo, $date, $uid)['effective'];
 
         $a = $agg[$uid] ?? null;
         $stats[] = [
