@@ -516,7 +516,11 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $reveal[$p] = ($myFinished || in_array($p, $myOwned, true)) ? $answers[$p] : null;
     }
 
-    $myHints = $hintsByUser[$userId] ?? [];
+    $myHints   = $hintsByUser[$userId] ?? [];
+    $myStreak  = fwordleStreakInfo($pdo, $date, $userId)['effective'];
+    // Players with no streak to spend still get one joker free per day — it's
+    // available only while they have 0 streak AND haven't used a joker yet.
+    $freeJoker = ($myStreak < 1 && count($myHints) === 0);
 
     $me = [
         'username'         => $myName,
@@ -526,7 +530,8 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'max_guesses'      => $myMax,
         'base_max_guesses' => $maxGuesses,
         'armor'            => $armorOf($userId),
-        'streak'           => fwordleStreakInfo($pdo, $date, $userId)['effective'],
+        'streak'           => $myStreak,
+        'free_joker'       => $freeJoker,
         'solved_boards'    => $mb['solved_boards'],
         'owned'            => $myOwned,
         'guesses'          => $mb['guesses'],

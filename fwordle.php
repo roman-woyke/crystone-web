@@ -101,9 +101,35 @@ main.container { max-width: 1280px; }
 }
 .fw-joker-btn .jk-sub { color: var(--text-3); font-size: 0.72rem; }
 .fw-joker-btn .sw.emoji { background: none; font-size: 15px; line-height: 1; }
-.fw-joker-btn.armor  .sw { background: none; }
-.fw-joker-btn.orange .sw { background: var(--fw-orange); }
-.fw-joker-btn.green  .sw { background: var(--fw-green); }
+/* Per-joker streak cost badge inside each button. */
+.fw-joker-btn .jk-cost {
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    color: var(--text-2);
+    background: rgba(255, 255, 255, 0.06);
+}
+.fw-joker-btn .jk-cost.free {
+    color: #fff;
+    font-weight: 700;
+    background: var(--fw-green);
+}
+/* Spendable-streak "wallet", on the same row as the jokers. */
+.fw-streak-wallet {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 13px;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--glass-border);
+}
 .fw-joker-btn.active {
     border-color: var(--violet);
     box-shadow: var(--glow-violet);
@@ -682,8 +708,8 @@ main.container { max-width: 1280px; }
     //    pick. ─────────────────────────────────────────────────────────────────
     const HINT_TYPES = [
         { type: "armor",  board: false, swatch: '<span class="sw emoji">🛡️</span>', text: "Armor (+1 guess)" },
-        { type: "orange", board: true,  swatch: '<span class="sw"></span>',         text: "Orange (+2 letters)" },
-        { type: "green",  board: true,  swatch: '<span class="sw"></span>',         text: "Green (+1 letter)" },
+        { type: "orange", board: true,  swatch: '<span class="sw emoji">🔍</span>', text: "Reveal (+2 letters)" },
+        { type: "green",  board: true,  swatch: '<span class="sw emoji">🧩</span>', text: "Place (+1 letter)" },
     ];
 
     // Boards a board-joker can target: unsolved and not yours. (Different joker
@@ -703,7 +729,9 @@ main.container { max-width: 1280px; }
         const me = STATE.me;
         const typesUsed = me.hint_types_used || [];
         const canPick = eligibleBoards().length > 0;
-        const broke = (me.streak || 0) < 1; // no streak left to spend
+        // You can spend if you have streak, or it's your one free joker (0 streak).
+        const canSpend = (me.streak || 0) >= 1 || me.free_joker;
+        const broke = !canSpend;
 
         // Drop a stale pending pick if it's no longer usable.
         if (pendingHint) {
@@ -711,15 +739,24 @@ main.container { max-width: 1280px; }
             if (me.finished || broke || typesUsed.includes(pendingHint) || (t && t.board && !canPick)) pendingHint = null;
         }
 
-        jokersEl.innerHTML = HINT_TYPES.map(t => {
+        const costHtml = me.free_joker
+            ? '<span class="jk-cost free">free</span>'
+            : '<span class="jk-cost">🔥&nbsp;1</span>';
+
+        const buttons = HINT_TYPES.map(t => {
             const used = typesUsed.includes(t.type);
             const active = pendingHint === t.type;
             // Board jokers also need an eligible board; armor doesn't.
             const dis = (used || me.finished || broke || (t.board && !canPick)) ? " disabled" : "";
             return `<button type="button" class="fw-joker-btn ${t.type}${used ? " used" : ""}${active ? " active" : ""}" data-type="${t.type}"${dis}>
-                ${t.swatch}<span>${used ? "✓ " : ""}${t.text}</span>
+                ${t.swatch}<span class="jk-label">${used ? "✓ " : ""}${t.text}</span>${used ? "" : costHtml}
             </button>`;
         }).join("");
+
+        // The player's spendable streak, shown as currency on the same row.
+        const wallet = `<span class="fw-streak-wallet" title="Streak you can spend on jokers">🔥 ${me.streak || 0}${me.free_joker ? " · 1 free" : ""}</span>`;
+
+        jokersEl.innerHTML = buttons + wallet;
 
         jokersEl.querySelectorAll(".fw-joker-btn").forEach(btn => {
             if (!btn.disabled) btn.addEventListener("click", () => selectHint(btn.dataset.type));
@@ -727,7 +764,8 @@ main.container { max-width: 1280px; }
 
         jokerHintEl.textContent = pendingHint
             ? `Pick a board for the ${pendingHint} joker (click the joker again to cancel).`
-            : broke ? "Need at least 1 🔥 streak to spend a joker (each one costs 1)."
+            : me.free_joker ? "No streak — your first joker today is free."
+            : broke ? "No streak left to spend on jokers."
             : "Each joker costs 1 streak.";
     }
 

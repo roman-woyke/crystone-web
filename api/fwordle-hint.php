@@ -39,8 +39,13 @@ if ($hStmt->fetchColumn() !== false) {
     exit("You've already used your $type joker.");
 }
 
-// Every joker costs 1 streak — you must have streak left to spend.
-if (fwordleStreakInfo($pdo, $date, $userId)['effective'] < 1) {
+// Every joker costs 1 streak — but a player with no streak gets one free per
+// day (allowed only as their first joker that day).
+$streak = fwordleStreakInfo($pdo, $date, $userId)['effective'];
+$usedStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_hints WHERE game_date = ? AND user_id = ?");
+$usedStmt->execute([$date, $userId]);
+$usedToday = (int) $usedStmt->fetchColumn();
+if ($streak < 1 && $usedToday > 0) {
     http_response_code(409);
     exit("Not enough streak to spend a joker.");
 }
