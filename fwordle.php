@@ -15,50 +15,12 @@ main.container { max-width: 1280px; }
 
 .fw-layout {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) 300px;
     gap: 28px;
     align-items: start;
 }
 
 .fw-main { min-width: 0; }
-
-/* Small legend of what the hint colours mean, left of the boards. */
-.fw-legend {
-    position: sticky;
-    top: 78px;
-    width: 150px;
-}
-.fw-legend h2 {
-    margin: 0 0 12px;
-    font-size: 0.95rem;
-}
-.fw-legend ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-.fw-legend li {
-    display: flex;
-    align-items: flex-start;
-    gap: 9px;
-    font-size: 0.76rem;
-    line-height: 1.3;
-    color: var(--text-2);
-}
-.fw-leg-sw {
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    margin-top: 1px;
-}
-.fw-leg-sw.grey   { background: var(--fw-grey); }
-.fw-leg-sw.orange { background: var(--fw-orange); }
-.fw-leg-sw.green  { background: var(--fw-green); }
-.fw-legend strong { color: var(--text-1); font-weight: 700; }
 
 .fw-intro { margin-bottom: 18px; }
 
@@ -493,25 +455,11 @@ main.container { max-width: 1280px; }
 
 @media (max-width: 920px) {
     .fw-layout { display: flex; flex-direction: column; }
-    .fw-sidebar { position: static; order: 2; }
-    /* Legend drops below the boards and lays its items out in a row. */
-    .fw-legend { position: static; width: auto; order: 1; }
-    .fw-legend h2 { display: none; }
-    .fw-legend ul { flex-direction: row; flex-wrap: wrap; gap: 8px 18px; }
+    .fw-sidebar { position: static; order: 1; }
 }
 </style>
 
 <div class="fw-layout">
-
-<aside class="fw-legend">
-    <h2>🃏 Hints</h2>
-    <ul>
-        <li><span class="fw-leg-sw grey"></span> 5 letters that are <strong>not</strong> in the word</li>
-        <li><span class="fw-leg-sw orange"></span> a letter that <strong>is</strong> in the word (wrong spot)</li>
-        <li><span class="fw-leg-sw green"></span> a letter in its <strong>correct</strong> spot</li>
-    </ul>
-</aside>
-
 <div class="fw-main">
 
     <div class="fw-intro">
