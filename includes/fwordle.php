@@ -143,16 +143,20 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
     $failed = (int) $failStmt->fetchColumn();
     $numBoards = max(1, FWORDLE_MAX_WORDS - $failed);
 
-    // Solvers (ordered by solve time) each get a slot to fill + own. Because
-    // solvers + failers ≤ players ≤ 4, the solver count never exceeds numBoards.
+    // Solvers each get a slot to fill + own. Boards are ordered by a FIXED player
+    // rank (roman/ben/basti/lorenz), not solve time, so the numbering is stable.
+    // Because solvers + failers ≤ players ≤ 4, the solver count never exceeds numBoards.
     $solverStmt = $pdo->prepare("
-        SELECT user_id FROM fwordle_results
-        WHERE game_date = ? AND solved = 1
-        ORDER BY solved_at ASC
+        SELECT r.user_id, u.username FROM fwordle_results r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.game_date = ? AND r.solved = 1
+        ORDER BY r.solved_at ASC
         LIMIT " . FWORDLE_MAX_WORDS
     );
     $solverStmt->execute([$prev]);
-    $slotUsers = array_map('intval', $solverStmt->fetchAll(PDO::FETCH_COLUMN));
+    $solverRows = $solverStmt->fetchAll(PDO::FETCH_ASSOC);
+    usort($solverRows, fn($a, $b) => fwordlePlayerRank($a['username']) <=> fwordlePlayerRank($b['username']));
+    $slotUsers = array_map(fn($r) => (int) $r['user_id'], $solverRows);
 
     $words = []; // [word, source, chooser_id]
     $used  = [];
@@ -253,6 +257,91 @@ function fwordleUserBoards(array $guesses, array $answers, array $owned = []): a
     }
     $solved = $num > 0 && !in_array(false, $solvedBoards, true);
     return ['guesses' => $rows, 'solved_boards' => $solvedBoards, 'solved' => $solved];
+}
+
+// Fixed board order so the numbering is stable per player (independent of who
+// solved first): roman → ben → basti → lorenz, others last.
+function fwordlePlayerRank(string $username): int
+{
+    static $order = ['roman' => 0, 'ben' => 1, 'basti' => 2, 'lorenz' => 3];
+    return $order[strtolower($username)] ?? 99;
+}
+
+// ── Hints (jokers) ───────────────────────────────────────────────────────────
+// 3 jokers per day (one each of grey/orange/green), at most one per board. Each
+// only ever reveals NEW info beyond what the player's own guesses already show.
+
+// What a player already knows about one board, derived from their guesses.
+function fwordleBoardKnowledge(array $guesses, string $answer): array
+{
+    $answer = strtolower($answer);
+    $len = strlen($answer);
+    $present = []; $absent = []; $greenPos = [];
+    foreach ($guesses as $g) {
+        $colors = fwordleScore($answer, $g);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $g[$i] ?? '_';
+            if ($ch === '_') continue;
+            if ($colors[$i] === 'green')      { $present[$ch] = true; $greenPos[$i] = true; }
+            elseif ($colors[$i] === 'orange') { $present[$ch] = true; }
+            elseif ($colors[$i] === 'grey' && strpos($answer, $ch) === false) { $absent[$ch] = true; }
+        }
+    }
+    return ['present' => $present, 'absent' => $absent, 'greenPos' => $greenPos];
+}
+
+// Compute a hint payload of the given type for a board, or null if there's
+// nothing new to reveal. payload encodings:
+//   grey   → 5 absent letters, e.g. "qzxwk"
+//   orange → one present letter, e.g. "r"
+//   green  → "letter:position" (0-indexed), e.g. "r:3"
+function fwordleComputeHint(string $answer, array $guesses, string $type): ?string
+{
+    $answer = strtolower($answer);
+    $len = strlen($answer);
+    $k = fwordleBoardKnowledge($guesses, $answer);
+
+    if ($type === 'grey') {
+        $cands = [];
+        foreach (range('a', 'z') as $ch) {
+            if (strpos($answer, $ch) === false && !isset($k['absent'][$ch])) $cands[] = $ch;
+        }
+        if (count($cands) < 5) return null;
+        shuffle($cands);
+        return implode('', array_slice($cands, 0, 5));
+    }
+
+    if ($type === 'orange') {
+        $cands = [];
+        foreach (array_unique(str_split($answer)) as $ch) {
+            if (!isset($k['present'][$ch])) $cands[] = $ch;
+        }
+        if (!$cands) return null;
+        return $cands[array_rand($cands)];
+    }
+
+    if ($type === 'green') {
+        $cands = [];
+        for ($i = 0; $i < $len; $i++) {
+            if (!isset($k['greenPos'][$i])) $cands[] = $i;
+        }
+        if (!$cands) return null;
+        $pos = $cands[array_rand($cands)];
+        return $answer[$pos] . ':' . $pos;
+    }
+
+    return null;
+}
+
+// Parse a stored hint row into the client shape.
+function fwordleParseHint(array $h): array
+{
+    $type = $h['type'];
+    $out  = ['board' => (int) $h['board_pos'], 'type' => $type];
+    if ($type === 'grey')        $out['letters'] = str_split($h['payload']);
+    elseif ($type === 'orange')  $out['letter']  = $h['payload'];
+    elseif ($type === 'green')   { [$l, $p] = explode(':', $h['payload']); $out['letter'] = $l; $out['pos'] = (int) $p; }
+    return $out;
 }
 
 // Board positions whose word this user chose (auto-solved for them).
@@ -360,15 +449,29 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $reveal[$p] = ($myFinished || in_array($p, $myOwned, true)) ? $answers[$p] : null;
     }
 
+    // ── Hints (jokers) used today, grouped by user ──
+    $hintStmt = $pdo->prepare("SELECT user_id, board_pos, type, payload FROM fwordle_hints WHERE game_date = ?");
+    $hintStmt->execute([$date]);
+    $hintsByUser = [];
+    foreach ($hintStmt->fetchAll(PDO::FETCH_ASSOC) as $h) {
+        $hintsByUser[(int) $h['user_id']][] = $h;
+    }
+    $myHints = $hintsByUser[$userId] ?? [];
+
     $me = [
-        'username'      => $myName,
-        'finished'      => $myFinished,
-        'solved'        => $mb['solved'],
-        'guesses_used'  => $myUsed,
-        'solved_boards' => $mb['solved_boards'],
-        'owned'         => $myOwned,
-        'guesses'       => $mb['guesses'],
-        'answers'       => $reveal,
+        'username'         => $myName,
+        'finished'         => $myFinished,
+        'solved'           => $mb['solved'],
+        'guesses_used'     => $myUsed,
+        'solved_boards'    => $mb['solved_boards'],
+        'owned'            => $myOwned,
+        'guesses'          => $mb['guesses'],
+        'answers'          => $reveal,
+        'hints'            => array_map('fwordleParseHint', $myHints),
+        'hint_types_used'  => array_values(array_unique(array_map(fn($h) => $h['type'], $myHints))),
+        'hint_boards_used' => array_map(fn($h) => (int) $h['board_pos'], $myHints),
+        'jokers_used'      => count($myHints),
+        'jokers_total'     => 3,
     ];
 
     // ── Opponents (colors only, never letters) ──
@@ -386,6 +489,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
             'guesses_used'  => $used,
             'solved_boards' => $b['solved_boards'],
             'owned'         => $ownedOf($uid), // auto-solved boards (their own pick)
+            'jokers_used'   => count($hintsByUser[$uid] ?? []),
             'guesses'       => array_map(fn($g) => ['boards' => $g['boards']], $b['guesses']),
         ];
     }

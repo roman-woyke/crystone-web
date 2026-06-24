@@ -56,6 +56,11 @@ main.container { max-width: 1280px; }
 
 .fw-pill strong { color: var(--text-1); font-weight: 700; }
 
+/* Win/lose result rides in the status row as a coloured pill. */
+.fw-pill.result { font-weight: 700; }
+.fw-pill.result.win  { background: rgba(46, 158, 91, 0.16); border-color: rgba(46,158,91,0.5); color: #7ee2a8; }
+.fw-pill.result.lose { background: rgba(248, 113, 113, 0.14); border-color: rgba(248,113,113,0.45); color: #fca5a5; }
+
 /* ── Boards ─────────────────────────────────────────────────────────────── */
 .fw-boards {
     display: grid;
@@ -68,6 +73,64 @@ main.container { max-width: 1280px; }
 @media (max-width: 600px) {
     .fw-boards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ── Hint row (one cell per board, same columns as the boards) ───────────── */
+.fw-hints {
+    display: grid;
+    grid-template-columns: repeat(var(--boards, 4), minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 8px;
+}
+@media (max-width: 600px) {
+    .fw-hints { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.fw-hint-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 30px;
+}
+
+.fw-hint-btn {
+    width: auto;
+    margin: 0;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    line-height: 1;
+    border-radius: 7px;
+    opacity: 0.85;
+}
+.fw-hint-btn:hover { opacity: 1; }
+.fw-hint-btn.grey   { border-color: var(--fw-grey); }
+.fw-hint-btn.orange { border-color: var(--fw-orange); }
+.fw-hint-btn.green  { border-color: var(--fw-green); }
+
+.fw-hint-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: var(--radius-full);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    color: #fff;
+}
+.fw-hint-chip small {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.62rem;
+    letter-spacing: 0;
+    opacity: 0.85;
+    text-transform: uppercase;
+}
+.fw-hint-chip.grey   { background: var(--fw-grey); }
+.fw-hint-chip.orange { background: var(--fw-orange); }
+.fw-hint-chip.green  { background: var(--fw-green); }
 
 .fw-board {
     padding: 14px;
@@ -151,16 +214,6 @@ main.container { max-width: 1280px; }
     --fw-orange: #c2992f;
     --fw-grey:   #4b4b55;
 }
-
-/* ── Banner ─────────────────────────────────────────────────────────────── */
-.fw-banner {
-    margin-bottom: 18px;
-    padding: 12px 16px;
-    border-radius: var(--radius-md);
-    font-weight: 600;
-}
-.fw-banner.win  { background: rgba(46, 158, 91, 0.14); border: 1px solid rgba(46,158,91,0.5); color: #7ee2a8; }
-.fw-banner.lose { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248,113,113,0.45); color: #fca5a5; }
 
 /* ── Controls / keyboard ────────────────────────────────────────────────── */
 .fw-controls { margin-bottom: 20px; }
@@ -421,7 +474,8 @@ main.container { max-width: 1280px; }
 
     <div class="fw-status" id="fw-status"></div>
 
-    <div class="fw-banner" id="fw-banner" style="display:none;"></div>
+    <!-- One hint cell per board (aligned above the boards). -->
+    <div class="fw-hints" id="fw-hints"></div>
 
     <div class="fw-boards" id="fw-boards"></div>
 
@@ -466,7 +520,7 @@ main.container { max-width: 1280px; }
     // ── DOM refs ───────────────────────────────────────────────────────────
     const statusEl  = document.getElementById("fw-status");
     const boardsEl   = document.getElementById("fw-boards");
-    const bannerEl   = document.getElementById("fw-banner");
+    const hintsEl    = document.getElementById("fw-hints");
     const keyboardEl = document.getElementById("fw-keyboard");
     const selectorEl = document.getElementById("fw-kb-selector");
     const msgEl      = document.getElementById("fw-msg");
@@ -483,11 +537,23 @@ main.container { max-width: 1280px; }
     // ── Status bar ───────────────────────────────────────────────────────
     function renderStatus() {
         const me = STATE.me;
+        // The win/lose result rides in the same row (a coloured pill) so it
+        // doesn't take its own line.
+        let result = "";
+        if (me.finished) {
+            if (me.solved) {
+                result = `<span class="fw-pill result win">🎉 Solved all ${STATE.num_boards} in ${me.guesses_used}!</span>`;
+            } else {
+                const got = me.solved_boards.filter(Boolean).length;
+                result = `<span class="fw-pill result lose">Out of guesses — ${got}/${STATE.num_boards} solved</span>`;
+            }
+        }
         statusEl.innerHTML = `
             <span class="fw-pill">📅 <strong>${escapeHtml(STATE.date)}</strong></span>
             <span class="fw-pill"><strong>${L()}</strong>-letter words</span>
             <span class="fw-pill"><strong>${STATE.num_boards}</strong> board${STATE.num_boards === 1 ? "" : "s"}</span>
             <span class="fw-pill">Guess <strong>${Math.min(me.guesses_used + (me.finished ? 0 : 1), MAX)}</strong>/${MAX}</span>
+            ${result}
         `;
     }
 
@@ -571,19 +637,63 @@ main.container { max-width: 1280px; }
         boardsEl.innerHTML = html;
     }
 
-    // ── Win/lose banner ──────────────────────────────────────────────────
-    function renderBanner() {
+    // ── Hints (jokers): one cell per board, aligned above the boards ──────
+    const HINT_TYPES = [
+        { type: "grey",   icon: "⬛", title: "Grey out 5 absent letters" },
+        { type: "orange", icon: "🟧", title: "Reveal a letter that's in the word" },
+        { type: "green",  icon: "🟩", title: "Reveal a letter in its correct spot" },
+    ];
+
+    function hintChipHtml(h) {
+        if (h.type === "grey")   return `<span class="fw-hint-chip grey">${h.letters.map(c => c.toUpperCase()).join("")}</span>`;
+        if (h.type === "orange") return `<span class="fw-hint-chip orange">${h.letter.toUpperCase()}<small>in word</small></span>`;
+        if (h.type === "green")  return `<span class="fw-hint-chip green">${h.letter.toUpperCase()}<small>spot ${h.pos + 1}</small></span>`;
+        return "";
+    }
+
+    function renderHints() {
         const me = STATE.me;
-        if (!me.finished) { bannerEl.style.display = "none"; return; }
-        bannerEl.style.display = "";
-        if (me.solved) {
-            bannerEl.className = "fw-banner win";
-            bannerEl.textContent = `🎉 Solved all ${STATE.num_boards} in ${me.guesses_used} guess${me.guesses_used === 1 ? "" : "es"}!`;
-        } else {
-            bannerEl.className = "fw-banner lose";
-            const got = me.solved_boards.filter(Boolean).length;
-            bannerEl.textContent = `Out of guesses — you solved ${got}/${STATE.num_boards}. Answers revealed above.`;
+        const n = STATE.num_boards;
+        if (n === 0) { hintsEl.innerHTML = ""; return; }
+        hintsEl.style.setProperty("--boards", n);
+
+        const byBoard = {};
+        (me.hints || []).forEach(h => { byBoard[h.board] = h; });
+        const typesUsed = me.hint_types_used || [];
+        const owned = me.owned || [];
+
+        let html = "";
+        for (let b = 0; b < n; b++) {
+            html += `<div class="fw-hint-cell">`;
+            if (byBoard[b]) {
+                html += hintChipHtml(byBoard[b]);
+            } else if (!me.finished && !me.solved_boards[b] && !owned.includes(b)) {
+                html += HINT_TYPES
+                    .filter(t => !typesUsed.includes(t.type))
+                    .map(t => `<button type="button" class="fw-hint-btn ${t.type}" data-type="${t.type}" data-board="${b}" title="${t.title}">${t.icon}</button>`)
+                    .join("");
+            }
+            html += `</div>`;
         }
+        // Nothing to offer or show → collapse the row entirely.
+        hintsEl.innerHTML = /fw-hint-(btn|chip)/.test(html) ? html : "";
+
+        hintsEl.querySelectorAll(".fw-hint-btn").forEach(btn =>
+            btn.addEventListener("click", () => applyHint(btn.dataset.type, parseInt(btn.dataset.board, 10))));
+    }
+
+    function applyHint(type, board) {
+        if (busy || STATE.me.finished) return;
+        busy = true;
+        setMsg("");
+        const body = new FormData();
+        body.append("type", type);
+        body.append("board", board);
+        fetch(BASE_PATH + "/api/fwordle-hint.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Hint failed."); }))
+            .then(state => { STATE = state; renderAll(); })
+            .catch(err => setMsg(err.message))
+            .finally(() => { busy = false; });
     }
 
     // ── Keyboard ───────────────────────────────────────────────────────────
@@ -610,19 +720,26 @@ main.container { max-width: 1280px; }
         keyboardEl.querySelectorAll(".fw-key").forEach(b => { b.disabled = disabled; });
     }
 
-    // Best colour seen for each letter on a given board (green > orange > grey).
+    // Best colour seen for each letter on a given board (green > orange > grey),
+    // merging both the player's guesses and any hint used on that board.
     function kbStatesFor(b) {
         const rank = { grey: 1, orange: 2, green: 3 };
         const st = {};
+        const bump = (ch, c) => { if (!st[ch] || rank[c] > rank[st[ch]]) st[ch] = c; };
         for (const g of STATE.me.guesses) {
             const colors = g.boards[b];
             for (let i = 0; i < g.text.length; i++) {
                 const ch = g.text[i];
                 const c = colors[i];
                 if (ch === "_" || c === "empty") continue;
-                if (!st[ch] || rank[c] > rank[st[ch]]) st[ch] = c;
+                bump(ch, c);
             }
         }
+        (STATE.me.hints || []).filter(h => h.board === b).forEach(h => {
+            if (h.type === "grey")        h.letters.forEach(c => bump(c, "grey"));
+            else if (h.type === "orange") bump(h.letter, "orange");
+            else if (h.type === "green")  bump(h.letter, "green");
+        });
         return st;
     }
 
@@ -685,9 +802,10 @@ main.container { max-width: 1280px; }
         const len = L();
         oppEl.innerHTML = opp.map(o => {
             const solvedCount = o.solved_boards.filter(Boolean).length;
-            const statusTxt = o.finished
+            const jokerTxt = o.jokers_used > 0 ? ` · 🃏${o.jokers_used}` : "";
+            const statusTxt = (o.finished
                 ? (o.solved ? `solved in ${o.guesses_used}` : `done · ${solvedCount}/${STATE.num_boards}`)
-                : `${o.guesses_used}/${MAX} guesses`;
+                : `${o.guesses_used}/${MAX} guesses`) + jokerTxt;
 
             const owned = o.owned || [];
             let minis = "";
@@ -882,7 +1000,7 @@ main.container { max-width: 1280px; }
             .then(state => {
                 // Don't clobber an in-progress guess: the local buffer is kept.
                 STATE = state;
-                renderBoards(); renderBanner(); renderStatus();
+                renderBoards(); renderStatus(); renderHints();
                 renderControls(); renderKeyboard(); renderStats(); renderOpponents(); renderChoose();
             })
             .catch(() => {});
@@ -891,7 +1009,7 @@ main.container { max-width: 1280px; }
     function renderAll() {
         renderStatus();
         renderBoards();
-        renderBanner();
+        renderHints();
         renderControls();
         renderKeyboard();
         renderStats();
