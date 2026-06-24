@@ -1008,7 +1008,7 @@ tbody tr:hover {
         display: none;
     }
 
-    .nav-logout-mobile {
+    .nav-links a.nav-logout-mobile {
         display: block;
         margin-top: 6px;
         padding: 12px;
@@ -1018,10 +1018,10 @@ tbody tr:hover {
         text-align: left;
     }
 
-    .nav-logout-mobile:hover,
-    .nav-logout-mobile:focus {
-        background: rgba(239, 68, 68, 0.15) !important;
-        color: #ef4444 !important;
+    .nav-links a.nav-logout-mobile:hover,
+    .nav-links a.nav-logout-mobile:focus {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
     }
 
     .podium {
