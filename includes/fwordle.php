@@ -414,5 +414,50 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'me'          => $me,
         'opponents'   => $opponents,
         'choose'      => $choose,
+        'stats'       => fwordleStats($pdo, $date),
     ];
+}
+
+// Per-user season stats: current solve streak (consecutive days solved, ending
+// today or — if today isn't solved yet — yesterday, so it stays alive) and the
+// average guesses used on solved days. One entry per user (empty if never won).
+function fwordleStats(PDO $pdo, string $date): array
+{
+    $users = $pdo->query("SELECT id, username FROM users ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
+
+    $aggStmt = $pdo->query("
+        SELECT user_id, COUNT(*) AS solves, AVG(guesses_used) AS avg_g
+        FROM fwordle_results WHERE solved = 1 GROUP BY user_id
+    ");
+    $agg = [];
+    foreach ($aggStmt->fetchAll(PDO::FETCH_ASSOC) as $r) $agg[(int) $r['user_id']] = $r;
+
+    $solvedStmt = $pdo->query("SELECT user_id, game_date FROM fwordle_results WHERE solved = 1");
+    $solved = [];
+    foreach ($solvedStmt->fetchAll(PDO::FETCH_ASSOC) as $r) $solved[(int) $r['user_id']][$r['game_date']] = true;
+
+    $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
+
+    $stats = [];
+    foreach ($users as $u) {
+        $uid   = (int) $u['id'];
+        $dates = $solved[$uid] ?? [];
+
+        // Anchor on today if solved today, else yesterday (grace for an unplayed today).
+        $cursor = isset($dates[$date]) ? $date : $yesterday;
+        $streak = 0;
+        while (isset($dates[$cursor])) {
+            $streak++;
+            $cursor = date('Y-m-d', strtotime($cursor . ' -1 day'));
+        }
+
+        $a = $agg[$uid] ?? null;
+        $stats[] = [
+            'username'     => $u['username'],
+            'streak'       => $streak,
+            'solves'       => $a ? (int) $a['solves'] : 0,
+            'avg_guesses'  => ($a && $a['avg_g'] !== null) ? round((float) $a['avg_g'], 1) : null,
+        ];
+    }
+    return $stats;
 }

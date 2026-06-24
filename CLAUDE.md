@@ -56,7 +56,7 @@ All return plain text on error (non-200 status) or their payload on success:
 | `api/patch-project.php` | POST | Update `name`, `description`, or `color` on an owned project; returns `OK` |
 | `api/delete-project.php` | POST | Delete an owned project plus its time entries; returns `OK` |
 | `api/delete-time-entry.php` | POST | Delete one owned `project_time_entries` row; returns `OK` |
-| `api/fwordle-state.php` | GET | Full fWordle state for today: my boards (with letters), opponents' boards (colors only), and the tomorrow-word pick panel |
+| `api/fwordle-state.php` | GET | Full fWordle state for today: my boards (with letters), opponents' boards (colors only), the tomorrow-word pick panel, and per-player `stats` (solve streak + average guesses, via `fwordleStats`) |
 | `api/fwordle-guess.php` | POST | Submit a guess (`word` + `offset`); validates length/position/dictionary server-side, scores every board, updates `fwordle_results`; returns the new state |
 | `api/fwordle-choose.php` | POST | Set one of tomorrow's words (`word`); solver-only, validated against the dictionary + tomorrow's length (duplicates between players allowed — rejecting would leak a taken word); returns `{ok, word, tomorrow_length}` |
 

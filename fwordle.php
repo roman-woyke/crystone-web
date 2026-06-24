@@ -322,6 +322,43 @@ main.container { max-width: 1280px; }
     margin: 0 0 14px;
     font-size: 1.05rem;
 }
+.fw-sidebar > h2:not(:first-child) { margin-top: 22px; }
+
+/* Streak / average-guesses slots — one per player. */
+.fw-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.fw-stat {
+    padding: 9px 11px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    background: var(--solid-glass);
+}
+.fw-stat.empty { opacity: 0.5; }
+
+.fw-stat-name {
+    font-weight: 700;
+    font-size: 0.86rem;
+    margin-bottom: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fw-stat-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+.fw-stat-streak { font-weight: 700; color: var(--text-1); }
+.fw-stat-avg { color: var(--text-3); }
 
 .fw-opp {
     padding: 12px 14px;
@@ -401,6 +438,9 @@ main.container { max-width: 1280px; }
 </div><!-- /fw-main -->
 
 <aside class="fw-sidebar">
+    <h2>🔥 Streaks</h2>
+    <div class="fw-stats" id="fw-stats"></div>
+
     <h2>⚔️ Competition</h2>
     <div id="fw-opponents"></div>
 </aside>
@@ -432,6 +472,7 @@ main.container { max-width: 1280px; }
     const msgEl      = document.getElementById("fw-msg");
     const chooseEl   = document.getElementById("fw-choose");
     const oppEl      = document.getElementById("fw-opponents");
+    const statsEl    = document.getElementById("fw-stats");
 
     function escapeHtml(v) {
         return String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -614,6 +655,24 @@ main.container { max-width: 1280px; }
             key.classList.remove("green", "orange", "grey");
             if (/^[a-z]$/.test(k) && st[k]) key.classList.add(st[k]);
         });
+    }
+
+    // ── Streak / average-guesses stats (one slot per player) ──────────────
+    function renderStats() {
+        const stats = STATE.stats || [];
+        statsEl.innerHTML = stats.map(s => {
+            const played = s.solves > 0 || s.streak > 0;
+            const avg = s.avg_guesses != null ? s.avg_guesses + " avg" : "—";
+            return `
+                <div class="fw-stat ${played ? "" : "empty"}">
+                    <div class="fw-stat-name">${escapeHtml(s.username)}</div>
+                    <div class="fw-stat-row">
+                        <span class="fw-stat-streak" title="Day streak">🔥 ${s.streak}</span>
+                        <span class="fw-stat-avg" title="Average guesses on solved days">${avg}</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
     }
 
     // ── Opponents ────────────────────────────────────────────────────────
@@ -824,7 +883,7 @@ main.container { max-width: 1280px; }
                 // Don't clobber an in-progress guess: the local buffer is kept.
                 STATE = state;
                 renderBoards(); renderBanner(); renderStatus();
-                renderControls(); renderKeyboard(); renderOpponents(); renderChoose();
+                renderControls(); renderKeyboard(); renderStats(); renderOpponents(); renderChoose();
             })
             .catch(() => {});
     }
@@ -835,6 +894,7 @@ main.container { max-width: 1280px; }
         renderBanner();
         renderControls();
         renderKeyboard();
+        renderStats();
         renderOpponents();
         renderChoose();
     }
