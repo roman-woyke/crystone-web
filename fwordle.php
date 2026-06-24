@@ -107,8 +107,9 @@ main.container { max-width: 1280px; }
     padding: 1px 7px;
     border-radius: 999px;
     font-size: 0.72rem;
+    font-weight: 700;
     white-space: nowrap;
-    color: var(--text-2);
+    color: var(--danger);
     background: rgba(255, 255, 255, 0.06);
 }
 .fw-joker-btn .jk-cost.free {
@@ -116,9 +117,8 @@ main.container { max-width: 1280px; }
     font-weight: 700;
     background: var(--fw-green);
 }
-/* Spendable-streak "wallet", on the same row as the jokers. */
+/* Spendable-streak "wallet", sat right next to the jokers and marked red. */
 .fw-streak-wallet {
-    margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -126,9 +126,9 @@ main.container { max-width: 1280px; }
     border-radius: var(--radius-md);
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--text-1);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--glass-border);
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--danger);
 }
 .fw-joker-btn.active {
     border-color: var(--violet);
@@ -140,7 +140,7 @@ main.container { max-width: 1280px; }
 }
 .fw-joker-btn[disabled] { cursor: not-allowed; }
 
-.fw-joker-hint { margin: 2px 0 0; min-height: 1em; font-size: 0.82rem; color: var(--violet); }
+.fw-joker-hint { margin: 7px 0 0; min-height: 1em; font-size: 0.82rem; color: var(--violet); }
 
 /* While picking a board for a joker, boards that can take it light up. */
 .fw-board.pickable {
@@ -708,7 +708,7 @@ main.container { max-width: 1280px; }
     //    pick. ─────────────────────────────────────────────────────────────────
     const HINT_TYPES = [
         { type: "armor",  board: false, swatch: '<span class="sw emoji">🛡️</span>', text: "Armor (+1 guess)" },
-        { type: "orange", board: true,  swatch: '<span class="sw emoji">🔍</span>', text: "Reveal (+2 letters)" },
+        { type: "orange", board: true,  swatch: '<span class="sw emoji">🔍</span>', text: "Reveal (+2 🟨)" },
         { type: "green",  board: true,  swatch: '<span class="sw emoji">🧩</span>', text: "Place (+1 letter)" },
     ];
 
