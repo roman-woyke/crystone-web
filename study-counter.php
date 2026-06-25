@@ -723,40 +723,58 @@ main.container {
     color: var(--text-3);
 }
 
-/* Time period → a connected segmented control. */
-.seg-control {
-    display: inline-flex;
-    gap: 2px;
-    padding: 4px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-full);
+/* Time period → a vertical "slot-machine" wheel: the active period spins to the
+   centre slot, the others curve away above/below (Hearthstone-style). */
+.period-wheel {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    perspective: 760px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 26%, #000 74%, transparent);
+            mask-image: linear-gradient(to bottom, transparent, #000 26%, #000 74%, transparent);
 }
 
-.seg-btn {
+/* The centre slot frame the active period lands in. */
+.period-wheel-marker {
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 42px;
+    margin-top: -21px;
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    background: var(--grad-accent-soft);
+    border-radius: var(--radius-full);
+    box-shadow: var(--glow-violet);
+    pointer-events: none;
+}
+
+.period-item {
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 42px;
+    margin: -21px 0 0;
+    padding: 0;
     width: auto;
-    margin: 0;
-    padding: 7px 16px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
     border: none;
     background: transparent;
     color: var(--text-2);
-    font-size: 0.88rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    line-height: 1;
     white-space: nowrap;
-    border-radius: var(--radius-full);
     cursor: pointer;
-    transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
-}
-.seg-btn:hover:not(.active) { color: var(--text-1); background: rgba(255, 255, 255, 0.07); }
-.seg-btn:active { transform: scale(0.95); }
-.seg-btn.active {
-    background: var(--grad-accent);
-    color: #fff;
-    box-shadow: var(--glow-violet);
-}
 
-/* View filters → standalone toggle chips. */
+    -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+    transition: transform 0.55s cubic-bezier(0.2, 1.1, 0.3, 1), opacity 0.45s var(--ease-out), color 0.3s;
+}
+.period-item.active { color: #fff; font-weight: 700; }
+
+/* View filters → standalone toggle chips, each a distinct colour when on. */
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .filter-chip {
@@ -780,11 +798,20 @@ main.container {
     background: rgba(255, 255, 255, 0.06);
 }
 .filter-chip:active { transform: scale(0.95); }
-.filter-chip.active {
+
+/* "Per module" → violet when active. */
+#podium-toggle.active {
     border-color: transparent;
     background: var(--grad-accent);
     color: #fff;
     box-shadow: var(--glow-violet);
+}
+/* "Library only" → its own blue when active, so the two read as separate. */
+#library-toggle.active {
+    border-color: transparent;
+    background: var(--info, #38bdf8);
+    color: #04222f;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.45);
 }
 
 
@@ -1451,10 +1478,11 @@ main.container {
         <div class="podium-controls">
             <div class="filter-group">
                 <span class="filter-label">Period</span>
-                <div class="seg-control">
-                    <button type="button" class="seg-btn active" data-period="overall">Overall</button>
-                    <button type="button" class="seg-btn" data-period="weekly">This week</button>
-                    <button type="button" class="seg-btn" data-period="daily">Today</button>
+                <div class="period-wheel" id="period-wheel" aria-label="Time period">
+                    <div class="period-wheel-marker" aria-hidden="true"></div>
+                    <button type="button" class="period-item" data-period="overall">Overall</button>
+                    <button type="button" class="period-item" data-period="weekly">This week</button>
+                    <button type="button" class="period-item" data-period="daily">Today</button>
                 </div>
             </div>
             <div class="filter-group">
@@ -2106,16 +2134,39 @@ main.container {
         if (showingModules) buildModulePodiums(); else buildOverallPodium();
     });
 
-    // ── Period segmented control ──────────────────────────────────────────
-    document.querySelectorAll(".seg-btn[data-period]").forEach(tab => {
-        tab.addEventListener("click", () => {
-            if (tab.dataset.period === podiumPeriod) return;
-            document.querySelectorAll(".seg-btn[data-period]").forEach(t => t.classList.remove("active"));
-            tab.classList.add("active");
-            podiumPeriod = tab.dataset.period;
-            if (showingModules) buildModulePodiums(); else buildOverallPodium();
+    // ── Period wheel (vertical slot-machine; active period spins to centre) ─
+    const periodWheel = document.getElementById("period-wheel");
+    const periodItems = [...periodWheel.querySelectorAll(".period-item")];
+    const PERIODS     = periodItems.map(b => b.dataset.period);
+    const WHEEL_ANGLE = 40;  // degrees between slots
+    const WHEEL_R     = 65;  // cylinder radius (px) — sets the slot spacing
+    let periodIndex   = Math.max(0, PERIODS.indexOf(podiumPeriod));
+
+    function layoutWheel() {
+        periodItems.forEach((el, i) => {
+            const off = i - periodIndex;
+            el.style.transform = `rotateX(${-off * WHEEL_ANGLE}deg) translateZ(${WHEEL_R}px)`;
+            el.style.opacity   = Math.abs(off) >= 2 ? 0.18 : (off === 0 ? 1 : 0.5);
+            el.classList.toggle("active", off === 0);
         });
-    });
+    }
+
+    function spinPeriod(idx) {
+        idx = Math.max(0, Math.min(PERIODS.length - 1, idx));
+        if (idx === periodIndex) return;
+        periodIndex  = idx;
+        podiumPeriod = PERIODS[idx];
+        layoutWheel();
+        if (showingModules) buildModulePodiums(); else buildOverallPodium();
+    }
+
+    periodItems.forEach((el, i) => el.addEventListener("click", () => spinPeriod(i)));
+    // Scroll the wheel to spin through the periods.
+    periodWheel.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        spinPeriod(periodIndex + (e.deltaY > 0 ? 1 : -1));
+    }, { passive: false });
+    layoutWheel();
 
     // ── Data load + full render ───────────────────────────────────────────
     function renderAll() {
