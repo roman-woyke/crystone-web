@@ -556,10 +556,13 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     }
 
     $myHints   = $hintsByUser[$userId] ?? [];
-    $myStreak  = fwordleStreakInfo($pdo, $date, $userId)['effective'];
+    $myInfo    = fwordleStreakInfo($pdo, $date, $userId);
+    $myStreak  = $myInfo['effective'];
     // Players with no streak to spend still get one joker free per day — it's
     // available only while they have 0 streak AND haven't used a joker yet.
     $freeJoker = ($myStreak < 1 && count($myHints) === 0);
+    // A freeze can be exchanged for a joker once a day.
+    $canFreezeJoker = ($myInfo['freezes'] >= 1 && !$myInfo['freeze_used_today'] && !$myFinished);
 
     $me = [
         'username'         => $myName,
@@ -570,6 +573,8 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'base_max_guesses' => $maxGuesses,
         'armor'            => $armorOf($userId),
         'streak'           => $myStreak,
+        'freezes'          => $myInfo['freezes'],
+        'can_freeze_joker' => $canFreezeJoker,
         'free_joker'       => $freeJoker,
         'solved_boards'    => $mb['solved_boards'],
         'owned'            => $myOwned,
@@ -650,14 +655,15 @@ function fwordleStats(PDO $pdo, string $date): array
     foreach ($users as $u) {
         $uid = (int) $u['id'];
 
-        // Effective streak = consecutive solved days minus jokers spent within
-        // that window (each joker costs 1 streak).
-        $streak = fwordleStreakInfo($pdo, $date, $uid)['effective'];
+        // Effective (freeze-aware) streak + current freeze balance.
+        $info   = fwordleStreakInfo($pdo, $date, $uid);
+        $streak = $info['effective'];
 
         $a = $agg[$uid] ?? null;
         $stats[] = [
             'username'     => $u['username'],
             'streak'       => $streak,
+            'freezes'      => $info['freezes'],
             'solves'       => $a ? (int) $a['solves'] : 0,
             'avg_guesses'  => ($a && $a['avg_g'] !== null) ? round((float) $a['avg_g'], 1) : null,
         ];

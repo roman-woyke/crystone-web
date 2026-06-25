@@ -117,6 +117,11 @@ main.container { max-width: 1280px; }
     font-weight: 700;
     background: var(--fw-green);
 }
+/* Freeze-paid joker cost badge (blue, like the freeze wallet). */
+.fw-joker-btn .jk-cost.freeze {
+    color: var(--info, #38bdf8);
+    background: rgba(56, 189, 248, 0.14);
+}
 /* Spendable-streak "wallet", sat right next to the jokers and marked red. */
 .fw-streak-wallet {
     display: inline-flex;
@@ -129,6 +134,37 @@ main.container { max-width: 1280px; }
     color: var(--danger);
     background: rgba(239, 68, 68, 0.1);
     border: 1px solid var(--danger);
+}
+/* Freeze wallet — same shape as the streak wallet, blue. */
+.fw-freeze-wallet {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 13px;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--info, #38bdf8);
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid var(--info, #38bdf8);
+}
+/* Toggle: pay the next joker with a freeze instead of streak. */
+.fw-freeze-toggle {
+    width: auto;
+    margin: 0;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    color: var(--info, #38bdf8);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.08);
+    cursor: pointer;
+}
+.fw-freeze-toggle.active {
+    color: #04222f;
+    background: var(--info, #38bdf8);
+    border-color: transparent;
 }
 .fw-joker-btn.active {
     border-color: var(--violet);
@@ -456,7 +492,9 @@ main.container { max-width: 1280px; }
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
 }
+.fw-stat-left { display: inline-flex; align-items: baseline; gap: 9px; }
 .fw-stat-streak { font-weight: 700; color: var(--text-1); }
+.fw-stat-freeze { font-weight: 700; color: var(--info, #38bdf8); }
 .fw-stat-avg { color: var(--text-3); }
 
 .fw-opp {
@@ -566,6 +604,7 @@ main.container { max-width: 1280px; }
     let busy = false;
     let kbBoard = 0;       // which board's letter colours the keyboard shows
     let pendingHint = null; // a joker type awaiting a board pick
+    let useFreeze = false;  // pay the next joker with a freeze instead of streak
 
     const L = () => STATE.length;
 
@@ -729,9 +768,16 @@ main.container { max-width: 1280px; }
         const me = STATE.me;
         const typesUsed = me.hint_types_used || [];
         const canPick = eligibleBoards().length > 0;
-        // You can spend if you have streak, or it's your one free joker (0 streak).
-        const canSpend = (me.streak || 0) >= 1 || me.free_joker;
+        // You can spend if you have streak, your one free joker (0 streak), or a
+        // freeze to exchange.
+        const canSpendStreak = (me.streak || 0) >= 1 || me.free_joker;
+        const canFreeze = !!me.can_freeze_joker;
+        const canSpend = canSpendStreak || canFreeze;
         const broke = !canSpend;
+
+        // Will the next joker be freeze-paid? (toggled on, or forced when there's
+        // no streak left.)
+        const payFreezeNow = canFreeze && (useFreeze || !canSpendStreak);
 
         // Drop a stale pending pick if it's no longer usable.
         if (pendingHint) {
@@ -739,9 +785,11 @@ main.container { max-width: 1280px; }
             if (me.finished || broke || typesUsed.includes(pendingHint) || (t && t.board && !canPick)) pendingHint = null;
         }
 
-        const costHtml = me.free_joker
-            ? '<span class="jk-cost free">free</span>'
-            : '<span class="jk-cost">🔥&nbsp;1</span>';
+        const costHtml = payFreezeNow
+            ? '<span class="jk-cost freeze">🧊&nbsp;1</span>'
+            : me.free_joker
+                ? '<span class="jk-cost free">free</span>'
+                : '<span class="jk-cost">🔥&nbsp;1</span>';
 
         const buttons = HINT_TYPES.map(t => {
             const used = typesUsed.includes(t.type);
@@ -753,20 +801,27 @@ main.container { max-width: 1280px; }
             </button>`;
         }).join("");
 
-        // The player's spendable streak, shown as currency on the same row.
+        // Spendable streak (red) + freeze balance (blue) shown as currency.
         const wallet = `<span class="fw-streak-wallet" title="Streak you can spend on jokers">🔥 ${me.streak || 0}${me.free_joker ? " · 1 free" : ""}</span>`;
+        const freezeWallet = `<span class="fw-freeze-wallet" title="Streak freezes — bridge a missed day, or exchange one for a joker (once/day)">🧊 ${me.freezes || 0}</span>`;
+        const freezeToggle = (canFreeze && !me.finished)
+            ? `<button type="button" class="fw-freeze-toggle${useFreeze ? " active" : ""}" id="fw-freeze-toggle" title="Pay your next joker with a freeze instead of streak">${useFreeze ? "Paying with freeze" : "Use a freeze"}</button>`
+            : "";
 
-        jokersEl.innerHTML = buttons + wallet;
+        jokersEl.innerHTML = buttons + wallet + freezeWallet + freezeToggle;
 
         jokersEl.querySelectorAll(".fw-joker-btn").forEach(btn => {
             if (!btn.disabled) btn.addEventListener("click", () => selectHint(btn.dataset.type));
         });
+        const ft = document.getElementById("fw-freeze-toggle");
+        if (ft) ft.addEventListener("click", () => { useFreeze = !useFreeze; renderJokers(); });
 
         jokerHintEl.textContent = pendingHint
             ? `Pick a board for the ${pendingHint} joker (click the joker again to cancel).`
+            : payFreezeNow ? "This joker costs 1 freeze — your streak stays safe."
             : me.free_joker ? "No streak — your first joker today is free."
-            : broke ? "No streak left to spend on jokers."
-            : "Each joker costs 1 streak.";
+            : broke ? "No streak or freezes left for jokers."
+            : "Each joker costs 1 streak (or use a freeze).";
     }
 
     function selectHint(type) {
@@ -818,13 +873,18 @@ main.container { max-width: 1280px; }
 
     function applyHint(type, board) {
         if (busy || STATE.me.finished) return;
+        const me = STATE.me;
+        const canSpendStreak = (me.streak || 0) >= 1 || me.free_joker;
+        const payFreeze = !!me.can_freeze_joker && (useFreeze || !canSpendStreak);
 
         // Warn before spending — armor lands here right after its click, reveal/
         // place right after a board is picked.
         const names = { armor: "Armor (+1 guess)", orange: "Reveal (+2 🟨)", green: "Place (+1 🟩)" };
-        const cost = STATE.me.free_joker
-            ? "This uses your one free joker (you have no streak)."
-            : "This costs you 1 🔥 streak.";
+        const cost = payFreeze
+            ? "This uses 1 🧊 freeze — your streak stays safe."
+            : me.free_joker
+                ? "This uses your one free joker (you have no streak)."
+                : "This costs you 1 🔥 streak.";
         if (!confirm(`Use ${names[type] || "this joker"}?\n\n${cost}`)) {
             pendingHint = null;
             renderJokers();
@@ -834,10 +894,12 @@ main.container { max-width: 1280px; }
 
         pendingHint = null;
         busy = true;
+        useFreeze = false; // consume the toggle either way
         setMsg("");
         const body = new FormData();
         body.append("type", type);
         if (board !== null && board !== undefined) body.append("board", board);
+        if (payFreeze) body.append("pay", "freeze");
         fetch(BASE_PATH + "/api/fwordle-hint.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Joker failed."); }))
             .then(state => { STATE = state; renderAll(); })
@@ -932,7 +994,10 @@ main.container { max-width: 1280px; }
                 <div class="fw-stat ${played ? "" : "empty"}">
                     <div class="fw-stat-name">${escapeHtml(s.username)}</div>
                     <div class="fw-stat-row">
-                        <span class="fw-stat-streak" title="Day streak">🔥 ${s.streak}</span>
+                        <span class="fw-stat-left">
+                            <span class="fw-stat-streak" title="Day streak">🔥 ${s.streak}</span>
+                            <span class="fw-stat-freeze" title="Streak freezes">🧊 ${s.freezes ?? 0}</span>
+                        </span>
                         <span class="fw-stat-avg" title="Average guesses on solved days">${avg}</span>
                     </div>
                 </div>

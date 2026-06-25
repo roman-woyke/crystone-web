@@ -232,16 +232,24 @@ CREATE TABLE fwordle_guesses (
 --            cells (letter is in the word but NOT at that shown spot), comma-joined.
 --   green  → +1 correctly-placed letter on a board; payload = one "letter:position".
 -- PK enforces one-of-each-type per day; armor/orange/green may share a board.
+-- via_freeze = 1 when the joker was bought by exchanging a streak freeze
+-- (once/day) instead of paying a streak.
 CREATE TABLE fwordle_hints (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     type       ENUM('armor','orange','green') NOT NULL,
     board_pos  TINYINT UNSIGNED NULL,
     payload    VARCHAR(64) NOT NULL,
+    via_freeze TINYINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (game_date, user_id, type)
 );
 ```
+
+> **Streak freezes** are not a table — everyone starts with 3, earns +2 per 7
+> days of streak, and a freeze auto-bridges a missed day (or is exchanged for a
+> joker once/day). The balance is **derived** by replaying solved days +
+> `fwordle_hints.via_freeze`, so the only persisted state is that column.
 
 > **Deploy note:** run the corresponding `CREATE TABLE` on the database
 > **before** pushing code that uses a new table, otherwise pages hitting it
@@ -253,6 +261,12 @@ CREATE TABLE fwordle_hints (
 > ```sql
 > DROP TABLE IF EXISTS fwordle_hints;
 > -- then run the CREATE TABLE above
+> ```
+>
+> **fwordle_hints.via_freeze migration:** streak freezes can be exchanged for
+> jokers, recorded on the hint row:
+> ```sql
+> ALTER TABLE fwordle_hints ADD COLUMN via_freeze TINYINT NOT NULL DEFAULT 0;
 > ```
 >
 > **study_segments migration:** the "I'm studying" session can now be split

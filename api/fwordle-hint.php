@@ -39,24 +39,43 @@ if ($hStmt->fetchColumn() !== false) {
     exit("You've already used your $type joker.");
 }
 
-// Every joker costs 1 streak — but a player with no streak gets one free per
-// day (allowed only as their first joker that day).
-$streak = fwordleStreakInfo($pdo, $date, $userId)['effective'];
+// Payment: a joker costs 1 streak, but a player with no streak gets one free per
+// day (their first), and a freeze can be exchanged for a joker once a day. The
+// client may request `pay=freeze`; we also fall back to a freeze when there's no
+// streak left to spend. `$viaFreeze` records which.
+$info = fwordleStreakInfo($pdo, $date, $userId);
 $usedStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_hints WHERE game_date = ? AND user_id = ?");
 $usedStmt->execute([$date, $userId]);
 $usedToday = (int) $usedStmt->fetchColumn();
-if ($streak < 1 && $usedToday > 0) {
+
+$wantFreeze = (($_POST["pay"] ?? "") === "freeze");
+$freeJoker  = ($info['effective'] < 1 && $usedToday === 0);
+$streakOk   = ($info['effective'] >= 1 || $freeJoker);
+$freezeOk   = ($info['freezes'] >= 1 && !$info['freeze_used_today']);
+
+$viaFreeze = 0;
+if ($wantFreeze) {
+    if (!$freezeOk) {
+        http_response_code(409);
+        exit("No freeze to exchange today.");
+    }
+    $viaFreeze = 1;
+} elseif ($streakOk) {
+    $viaFreeze = 0;
+} elseif ($freezeOk) {
+    $viaFreeze = 1; // out of streak → auto-pay with a freeze
+} else {
     http_response_code(409);
-    exit("Not enough streak to spend a joker.");
+    exit("Not enough streak or freezes to spend a joker.");
 }
 
 // ── Armor: +1 guess overall, no board, no reveal. ──
 if ($type === "armor") {
     try {
         $pdo->prepare("
-            INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload)
-            VALUES (?, ?, NULL, 'armor', '1')
-        ")->execute([$date, $userId]);
+            INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload, via_freeze)
+            VALUES (?, ?, NULL, 'armor', '1', ?)
+        ")->execute([$date, $userId, $viaFreeze]);
     } catch (Throwable $e) {
         http_response_code(409);
         exit("Joker conflict — reload and try again.");
@@ -100,9 +119,9 @@ if ($payload === null) {
 
 try {
     $pdo->prepare("
-        INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload)
-        VALUES (?, ?, ?, ?, ?)
-    ")->execute([$date, $userId, $board, $type, $payload]);
+        INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload, via_freeze)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ")->execute([$date, $userId, $board, $type, $payload, $viaFreeze]);
 } catch (Throwable $e) {
     http_response_code(409);
     exit("Joker conflict — reload and try again.");
