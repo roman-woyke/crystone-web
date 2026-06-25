@@ -25,7 +25,7 @@ const FWORDLE_MAX_LEN   = 10;
 // freeze (so the streak survives) when one is available; +2 are earned for every
 // 7 days of streak. A freeze can also be exchanged for a joker once per day.
 const FWORDLE_FREEZE_START    = 3;
-const FWORDLE_FREEZE_PER_WEEK = 2;
+const FWORDLE_FREEZE_PER_WEEK = 3;
 
 // Shared guesses for a day: 6 for 1 board, +1 per extra board → 6/7/8/9 for
 // 1–4 boards. The 4-board default is 9, like a cat's nine lives: each globally
