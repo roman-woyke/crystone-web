@@ -266,28 +266,40 @@ if ($action === "start") {
 
             $actual = (int) $g["total"];
             $req    = (int) $reqByMod[$k];
-            // 0/absent → keep the full amount; otherwise clamp into [1, actual].
-            $target = $req <= 0 ? $actual : max(1, min($req, $actual));
+            // 0/absent → keep the full amount; otherwise clamp into [1, 24h]. The
+            // target can be BELOW the measured time (trim a forgotten tail) or
+            // ABOVE it (the user added time back / extended the session).
+            $target = $req <= 0 ? $actual : max(1, min($req, 86400));
             if ($target <= 0) continue;
 
-            // Trim from the end to reach $target — drop whole trailing intervals,
-            // then shorten the last partial one (so a forgotten tail disappears
-            // from the recap too, not just from the logged total).
-            $toRemove = $actual - $target;
             $segs = $g["segs"];
-            for ($i = count($segs) - 1; $i >= 0 && $toRemove > 0; $i--) {
-                $dur = (int) $segs[$i]["dur"];
-                if ($dur <= $toRemove) {
-                    $pdo->prepare("DELETE FROM study_segments WHERE id = ?")->execute([$segs[$i]["id"]]);
-                    $toRemove -= $dur;
-                } else {
-                    $keep   = $dur - $toRemove;
-                    $newEnd = (new DateTime($segs[$i]["started_at"]))
-                        ->modify("+{$keep} seconds")->format("Y-m-d H:i:s");
-                    $pdo->prepare("UPDATE study_segments SET ended_at = ? WHERE id = ?")
-                        ->execute([$newEnd, $segs[$i]["id"]]);
-                    $toRemove = 0;
+            if ($target < $actual) {
+                // Trim from the end — drop whole trailing intervals, then shorten
+                // the last partial one (so the cut shows in the recap too).
+                $toRemove = $actual - $target;
+                for ($i = count($segs) - 1; $i >= 0 && $toRemove > 0; $i--) {
+                    $dur = (int) $segs[$i]["dur"];
+                    if ($dur <= $toRemove) {
+                        $pdo->prepare("DELETE FROM study_segments WHERE id = ?")->execute([$segs[$i]["id"]]);
+                        $toRemove -= $dur;
+                    } else {
+                        $keep   = $dur - $toRemove;
+                        $newEnd = (new DateTime($segs[$i]["started_at"]))
+                            ->modify("+{$keep} seconds")->format("Y-m-d H:i:s");
+                        $pdo->prepare("UPDATE study_segments SET ended_at = ? WHERE id = ?")
+                            ->execute([$newEnd, $segs[$i]["id"]]);
+                        $toRemove = 0;
+                    }
                 }
+            } elseif ($target > $actual && $segs) {
+                // Added time — push the last interval's ended_at out by the extra
+                // (only ended_at ever changes, mirroring the trim path).
+                $last    = $segs[count($segs) - 1];
+                $newDur  = (int) $last["dur"] + ($target - $actual);
+                $newEnd  = (new DateTime($last["started_at"]))
+                    ->modify("+{$newDur} seconds")->format("Y-m-d H:i:s");
+                $pdo->prepare("UPDATE study_segments SET ended_at = ? WHERE id = ?")
+                    ->execute([$newEnd, $last["id"]]);
             }
 
             // started_at = the real sub-session start (of the surviving intervals).

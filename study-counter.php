@@ -32,6 +32,12 @@ $initialStatus = studyStatusPayload($pdo, $_SESSION["user_id"]);
 // Each session is charted on the study day it started in (see studySessionsByDay).
 $initialSessions = studySessionsByDay($pdo);
 
+// username -> avatar (base64 data URL), for the podium profile pictures.
+$userAvatars = [];
+foreach ($pdo->query("SELECT username, avatar FROM users")->fetchAll(PDO::FETCH_ASSOC) as $u) {
+    if (!empty($u["avatar"])) $userAvatars[$u["username"]] = $u["avatar"];
+}
+
 $pageTitle = "Study Counter";
 require_once __DIR__ . "/includes/header.php";
 ?>
@@ -698,47 +704,87 @@ main.container {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 18px;
     margin-top: 20px;
 }
 
+/* Each filter group: a small uppercase label over its controls. */
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
 
-.period-tab {
+.filter-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+/* Time period → a connected segmented control. */
+.seg-control {
     display: inline-flex;
-    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-full);
+}
+
+.seg-btn {
     width: auto;
     margin: 0;
-    padding: 8px 20px;
-    border-radius: var(--radius-full);
-    font-size: 0.92rem;
-    font-weight: 600;
+    padding: 7px 16px;
     border: none;
     background: transparent;
     color: var(--text-2);
-    cursor: pointer;
-    transition: all var(--t-fast);
-    white-space: nowrap;
+    font-size: 0.88rem;
+    font-weight: 600;
     line-height: 1;
+    white-space: nowrap;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: background var(--t-fast), color var(--t-fast), transform var(--t-fast);
 }
-
-.tab-sep {
-    display: block;
-    width: 100%;
-    height: 2px;
-    background: rgba(255,255,255,0.12);
-    border-radius: 2px;
-    margin: 4px 0;
-}
-
-.period-tab.active {
+.seg-btn:hover:not(.active) { color: var(--text-1); background: rgba(255, 255, 255, 0.07); }
+.seg-btn:active { transform: scale(0.95); }
+.seg-btn.active {
     background: var(--grad-accent);
     color: #fff;
     box-shadow: var(--glow-violet);
 }
 
-.period-tab:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.08);
+/* View filters → standalone toggle chips. */
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.filter-chip {
+    width: auto;
+    margin: 0;
+    padding: 8px 15px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-2);
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+}
+.filter-chip:hover:not(.active) {
     color: var(--text-1);
+    border-color: rgba(139, 92, 246, 0.45);
+    background: rgba(255, 255, 255, 0.06);
+}
+.filter-chip:active { transform: scale(0.95); }
+.filter-chip.active {
+    border-color: transparent;
+    background: var(--grad-accent);
+    color: #fff;
+    box-shadow: var(--glow-violet);
 }
 
 
@@ -758,6 +804,62 @@ main.container {
 .podium-sub-time {
     font-size: 0.78rem;
     color: var(--text-3);
+}
+
+/* ── Study podium: profile pictures + gold/silver/bronze/chocolate medals ──
+   Scoped to #overall-podium so the shared .podium (projects) is untouched. */
+#overall-podium { flex-wrap: wrap; }
+
+.sc-avatar {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 2px solid var(--glass-border);
+    border-radius: 50%;
+    background: var(--glass-strong);
+}
+.sc-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sc-avatar-fallback {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--text-1);
+    line-height: 1;
+}
+
+/* The medal disc lives under the "total studied" sub-label. */
+.sc-medal {
+    width: 30px;
+    height: 30px;
+    margin: 12px auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.92rem;
+    border-radius: 50%;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.sc-medal-1 { /* gold   */ background: linear-gradient(145deg, #fff3b0, #fbbf24 45%, #d4960a); color: #5a3d00; box-shadow: inset 0 1px 1px rgba(255,255,255,0.55), 0 0 14px rgba(251,191,36,0.5); }
+.sc-medal-2 { /* silver */ background: linear-gradient(145deg, #ffffff, #cbd5e1 45%, #94a3b8); color: #39414e; }
+.sc-medal-3 { /* bronze — warm copper, kept clearly orange so it doesn't read as brown */ background: linear-gradient(145deg, #f7b878, #e07f37 45%, #b85f1e); color: #4a2400; }
+.sc-medal-4 { /* chocolate — dark brown */ background: linear-gradient(145deg, #8a5a36, #5e3a1e 45%, #3a2210); color: #f3e2d0; }
+
+/* Desktop: 1→4 left-to-right staircase, with a smaller 4th place. */
+@media (min-width: 769px) {
+    #overall-podium { align-items: flex-start; }
+    #overall-podium .podium-card { order: 0; margin-top: 0; max-width: 210px; }
+    #overall-podium .podium-card.rank-1 { order: 1; max-width: 230px; }
+    #overall-podium .podium-card.rank-2 { order: 2; margin-top: 14px; }
+    #overall-podium .podium-card.rank-3 { order: 3; margin-top: 26px; }
+    #overall-podium .podium-card.rank-4 { order: 4; margin-top: 38px; max-width: 168px; padding: 18px 14px; }
+    #overall-podium .podium-card.rank-4 .sc-avatar { width: 48px; height: 48px; }
+    #overall-podium .podium-card.rank-4 .podium-score { font-size: 1.6rem; }
 }
 
 /* Per-module mini podiums */
@@ -988,7 +1090,8 @@ main.container {
     line-height: 1;
     border-radius: var(--radius-sm);
 }
-.stop-part-btn.minus { font-size: 1.2rem; }
+.stop-part-btn.minus,
+.stop-part-btn.plus { font-size: 1.2rem; }
 .stop-part-btn.remove { color: var(--danger); border-color: rgba(248, 113, 113, 0.4); }
 .stop-part-btn.remove:hover { background: rgba(248, 113, 113, 0.14); }
 
@@ -1346,12 +1449,21 @@ main.container {
     <div class="study-intro">
         <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
         <div class="podium-controls">
-            <button class="period-tab active" data-period="overall">Overall</button>
-            <button class="period-tab" data-period="weekly">This week</button>
-            <button class="period-tab" data-period="daily">Today</button>
-            <span class="tab-sep"></span>
-            <button type="button" class="period-tab" id="podium-toggle">Per module</button>
-            <button type="button" class="period-tab" id="library-toggle">Library only</button>
+            <div class="filter-group">
+                <span class="filter-label">Period</span>
+                <div class="seg-control">
+                    <button type="button" class="seg-btn active" data-period="overall">Overall</button>
+                    <button type="button" class="seg-btn" data-period="weekly">This week</button>
+                    <button type="button" class="seg-btn" data-period="daily">Today</button>
+                </div>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">View</span>
+                <div class="chip-row">
+                    <button type="button" class="filter-chip" id="podium-toggle">Per module</button>
+                    <button type="button" class="filter-chip" id="library-toggle">Library only</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1604,6 +1716,7 @@ main.container {
     const MODULES          = <?= json_encode($modules) ?>;
     const INITIAL_STATUS   = <?= json_encode($initialStatus) ?>;
     const INITIAL_SESSIONS = <?= json_encode($initialSessions) ?>;
+    const USER_AVATARS     = <?= json_encode($userAvatars, JSON_UNESCAPED_SLASHES) ?>;
 
     // Two distinct palettes: outlines for users, fills for modules.
     // Fixed colours for the regulars; everyone else draws from the palette.
@@ -1876,17 +1989,22 @@ main.container {
         empty.style.display = "none";
 
         const sublabel = (PERIOD_LABELS[podiumPeriod] || "total studied") + (libraryOnly ? " · at the library" : "");
-        const top = ranked.slice(0, 3);
+        const top = ranked.slice(0, 4);
         podium.innerHTML = top.map(([username, secs], i) => {
             const rank = i + 1;
             const color = userColor[username] || "#8b5cf6";
             const style = `border-color:${color}; background:linear-gradient(160deg, ${color}24, ${color}0a); box-shadow:0 10px 28px ${color}33;`;
+            const av = USER_AVATARS[username];
+            const avatarInner = av
+                ? `<img src="${av}" alt="">`
+                : `<span class="sc-avatar-fallback">${escapeHtml((username[0] || "?").toUpperCase())}</span>`;
             return `
                 <div class="podium-card glass-card rank-${rank}" style="${style}">
-                    <span class="podium-medal">${rank}</span>
+                    <div class="sc-avatar" style="border-color:${color}">${avatarInner}</div>
                     <div class="podium-name">${escapeHtml(username)}</div>
                     <div class="podium-score" style="color:${color}">${fmtTime(secs)}</div>
                     <div class="podium-sub podium-sub-time">${sublabel}</div>
+                    <div class="sc-medal sc-medal-${rank}">${rank}</div>
                 </div>
             `;
         }).join("");
@@ -1988,11 +2106,11 @@ main.container {
         if (showingModules) buildModulePodiums(); else buildOverallPodium();
     });
 
-    // ── Period tabs ───────────────────────────────────────────────────────
-    document.querySelectorAll(".period-tab[data-period]").forEach(tab => {
+    // ── Period segmented control ──────────────────────────────────────────
+    document.querySelectorAll(".seg-btn[data-period]").forEach(tab => {
         tab.addEventListener("click", () => {
             if (tab.dataset.period === podiumPeriod) return;
-            document.querySelectorAll(".period-tab[data-period]").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".seg-btn[data-period]").forEach(t => t.classList.remove("active"));
             tab.classList.add("active");
             podiumPeriod = tab.dataset.period;
             if (showingModules) buildModulePodiums(); else buildOverallPodium();
@@ -2767,7 +2885,8 @@ main.container {
                 <span class="module-dot" style="background:${color}"></span>
                 <span class="stop-part-name">${escapeHtml(r.module)}</span>
                 <span class="stop-part-time">${fmtTime(r.secs)}</span>
-                <button type="button" class="btn stop-part-btn minus" data-act="minus" data-i="${i}" title="Trim 5 min" ${r.removed ? "disabled" : ""}>−</button>
+                <button type="button" class="btn stop-part-btn minus" data-act="minus" data-i="${i}" title="Remove 5 min" ${r.removed ? "disabled" : ""}>−</button>
+                <button type="button" class="btn stop-part-btn plus" data-act="plus" data-i="${i}" title="Add 5 min" ${r.removed ? "disabled" : ""}>+</button>
                 <button type="button" class="btn stop-part-btn remove" data-act="remove" data-i="${i}" title="${r.removed ? "Restore" : "Drop this session"}">${r.removed ? "↺" : "✕"}</button>
             </div>`;
         }).join("") || `<p class="muted">No study time recorded yet.</p>`;
@@ -2792,7 +2911,9 @@ main.container {
         const r = stopRows[+btn.dataset.i];
         if (!r) return;
         if (btn.dataset.act === "minus") {
-            r.secs = Math.max(60, r.secs - TRIM_STEP); // floor at 1 min
+            r.secs = Math.max(60, r.secs - TRIM_STEP);     // floor at 1 min
+        } else if (btn.dataset.act === "plus") {
+            r.secs = Math.min(86400, r.secs + TRIM_STEP);  // cap at 24h
         } else {
             r.removed = !r.removed;
         }

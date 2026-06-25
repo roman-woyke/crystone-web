@@ -41,6 +41,7 @@ CREATE TABLE users (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     username      VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    avatar        MEDIUMTEXT NULL,  -- profile picture as a base64 data URL (resized client-side)
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -260,6 +261,12 @@ CREATE TABLE fwordle_hints (
 > ```sql
 > ALTER TABLE study_segments ADD COLUMN module_name VARCHAR(255) NULL AFTER session_id;
 > ```
+>
+> **users.avatar migration:** profile pictures are stored as a base64 data URL
+> on the user row:
+> ```sql
+> ALTER TABLE users ADD COLUMN avatar MEDIUMTEXT NULL AFTER password_hash;
+> ```
 
 ---
 
@@ -297,11 +304,13 @@ public_html/               ← web root = this repo
 ├── api/                   ← JSON endpoints (called by JS fetch)
 │   ├── delete-application.php
 │   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
+│   ├── delete-study-session.php ← study counter: delete one of my logged sessions
 │   ├── delete-time-entry.php   ← project tracker: remove a single logged session
 │   ├── fwordle-choose.php      ← fWordle: set one of tomorrow's words (solver-only)
 │   ├── fwordle-guess.php       ← fWordle: submit a guess (validated + scored server-side)
 │   ├── fwordle-state.php       ← fWordle: full game state (mine + opponents' colors)
 │   ├── get-leaderboard.php
+│   ├── get-my-study-sessions.php ← study counter: my logged sessions (manage window)
 │   ├── get-raw-events.php
 │   ├── get-score-history.php
 │   ├── get-study-data.php      ← study counter: modules + aggregated sessions
@@ -311,7 +320,8 @@ public_html/               ← web root = this repo
 │   ├── study-timer.php         ← study counter: persistent timer/presence state machine
 │   ├── patch-application.php
 │   ├── patch-project.php       ← project tracker: edit name/description/colour
-│   └── toggle-user-exam.php    ← exam calendar checkbox toggle
+│   ├── toggle-user-exam.php    ← exam calendar checkbox toggle
+│   └── upload-avatar.php       ← set/clear the logged-in user's profile picture
 ├── assets/
 │   ├── css/style.css      ← design tokens + shared glass components
 │   └── js/app.js          ← mobile nav toggle + countUp helper

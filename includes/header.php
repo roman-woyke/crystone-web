@@ -34,6 +34,19 @@
     $loggedIn = isset($_SESSION["user_id"]);
     $currentPage = basename($_SERVER["SCRIPT_NAME"]);
 
+    // Current user's avatar (base64 data URL) + initial for the placeholder.
+    $myAvatar  = null;
+    $myInitial = strtoupper(mb_substr($_SESSION["username"] ?? "?", 0, 1));
+    if ($loggedIn && isset($pdo)) {
+        try {
+            $st = $pdo->prepare("SELECT avatar FROM users WHERE id = ?");
+            $st->execute([$_SESSION["user_id"]]);
+            $myAvatar = $st->fetchColumn() ?: null;
+        } catch (Throwable $e) {
+            $myAvatar = null;
+        }
+    }
+
     $navLinks = [
         "dashboard.php"   => "Dashboard",
         "leaderboard.php" => "Leaderboard",
@@ -66,6 +79,14 @@
 
     <div class="nav-right">
         <?php if ($loggedIn): ?>
+            <button class="nav-avatar" id="nav-avatar" type="button" title="Profile picture" aria-label="Edit profile picture">
+                <?php if ($myAvatar): ?>
+                    <img src="<?= htmlspecialchars($myAvatar) ?>" alt="">
+                <?php else: ?>
+                    <span class="nav-avatar-fallback"><?= htmlspecialchars($myInitial) ?></span>
+                <?php endif; ?>
+            </button>
+
             <?php if (isset($_SESSION["username"])): ?>
                 <span class="nav-user-chip">
                     <?= htmlspecialchars($_SESSION["username"]) ?>
@@ -85,5 +106,121 @@
         <?php endif; ?>
     </div>
 </nav>
+
+<?php if ($loggedIn): ?>
+<!-- Profile-picture upload modal (opened from the nav avatar button) -->
+<div id="avatar-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card modal-solid avatar-dialog">
+        <div class="avatar-modal-head">
+            <h3>Profile picture</h3>
+            <button type="button" class="icon-btn" id="avatar-close" aria-label="Close">✕</button>
+        </div>
+        <div class="avatar-preview" id="avatar-preview">
+            <?php if ($myAvatar): ?>
+                <img src="<?= htmlspecialchars($myAvatar) ?>" alt="">
+            <?php else: ?>
+                <span class="nav-avatar-fallback big"><?= htmlspecialchars($myInitial) ?></span>
+            <?php endif; ?>
+        </div>
+        <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" hidden>
+        <p class="avatar-hint muted">PNG, JPG or WebP — it's cropped to a square and resized.</p>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-danger" id="avatar-remove">Remove</button>
+            <button type="button" class="btn" id="avatar-pick">Choose image</button>
+            <button type="button" class="btn-primary" id="avatar-save" disabled>Save</button>
+        </div>
+        <p class="avatar-feedback" id="avatar-feedback"></p>
+    </div>
+</div>
+
+<script>
+(function () {
+    const modal = document.getElementById("avatar-modal");
+    if (!modal) return;
+    const BASE     = "<?= BASE_PATH ?>";
+    const INIT     = <?= json_encode($myInitial) ?>;
+    const navBtn   = document.getElementById("nav-avatar");
+    const preview  = document.getElementById("avatar-preview");
+    const fileEl   = document.getElementById("avatar-file");
+    const saveBtn  = document.getElementById("avatar-save");
+    const feedback = document.getElementById("avatar-feedback");
+    let pending = null; // resized data URL awaiting save
+
+    const open  = () => { feedback.textContent = ""; pending = null; saveBtn.disabled = true; modal.style.display = "flex"; };
+    const close = () => { modal.style.display = "none"; };
+    navBtn.addEventListener("click", open);
+    document.getElementById("avatar-close").addEventListener("click", close);
+    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+    document.getElementById("avatar-pick").addEventListener("click", () => fileEl.click());
+
+    function fallbackHtml(big) {
+        const span = document.createElement("span");
+        span.className = "nav-avatar-fallback" + (big ? " big" : "");
+        span.textContent = INIT;
+        return span;
+    }
+    function imgHtml(src) {
+        const img = document.createElement("img");
+        img.src = src; img.alt = "";
+        return img;
+    }
+    function setNav(src) {
+        navBtn.replaceChildren(src ? imgHtml(src) : fallbackHtml(false));
+    }
+
+    fileEl.addEventListener("change", () => {
+        const file = fileEl.files && fileEl.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                // Center-crop to a square, resize to 256px, export as JPEG.
+                const size = 256;
+                const c = document.createElement("canvas");
+                c.width = c.height = size;
+                const ctx  = c.getContext("2d");
+                const side = Math.min(img.width, img.height);
+                const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+                ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+                pending = c.toDataURL("image/jpeg", 0.85);
+                preview.replaceChildren(imgHtml(pending));
+                saveBtn.disabled = false;
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+        fileEl.value = ""; // allow re-picking the same file
+    });
+
+    saveBtn.addEventListener("click", () => {
+        if (!pending) return;
+        saveBtn.disabled = true;
+        feedback.textContent = "Saving…";
+        const body = new FormData();
+        body.append("avatar", pending);
+        fetch(BASE + "/api/upload-avatar.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Upload failed."); }))
+            .then(res => { setNav(res.avatar); feedback.textContent = "Saved."; setTimeout(close, 600); })
+            .catch(err => { feedback.textContent = err.message; saveBtn.disabled = false; });
+    });
+
+    document.getElementById("avatar-remove").addEventListener("click", () => {
+        feedback.textContent = "Removing…";
+        const body = new FormData();
+        body.append("remove", "1");
+        fetch(BASE + "/api/upload-avatar.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Failed."); }))
+            .then(() => {
+                setNav(null);
+                preview.replaceChildren(fallbackHtml(true));
+                pending = null; saveBtn.disabled = true;
+                feedback.textContent = "Removed.";
+            })
+            .catch(err => { feedback.textContent = err.message; });
+    });
+}());
+</script>
+<?php endif; ?>
 
 <main class="container">
