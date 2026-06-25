@@ -21,6 +21,12 @@ const FWORDLE_MAX_WORDS = 4;
 const FWORDLE_MIN_LEN   = 5;
 const FWORDLE_MAX_LEN   = 10;
 
+// Streak freezes: everyone starts with 3; a missed day is auto-bridged by a
+// freeze (so the streak survives) when one is available; +2 are earned for every
+// 7 days of streak. A freeze can also be exchanged for a joker once per day.
+const FWORDLE_FREEZE_START    = 3;
+const FWORDLE_FREEZE_PER_WEEK = 2;
+
 // Shared guesses for a day: 6 for 1 board, +1 per extra board → 6/7/8/9 for
 // 1–4 boards. The 4-board default is 9, like a cat's nine lives: each globally
 // lost board (a failed player) costs a life the next day. Length-independent.
@@ -365,35 +371,68 @@ function fwordleHasArmor(PDO $pdo, string $date, int $userId): bool
     return (bool) $s->fetchColumn();
 }
 
-// Current solve streak for a user, net of the joker streak-cost.
-//   base      = run of consecutive solved days (today if solved, else through
-//               yesterday, so an unplayed today doesn't break it).
-//   penalty   = jokers used within that window INCLUDING today, so a joker bought
-//               today drops the streak immediately even before today is solved.
-//   effective = max(0, base - penalty).
+// Current solve streak AND freeze balance for a user, computed by replaying every
+// day in order from the first relevant day up to today:
+//   - each solved day: streak + 1, and +2 freezes whenever the streak hits a
+//     multiple of 7.
+//   - each PAST unsolved day (today excluded — it isn't over): a freeze bridges
+//     it (streak preserved) when the balance allows, otherwise the streak resets.
+//   - jokers settle on their day: a freeze-paid joker (`via_freeze`) spends a
+//     freeze; every other joker costs 1 streak.
+// `effective` is the freeze-aware streak, net of the joker streak-cost.
 function fwordleStreakInfo(PDO $pdo, string $date, int $userId): array
 {
-    $s = $pdo->prepare("SELECT game_date FROM fwordle_results WHERE user_id = ? AND solved = 1");
+    $s = $pdo->prepare("SELECT game_date FROM fwordle_results WHERE user_id = ? AND solved = 1 ORDER BY game_date");
     $s->execute([$userId]);
-    $solved = [];
-    foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $d) $solved[$d] = true;
+    $solvedList = $s->fetchAll(PDO::FETCH_COLUMN);
+    $solved = array_fill_keys($solvedList, true);
 
-    $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
-    $cursor = isset($solved[$date]) ? $date : $yesterday;
-    $base = 0;
-    $oldest = $date;
-    while (isset($solved[$cursor])) {
-        $base++;
-        $oldest = $cursor;
-        $cursor = date('Y-m-d', strtotime($cursor . ' -1 day'));
+    // Jokers per day, split by payment method.
+    $h = $pdo->prepare("
+        SELECT game_date,
+               SUM(via_freeze = 0) AS streak_jokers,
+               SUM(via_freeze = 1) AS freeze_jokers
+        FROM fwordle_hints WHERE user_id = ? GROUP BY game_date
+    ");
+    $h->execute([$userId]);
+    $streakJokers = []; $freezeJokers = []; $jokerDates = [];
+    foreach ($h->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $streakJokers[$r['game_date']] = (int) $r['streak_jokers'];
+        $freezeJokers[$r['game_date']] = (int) $r['freeze_jokers'];
+        $jokerDates[] = $r['game_date'];
     }
-    $start = $base > 0 ? $oldest : $date; // window floor (today when no streak)
 
-    $p = $pdo->prepare("SELECT COUNT(*) FROM fwordle_hints WHERE user_id = ? AND game_date BETWEEN ? AND ?");
-    $p->execute([$userId, $start, $date]);
-    $penalty = (int) $p->fetchColumn();
+    // Replay from the earliest day that matters up to today.
+    $candidates = array_filter([$solvedList[0] ?? null, $jokerDates ? min($jokerDates) : null]);
+    $cursor = $candidates ? min($candidates) : $date;
 
-    return ['base' => $base, 'penalty' => $penalty, 'effective' => max(0, $base - $penalty)];
+    $balance = FWORDLE_FREEZE_START;
+    $streak  = 0;
+    while ($cursor <= $date) {
+        if (isset($solved[$cursor])) {
+            $streak++;
+            if ($streak % 7 === 0) $balance += FWORDLE_FREEZE_PER_WEEK;
+        } elseif ($cursor !== $date) {
+            // A past day that ended unsolved → bridge with a freeze, else break.
+            if ($streak > 0) {
+                if ($balance >= 1) $balance--;
+                else $streak = 0;
+            }
+        }
+        // Settle the day's jokers.
+        if (!empty($freezeJokers[$cursor])) $balance -= $freezeJokers[$cursor];
+        if (!empty($streakJokers[$cursor])) $streak = max(0, $streak - $streakJokers[$cursor]);
+        if ($balance < 0) $balance = 0;
+
+        if ($cursor === $date) break;
+        $cursor = date('Y-m-d', strtotime($cursor . ' +1 day'));
+    }
+
+    return [
+        'effective'         => max(0, $streak),
+        'freezes'           => max(0, $balance),
+        'freeze_used_today' => !empty($freezeJokers[$date]),
+    ];
 }
 
 // Board positions whose word this user chose (auto-solved for them).
