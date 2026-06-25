@@ -703,7 +703,9 @@ main.container {
 .podium-controls {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    /* Hug the right edge of the intro column so the filters sit close to the
+       podium instead of stranded far left. */
+    align-items: flex-end;
     gap: 18px;
     margin-top: 20px;
 }
@@ -712,6 +714,7 @@ main.container {
 .filter-group {
     display: flex;
     flex-direction: column;
+    align-items: flex-end;
     gap: 8px;
 }
 
@@ -721,6 +724,7 @@ main.container {
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--text-3);
+    text-align: right;
 }
 
 /* Time period → a vertical segmented control (stacked pills). */
