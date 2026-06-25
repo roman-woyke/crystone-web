@@ -148,24 +148,14 @@ main.container { max-width: 1280px; }
     background: rgba(56, 189, 248, 0.1);
     border: 1px solid var(--info, #38bdf8);
 }
-/* Toggle: pay the next joker with a freeze instead of streak. */
-.fw-freeze-toggle {
-    width: auto;
-    margin: 0;
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: var(--radius-md);
-    color: var(--info, #38bdf8);
-    border: 1px solid rgba(56, 189, 248, 0.4);
-    background: rgba(56, 189, 248, 0.08);
-    cursor: pointer;
-}
-.fw-freeze-toggle.active {
-    color: #04222f;
-    background: var(--info, #38bdf8);
-    border-color: transparent;
-}
+/* The wallet chips double as the payment-mode switch: clickable when both
+   streak and freeze are options, with the active mode filled in. */
+.fw-streak-wallet.selectable,
+.fw-freeze-wallet.selectable { cursor: pointer; transition: background var(--t-fast); }
+.fw-streak-wallet.selectable:hover { background: rgba(239, 68, 68, 0.2); }
+.fw-freeze-wallet.selectable:hover { background: rgba(56, 189, 248, 0.2); }
+.fw-streak-wallet.selectable.active { color: #2a0606; background: var(--danger); border-color: transparent; }
+.fw-freeze-wallet.selectable.active { color: #04222f; background: var(--info, #38bdf8); border-color: transparent; }
 .fw-joker-btn.active {
     border-color: var(--violet);
     box-shadow: var(--glow-violet);
@@ -801,27 +791,36 @@ main.container { max-width: 1280px; }
             </button>`;
         }).join("");
 
-        // Spendable streak (red) + freeze balance (blue) shown as currency.
-        const wallet = `<span class="fw-streak-wallet" title="Streak you can spend on jokers">🔥 ${me.streak || 0}${me.free_joker ? " · 1 free" : ""}</span>`;
-        const freezeWallet = `<span class="fw-freeze-wallet" title="Streak freezes — bridge a missed day, or exchange one for a joker (once/day)">🧊 ${me.freezes || 0}</span>`;
-        const freezeToggle = (canFreeze && !me.finished)
-            ? `<button type="button" class="fw-freeze-toggle${useFreeze ? " active" : ""}" id="fw-freeze-toggle" title="Pay your next joker with a freeze instead of streak">${useFreeze ? "Paying with freeze" : "Use a freeze"}</button>`
-            : "";
+        // Spendable streak (red) + freeze balance (blue) shown as currency — and
+        // they double as the payment-mode switch: click one to pay your next
+        // joker with it. The active one is highlighted.
+        const streakSelectable = canSpendStreak && canFreeze; // switching only matters when both are options
+        const freezeSelectable = canFreeze;
+        const wallet =
+            `<span class="fw-streak-wallet${!payFreezeNow ? " active" : ""}${streakSelectable ? " selectable" : ""}" data-pay="streak"
+                   title="${streakSelectable ? "Click to pay jokers with streak" : "Streak you can spend on jokers"}">🔥 ${me.streak || 0}${me.free_joker ? " · 1 free" : ""}</span>`;
+        const freezeWallet =
+            `<span class="fw-freeze-wallet${payFreezeNow ? " active" : ""}${freezeSelectable ? " selectable" : ""}" data-pay="freeze"
+                   title="${freezeSelectable ? "Click to pay your next joker with a freeze (keeps your streak)" : "Streak freezes — bridge a missed day, or exchange one for a joker (once/day)"}">🧊 ${me.freezes || 0}</span>`;
 
-        jokersEl.innerHTML = buttons + wallet + freezeWallet + freezeToggle;
+        jokersEl.innerHTML = buttons + wallet + freezeWallet;
 
         jokersEl.querySelectorAll(".fw-joker-btn").forEach(btn => {
             if (!btn.disabled) btn.addEventListener("click", () => selectHint(btn.dataset.type));
         });
-        const ft = document.getElementById("fw-freeze-toggle");
-        if (ft) ft.addEventListener("click", () => { useFreeze = !useFreeze; renderJokers(); });
+        // Wallet chips switch the payment mode.
+        const streakChip = jokersEl.querySelector('.fw-streak-wallet.selectable');
+        if (streakChip) streakChip.addEventListener("click", () => { useFreeze = false; renderJokers(); });
+        const freezeChip = jokersEl.querySelector('.fw-freeze-wallet.selectable');
+        if (freezeChip) freezeChip.addEventListener("click", () => { useFreeze = true; renderJokers(); });
 
         jokerHintEl.textContent = pendingHint
             ? `Pick a board for the ${pendingHint} joker (click the joker again to cancel).`
-            : payFreezeNow ? "This joker costs 1 freeze — your streak stays safe."
+            : payFreezeNow ? "Paying with a freeze — your streak stays safe (click 🔥 to pay with streak)."
             : me.free_joker ? "No streak — your first joker today is free."
             : broke ? "No streak or freezes left for jokers."
-            : "Each joker costs 1 streak (or use a freeze).";
+            : canFreeze ? "Each joker costs 1 streak (click 🧊 to pay with a freeze)."
+            : "Each joker costs 1 streak.";
     }
 
     function selectHint(type) {

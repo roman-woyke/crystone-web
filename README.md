@@ -246,7 +246,7 @@ CREATE TABLE fwordle_hints (
 );
 ```
 
-> **Streak freezes** are not a table — everyone starts with 3, earns +2 per 7
+> **Streak freezes** are not a table — everyone starts with 3, earns +3 per 7
 > days of streak, and a freeze auto-bridges a missed day (or is exchanged for a
 > joker once/day). The balance is **derived** by replaying solved days +
 > `fwordle_hints.via_freeze`, so the only persisted state is that column.

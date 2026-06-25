@@ -22,8 +22,9 @@ const FWORDLE_MIN_LEN   = 5;
 const FWORDLE_MAX_LEN   = 10;
 
 // Streak freezes: everyone starts with 3; a missed day is auto-bridged by a
-// freeze (so the streak survives) when one is available; +2 are earned for every
-// 7 days of streak. A freeze can also be exchanged for a joker once per day.
+// freeze (so the streak survives) when one is available; FWORDLE_FREEZE_PER_WEEK
+// are earned for every 7 days of streak. A freeze can also be exchanged for a
+// joker once per day.
 const FWORDLE_FREEZE_START    = 3;
 const FWORDLE_FREEZE_PER_WEEK = 3;
 
@@ -373,8 +374,8 @@ function fwordleHasArmor(PDO $pdo, string $date, int $userId): bool
 
 // Current solve streak AND freeze balance for a user, computed by replaying every
 // day in order from the first relevant day up to today:
-//   - each solved day: streak + 1, and +2 freezes whenever the streak hits a
-//     multiple of 7.
+//   - each solved day: streak + 1, and FWORDLE_FREEZE_PER_WEEK freezes whenever
+//     the streak hits a multiple of 7.
 //   - each PAST unsolved day (today excluded — it isn't over): a freeze bridges
 //     it (streak preserved) when the balance allows, otherwise the streak resets.
 //   - jokers settle on their day: a freeze-paid joker (`via_freeze`) spends a
