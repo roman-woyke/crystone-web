@@ -103,15 +103,15 @@
 
         var dpr = window.devicePixelRatio || 1;
 
-        // Colors: dark violet -> dark blue cycle, matches site accent palette
-        var GRADIENT_COLORS = ["#090714", "#1c0e45", "#0b1e55", "#090714"];
-        var NOISE           = 0.12;
+        // Colors: very dark violet -> dark blue cycle, matches site accent palette
+        var GRADIENT_COLORS = ["#05040d", "#110830", "#060f30", "#05040d"];
+        var NOISE           = 0.10;
         var BLIND_COUNT     = 8;
         var BLIND_MIN_WIDTH = 80;
         var DAMPENING       = 0.15;
         var SPOT_RADIUS     = 0.55;
         var SPOT_SOFTNESS   = 1.0;
-        var SPOT_OPACITY    = 0.75;
+        var SPOT_OPACITY    = 0.45;
         var MAX_COLORS      = 8;
 
         function hexToRgb(hex) {

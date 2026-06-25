@@ -169,6 +169,8 @@ a:hover {
     pointer-events: none;
     mix-blend-mode: screen;
     overflow: hidden;
+    filter: blur(28px);
+    opacity: 0.55;
 }
 
 /* --------------------------------------------------------------------------
