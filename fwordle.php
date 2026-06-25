@@ -435,6 +435,27 @@ main.container { max-width: 1280px; }
     font-size: 0.8rem;
 }
 
+.fw-spoiler-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.fw-spoiler {
+    filter: blur(6px);
+    user-select: none;
+    transition: filter 0.2s;
+}
+.fw-spoiler.revealed {
+    filter: none;
+}
+.fw-reveal-btn {
+    width: auto;
+    margin: 0;
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    opacity: 0.75;
+}
+
 .fw-choose-msg { margin: 10px 0 0; min-height: 1.1em; font-size: 0.85rem; color: var(--danger); }
 .fw-choose-msg.ok { color: var(--success); }
 
@@ -1086,12 +1107,18 @@ main.container { max-width: 1280px; }
             chooseEl.innerHTML = `
                 <h2>🗳️ Tomorrow's word — locked in</h2>
                 <div class="fw-chosen">
-                    Your pick: <strong>${escapeHtml(c.already)}</strong>
+                    Your pick: <span class="fw-spoiler-wrap"><strong class="fw-spoiler" id="fw-spoiler">${escapeHtml(c.already)}</strong><button type="button" class="btn fw-reveal-btn" id="fw-reveal">Reveal</button></span>
                     <br><button type="button" class="btn" id="fw-change">Change it</button>
                 </div>
                 <p class="fw-choose-msg ok" id="fw-choose-msg">Saved. You can change it until tomorrow begins.</p>
             `;
             document.getElementById("fw-change").addEventListener("click", () => { changing = true; renderChoose(); });
+            document.getElementById("fw-reveal").addEventListener("click", () => {
+                const spoiler = document.getElementById("fw-spoiler");
+                const btn = document.getElementById("fw-reveal");
+                const revealed = spoiler.classList.toggle("revealed");
+                btn.textContent = revealed ? "Hide" : "Reveal";
+            });
             return;
         }
 
