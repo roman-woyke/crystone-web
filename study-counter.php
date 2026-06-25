@@ -758,45 +758,6 @@ main.container {
     box-shadow: var(--glow-violet);
 }
 
-/* View filters → standalone toggle chips, each a distinct colour when on. */
-.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.filter-chip {
-    width: auto;
-    margin: 0;
-    padding: 8px 15px;
-    border: 1px solid var(--glass-border);
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--text-2);
-    font-size: 0.86rem;
-    font-weight: 600;
-    line-height: 1;
-    white-space: nowrap;
-    border-radius: var(--radius-full);
-    cursor: pointer;
-    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
-}
-.filter-chip:hover:not(.active) {
-    color: var(--text-1);
-    border-color: rgba(139, 92, 246, 0.45);
-    background: rgba(255, 255, 255, 0.06);
-}
-.filter-chip:active { transform: scale(0.95); }
-
-/* "Per module" → violet when active. */
-#podium-toggle.active {
-    border-color: transparent;
-    background: var(--grad-accent);
-    color: #fff;
-    box-shadow: var(--glow-violet);
-}
-/* "Library only" → its own blue when active, so the two read as separate. */
-#library-toggle.active {
-    border-color: transparent;
-    background: var(--info, #38bdf8);
-    color: #04222f;
-    box-shadow: 0 0 16px rgba(56, 189, 248, 0.45);
-}
 
 
 .podium-views {
@@ -1470,9 +1431,10 @@ main.container {
             </div>
             <div class="filter-group">
                 <span class="filter-label">View</span>
-                <div class="chip-row">
-                    <button type="button" class="filter-chip" id="podium-toggle">Per module</button>
-                    <button type="button" class="filter-chip" id="library-toggle">Library only</button>
+                <div class="seg-control">
+                    <button type="button" class="seg-btn active" data-view="all">All modules</button>
+                    <button type="button" class="seg-btn" data-view="module">Per module</button>
+                    <button type="button" class="seg-btn" data-view="library">Library only</button>
                 </div>
             </div>
         </div>
@@ -2083,15 +2045,15 @@ main.container {
             `).join("");
     }
 
-    // ── Podium toggle (fade) ──────────────────────────────────────────────
+    // ── Podium view crossfade ─────────────────────────────────────────────
     let showingModules = false;
-    const toggleBtn   = document.getElementById("podium-toggle");
     const viewOverall = document.getElementById("podium-overall");
     const viewModules = document.getElementById("podium-modules");
 
     function switchPodiumView(toModules) {
         const current = showingModules ? viewModules : viewOverall;
         const next    = toModules      ? viewModules : viewOverall;
+        showingModules = toModules;
         if (current === next) return;
         current.classList.add("fade-out");
         setTimeout(() => {
@@ -2099,22 +2061,23 @@ main.container {
             next.style.display = "block";
             requestAnimationFrame(() => next.classList.remove("fade-out"));
         }, 280);
-        showingModules = toModules;
-        toggleBtn.classList.toggle("active", showingModules);
     }
 
-    toggleBtn.addEventListener("click", () => {
-        switchPodiumView(!showingModules);
-        if (showingModules) buildModulePodiums(); else buildOverallPodium();
-    });
+    // ── View segmented control (single-select) ────────────────────────────
+    //   all     → overall combined podium, every session
+    //   module  → per-module mini-podiums
+    //   library → overall combined podium, library sessions only
+    document.querySelectorAll(".seg-btn[data-view]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            if (btn.classList.contains("active")) return;
+            document.querySelectorAll(".seg-btn[data-view]").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
 
-    // Library-only filter — applies on top of the period selection. Re-render
-    // whichever podium view (overall/per-module) is currently visible.
-    const libraryToggle = document.getElementById("library-toggle");
-    libraryToggle.addEventListener("click", () => {
-        libraryOnly = !libraryOnly;
-        libraryToggle.classList.toggle("active", libraryOnly);
-        if (showingModules) buildModulePodiums(); else buildOverallPodium();
+            const view = btn.dataset.view;
+            libraryOnly = (view === "library");
+            switchPodiumView(view === "module");
+            if (showingModules) buildModulePodiums(); else buildOverallPodium();
+        });
     });
 
     // ── Period segmented control (vertical) ───────────────────────────────
