@@ -710,11 +710,12 @@ main.container {
     margin-top: 20px;
 }
 
-/* Each filter group: a small uppercase label over its controls. */
+/* Each filter group hugs the right of the column, but its label stays aligned
+   with the left edge of the control beneath it. */
 .filter-group {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: stretch;
     gap: 8px;
 }
 
@@ -724,7 +725,7 @@ main.container {
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--text-3);
-    text-align: right;
+    text-align: left;
 }
 
 /* Time period → a vertical segmented control (stacked pills). */
