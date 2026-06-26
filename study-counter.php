@@ -3383,30 +3383,30 @@ main.container {
         const outAnim = showBack ? "flip-out"     : "flip-out-rev";
         const inAnim  = showBack ? "flip-in"      : "flip-in-rev";
 
+        // Update layout state NOW (before any animation) so no mid-animation
+        // reflow disturbs the running transform and flashes the back face.
+        flipInner.classList.toggle("flipped", showBack);
+        dockCard.classList.toggle("recap", showBack);
+        syncDockHeight();
+
         // Phase 1: outgoing face rotates to 90° (geometrically edge-on).
         outFace.style.visibility = "visible";
-        outFace.style.animation  = `${outAnim} 280ms ease-in forwards`;
+        outFace.style.animation  = `${outAnim} 200ms ease-in forwards`;
 
         flipPhase[0] = setTimeout(() => {
-            // At the midpoint the face is invisible — safe to swap.
+            // Face is edge-on and invisible — safe to swap.
             outFace.style.visibility = "hidden";
             outFace.style.animation  = "";
 
-            // Flip state + height update happen here so the card resizes as
-            // the incoming face arrives, not before it's visible.
-            flipInner.classList.toggle("flipped", showBack);
-            dockCard.classList.toggle("recap", showBack);
-            syncDockHeight();
-
             // Phase 2: incoming face rotates from 90° to face the viewer.
             inFace.style.visibility = "visible";
-            inFace.style.animation  = `${inAnim} 280ms ease-out forwards`;
+            inFace.style.animation  = `${inAnim} 200ms ease-out forwards`;
 
             flipPhase[1] = setTimeout(() => {
                 inFace.style.animation = "";
                 flipPhase = [null, null];
-            }, 310);
-        }, 280);
+            }, 230);
+        }, 200);
     }
 
     document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
