@@ -3356,6 +3356,11 @@ main.container {
     const frontFace = dockCard.querySelector(".flip-front");
     const backFace  = dockCard.querySelector(".flip-back");
 
+    // Firefox doesn't reliably honour backface-visibility:hidden after a CSS
+    // transition fires on the parent. We manage the inactive face's visibility
+    // in JS as a bulletproof fallback. Start with back face hidden.
+    backFace.style.visibility = "hidden";
+
     let dockHeightInit = false;
     function syncDockHeight() {
         const face = flipInner.classList.contains("flipped") ? backFace : frontFace;
@@ -3373,11 +3378,26 @@ main.container {
         }
     }
 
+    let flipTimeout = null;
     function flipDock(showBack) {
+        // Make both faces visible so the 3D rotation animation is actually seen.
+        frontFace.style.visibility = "";
+        backFace.style.visibility  = "";
+
         flipInner.classList.toggle("flipped", showBack);
         // Front = sticky; back = in-flow so a tall recap can scroll down the page.
         dockCard.classList.toggle("recap", showBack);
         syncDockHeight();
+
+        // After the transition (600ms), hide the now-inactive face. This is a
+        // Firefox workaround: backface-visibility:hidden stops working after a
+        // CSS transition on a preserve-3d parent, causing the hidden face to
+        // bleed through below the active face's bottom edge.
+        clearTimeout(flipTimeout);
+        flipTimeout = setTimeout(() => {
+            frontFace.style.visibility = showBack ? "hidden" : "";
+            backFace.style.visibility  = showBack ? "" : "hidden";
+        }, 650);
     }
 
     document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
