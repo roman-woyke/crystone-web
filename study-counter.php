@@ -3389,15 +3389,17 @@ main.container {
         dockCard.classList.toggle("recap", showBack);
         syncDockHeight();
 
-        // After the transition (600ms), hide the now-inactive face. This is a
-        // Firefox workaround: backface-visibility:hidden stops working after a
-        // CSS transition on a preserve-3d parent, causing the hidden face to
-        // bleed through below the active face's bottom edge.
+        // Hide the inactive face shortly after the 90° edge-on point. With
+        // cubic-bezier(0.22,1,0.36,1) over 600ms the face is already past 90°
+        // (and geometrically invisible) by ~80ms, so 100ms is a seamless cut.
+        // Firefox workaround: backface-visibility:hidden breaks after a CSS
+        // transition fires on a preserve-3d parent, so the hidden face bleeds
+        // through below the active face's bottom edge without this explicit hide.
         clearTimeout(flipTimeout);
         flipTimeout = setTimeout(() => {
             frontFace.style.visibility = showBack ? "hidden" : "";
             backFace.style.visibility  = showBack ? "" : "hidden";
-        }, 650);
+        }, 100);
     }
 
     document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
