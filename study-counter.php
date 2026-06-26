@@ -999,10 +999,38 @@ main.container {
 
 /* ── Custom module picker list ───────────────────────────────────────────── */
 
-.mod-list {
-    max-height: 210px;
-    overflow-y: auto;
+/* Wrapper: just provides the stacking context for the scroll-hint overlay. */
+.mod-list-wrap {
+    position: relative;
     margin: 6px 0 0;
+}
+
+/* Fading arrow that appears when more items are below the fold. */
+.mod-list-wrap::after {
+    content: "\25BE"; /* ▾ */
+    position: absolute;
+    bottom: 1px;
+    left: 1px;
+    right: 1px;
+    height: 30px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 5px;
+    background: linear-gradient(to bottom, transparent, rgba(16, 16, 30, 0.78));
+    pointer-events: none;
+    font-size: 0.85rem;
+    color: var(--text-3);
+    border-radius: 0 0 calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px);
+    transition: opacity var(--t-fast);
+}
+.mod-list-wrap.no-more::after { opacity: 0; }
+
+/* 207px = 1px top-border + 5 × 41px items − 1px (last item has no border) + 1px bottom-border */
+.mod-list {
+    max-height: 207px;
+    overflow-y: auto;
+    margin: 0;
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.02);
@@ -1815,7 +1843,9 @@ main.container {
         <p class="muted" id="sess-module-hint">Switching modules keeps the time so far under the old one and starts a fresh session — both show up separately.</p>
 
         <label>Module</label>
-        <div class="mod-list" id="sess-mod-list"></div>
+        <div class="mod-list-wrap">
+            <div class="mod-list" id="sess-mod-list"></div>
+        </div>
         <div class="new-module-wrap" id="sess-new-module-wrap">
             <input type="text" id="sess-new-module-input" maxlength="255" placeholder="New module name">
             <p class="module-hint">This module will join the shared list for everyone.</p>
@@ -1854,7 +1884,9 @@ main.container {
 
         <div class="module-picker">
             <label>Module</label>
-            <div class="mod-list" id="manual-mod-list"></div>
+            <div class="mod-list-wrap">
+                <div class="mod-list" id="manual-mod-list"></div>
+            </div>
             <div class="new-module-wrap" id="new-module-wrap">
                 <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
                 <p class="module-hint">This module will join the shared list for everyone.</p>
@@ -2457,7 +2489,14 @@ main.container {
     }
 
     function createModulePicker(listEl, newWrapEl, newInputEl) {
+        const wrapEl = listEl.parentElement; // .mod-list-wrap
         let value = MODULES.length > 0 ? MODULES[0].name : "__new__";
+
+        function updateScrollHint() {
+            const overflows = listEl.scrollHeight > listEl.clientHeight;
+            const atBottom  = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 2;
+            wrapEl.classList.toggle("no-more", !overflows || atBottom);
+        }
 
         function render() {
             const items = MODULES.map(m => {
@@ -2475,6 +2514,7 @@ main.container {
                 <span class="mod-name">Add new module…</span>
             </div>`);
             listEl.innerHTML = items.join("");
+            requestAnimationFrame(updateScrollHint);
         }
 
         function select(val) {
@@ -2485,6 +2525,7 @@ main.container {
             if (isNew) setTimeout(() => newInputEl.focus(), 0);
         }
 
+        listEl.addEventListener("scroll", updateScrollHint);
         listEl.addEventListener("click", e => {
             const del = e.target.closest(".mod-delete");
             if (del) { e.stopPropagation(); deleteModule(del.dataset.name); return; }
