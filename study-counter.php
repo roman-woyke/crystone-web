@@ -1415,6 +1415,146 @@ main.container {
     .chart-area { height: 240px; }
     .manual-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Podium detail modal ─────────────────────────────────────────────────── */
+
+/* Cards become clickable in the overall podium */
+#overall-podium .podium-card {
+    cursor: pointer;
+    transition:
+        transform var(--t-fast),
+        box-shadow var(--t-fast),
+        border-color var(--t-fast);
+}
+#overall-podium .podium-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+}
+#overall-podium .podium-card:active {
+    transform: translateY(-1px) scale(1.00);
+}
+
+.podium-detail-dialog {
+    width: min(540px, calc(100vw - 32px));
+    text-align: center;
+    animation: podium-detail-in 300ms var(--ease-out);
+}
+
+@keyframes podium-detail-in {
+    from { opacity: 0; transform: scale(0.88); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .podium-detail-dialog { animation: none; }
+}
+
+.pd-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    margin-bottom: 4px;
+}
+
+.pd-avatar {
+    width: 108px;
+    height: 108px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 3px solid var(--glass-border);
+    border-radius: 50%;
+    background: var(--glass-strong);
+}
+.pd-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pd-avatar .sc-avatar-fallback { font-size: 2.6rem; }
+
+.pd-username {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.pd-rank-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.pd-rank-row .sc-medal { margin: 0; flex-shrink: 0; }
+
+.pd-total-time {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.4rem;
+}
+
+.pd-total-label {
+    font-size: 0.8rem;
+    color: var(--text-3);
+}
+
+.pd-modules {
+    text-align: left;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 18px;
+    margin-top: 4px;
+}
+
+.pd-modules-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 12px;
+}
+
+.pd-mod-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.pd-mod-row:last-child { border-bottom: none; }
+
+.pd-mod-name {
+    flex: 0 0 120px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.pd-mod-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pd-mod-bar {
+    height: 100%;
+    border-radius: 3px;
+}
+
+.pd-mod-time {
+    flex: 0 0 62px;
+    text-align: right;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+}
 </style>
 
 <div class="study-layout">
@@ -1563,6 +1703,16 @@ main.container {
 </div><!-- /study-layout -->
 
 <div class="chart-tooltip" id="chart-tooltip"></div>
+
+<!-- ── Podium-card detail modal ──────────────────────────────────────────── -->
+<div id="podium-detail-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card modal-solid podium-detail-dialog">
+        <div class="pd-head">
+            <button type="button" class="icon-btn" id="podium-detail-close" aria-label="Close">&#x2715;</button>
+        </div>
+        <div id="podium-detail-body"></div>
+    </div>
+</div>
 
 <!-- ── Module picker modal (assign/switch the running session's module) ─────── -->
 <div id="module-modal" class="modal-overlay" style="display:none;">
@@ -1977,7 +2127,9 @@ main.container {
                 ? `<img src="${av}" alt="">`
                 : `<span class="sc-avatar-fallback">${escapeHtml((username[0] || "?").toUpperCase())}</span>`;
             return `
-                <div class="podium-card glass-card rank-${rank}" style="${style}">
+                <div class="podium-card glass-card rank-${rank}" style="${style}"
+                     data-username="${escapeHtml(username)}" data-rank="${rank}" data-secs="${secs}"
+                     role="button" tabindex="0" aria-label="View ${escapeHtml(username)}'s study breakdown">
                     <div class="sc-avatar" style="border-color:${color}">${avatarInner}</div>
                     <div class="podium-name">${escapeHtml(username)}</div>
                     <div class="podium-score" style="color:${color}">${fmtTime(secs)}</div>
@@ -2035,6 +2187,91 @@ main.container {
             `;
         }).join("");
     }
+
+    // ── Podium detail modal ───────────────────────────────────────────────────
+    const detailModal = document.getElementById("podium-detail-modal");
+    const detailBody  = document.getElementById("podium-detail-body");
+
+    function openPodiumDetail(username, rank, totalSecs) {
+        const sessions = filteredSessions().filter(s => s.username === username);
+
+        const byModule = {};
+        sessions.forEach(s => {
+            byModule[s.module] = (byModule[s.module] || 0) + s.seconds;
+        });
+        const mods = Object.entries(byModule).sort((a, b) => b[1] - a[1]);
+
+        const av    = USER_AVATARS[username];
+        const color = userColor[username] || "#8b5cf6";
+        const avatarHtml = av
+            ? `<img src="${av}" alt="">`
+            : `<span class="sc-avatar-fallback">${escapeHtml((username[0] || "?").toUpperCase())}</span>`;
+
+        const sublabel = (PERIOD_LABELS[podiumPeriod] || "total studied") + (libraryOnly ? " · at the library" : "");
+
+        const modRows = mods.map(([mod, secs]) => {
+            const pct = totalSecs > 0 ? Math.round(secs / totalSecs * 100) : 0;
+            const col = moduleColor[mod] || "#64748b";
+            return `
+                <div class="pd-mod-row">
+                    <span class="module-dot" style="background:${col};width:12px;height:12px;border-radius:4px;flex-shrink:0;"></span>
+                    <span class="pd-mod-name">${escapeHtml(mod)}</span>
+                    <div class="pd-mod-bar-wrap">
+                        <div class="pd-mod-bar" style="width:${pct}%;background:${col}"></div>
+                    </div>
+                    <span class="pd-mod-time">${fmtTime(secs)}</span>
+                </div>
+            `;
+        }).join("");
+
+        detailBody.innerHTML = `
+            <div class="pd-avatar" style="border-color:${color}">${avatarHtml}</div>
+            <div class="pd-username" style="color:${color}">${escapeHtml(username)}</div>
+            <div class="pd-rank-row">
+                <span class="sc-medal sc-medal-${rank}">${rank}</span>
+                <span class="pd-total-time">${fmtTime(totalSecs)}</span>
+                <span class="pd-total-label">${escapeHtml(sublabel)}</span>
+            </div>
+            ${mods.length > 0 ? `
+                <div class="pd-modules">
+                    <div class="pd-modules-label">Module breakdown</div>
+                    ${modRows}
+                </div>
+            ` : `<p class="muted" style="margin:0;">No sessions logged for this period.</p>`}
+        `;
+
+        detailModal.style.display = "flex";
+    }
+
+    function closePodiumDetail() { detailModal.style.display = "none"; }
+
+    document.getElementById("podium-detail-close").addEventListener("click", closePodiumDetail);
+    detailModal.addEventListener("click", (e) => { if (e.target === detailModal) closePodiumDetail(); });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && detailModal.style.display !== "none") closePodiumDetail();
+    });
+
+    // Event delegation on the overall podium — works even after innerHTML rerenders
+    document.getElementById("overall-podium").addEventListener("click", (e) => {
+        const card = e.target.closest("[data-username]");
+        if (!card) return;
+        openPodiumDetail(
+            card.dataset.username,
+            parseInt(card.dataset.rank, 10),
+            parseInt(card.dataset.secs, 10)
+        );
+    });
+    document.getElementById("overall-podium").addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const card = e.target.closest("[data-username]");
+        if (!card) return;
+        e.preventDefault();
+        openPodiumDetail(
+            card.dataset.username,
+            parseInt(card.dataset.rank, 10),
+            parseInt(card.dataset.secs, 10)
+        );
+    });
 
     // ── Legend (users only — modules now live in the bar tooltips) ─────────
     function buildLegends() {

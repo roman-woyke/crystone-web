@@ -88,9 +88,9 @@
             </button>
 
             <?php if (isset($_SESSION["username"])): ?>
-                <span class="nav-user-chip">
+                <button class="nav-user-chip" id="nav-user-chip" type="button" title="Edit profile" aria-label="Edit username or password">
                     <?= htmlspecialchars($_SESSION["username"]) ?>
-                </span>
+                </button>
             <?php endif; ?>
 
             <a class="btn btn-ghost nav-logout-desktop" href="<?= BASE_PATH ?>/logout.php">Logout</a>
@@ -218,6 +218,117 @@
                 feedback.textContent = "Removed.";
             })
             .catch(err => { feedback.textContent = err.message; });
+    });
+}());
+</script>
+
+<!-- Profile-credentials modal (opened from the username chip in the nav) -->
+<div id="profile-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card modal-solid profile-dialog">
+        <div class="avatar-modal-head">
+            <h3>Edit profile</h3>
+            <button type="button" class="icon-btn" id="profile-close" aria-label="Close">&#x2715;</button>
+        </div>
+
+        <label for="profile-username">Username</label>
+        <input type="text" id="profile-username" maxlength="50" autocomplete="username">
+
+        <label for="profile-current-pw">Current password <span class="muted">(required)</span></label>
+        <input type="password" id="profile-current-pw" autocomplete="current-password">
+
+        <label for="profile-new-pw">New password <span class="muted">(optional — min 8 chars)</span></label>
+        <input type="password" id="profile-new-pw" placeholder="Leave blank to keep current" autocomplete="new-password">
+
+        <div class="modal-actions">
+            <button type="button" class="btn" id="profile-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="profile-save">Save</button>
+        </div>
+        <p class="profile-feedback" id="profile-feedback"></p>
+    </div>
+</div>
+
+<script>
+(function () {
+    const modal    = document.getElementById("profile-modal");
+    if (!modal) return;
+    const BASE     = "<?= BASE_PATH ?>";
+    let currentUser = <?= json_encode($_SESSION["username"] ?? "") ?>;
+
+    const chipBtn   = document.getElementById("nav-user-chip");
+    const userEl    = document.getElementById("profile-username");
+    const curPwEl   = document.getElementById("profile-current-pw");
+    const newPwEl   = document.getElementById("profile-new-pw");
+    const saveBtn   = document.getElementById("profile-save");
+    const feedback  = document.getElementById("profile-feedback");
+
+    function open() {
+        userEl.value   = currentUser;
+        curPwEl.value  = "";
+        newPwEl.value  = "";
+        feedback.textContent = "";
+        feedback.className   = "profile-feedback";
+        saveBtn.disabled     = false;
+        modal.style.display  = "flex";
+        setTimeout(() => { userEl.focus(); userEl.select(); }, 50);
+    }
+    function close() { modal.style.display = "none"; }
+
+    if (chipBtn) chipBtn.addEventListener("click", open);
+    document.getElementById("profile-close").addEventListener("click", close);
+    document.getElementById("profile-cancel").addEventListener("click", close);
+    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && modal.style.display !== "none") close();
+    });
+
+    saveBtn.addEventListener("click", () => {
+        const newUsername = userEl.value.trim();
+        const curPw       = curPwEl.value;
+        const newPw       = newPwEl.value;
+
+        if (!curPw) {
+            feedback.textContent = "Enter your current password to save changes.";
+            feedback.className   = "profile-feedback error";
+            return;
+        }
+
+        const usernameChanged = newUsername !== "" && newUsername !== currentUser;
+        const passwordChanged = newPw !== "";
+        if (!usernameChanged && !passwordChanged) {
+            feedback.textContent = "Nothing to update.";
+            feedback.className   = "profile-feedback error";
+            return;
+        }
+
+        feedback.textContent = "Saving…";
+        feedback.className   = "profile-feedback";
+        saveBtn.disabled     = true;
+
+        const body = new FormData();
+        if (usernameChanged) body.append("username", newUsername);
+        body.append("current_password", curPw);
+        if (passwordChanged) body.append("new_password", newPw);
+
+        fetch(BASE + "/api/patch-profile.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Request failed."); }))
+            .then(res => {
+                currentUser = res.username;
+                if (chipBtn) chipBtn.textContent = res.username;
+                // Update avatar fallback initial if it exists and no avatar is set
+                const navAvatar = document.getElementById("nav-avatar");
+                if (navAvatar) {
+                    const fallback = navAvatar.querySelector(".nav-avatar-fallback");
+                    if (fallback) fallback.textContent = (res.username[0] || "?").toUpperCase();
+                }
+                feedback.textContent = "Saved.";
+                feedback.className   = "profile-feedback";
+                setTimeout(close, 900);
+            })
+            .catch(err => {
+                feedback.textContent = err.message;
+                feedback.className   = "profile-feedback error";
+                saveBtn.disabled     = false;
+            });
     });
 }());
 </script>
