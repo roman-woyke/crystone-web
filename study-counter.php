@@ -942,7 +942,7 @@ main.container {
 
 .new-module-wrap {
     display: none;
-    margin-top: -8px;
+    margin-top: 8px;
 }
 
 .new-module-wrap.show { display: block; }
@@ -951,11 +951,6 @@ main.container {
     margin: -8px 0 14px;
     font-size: 0.78rem;
     color: var(--text-3);
-}
-
-/* Module / stop modal: the dropdown sits below the label. */
-#module-modal select {
-    margin: 16px 0 8px;
 }
 
 .manual-today {
@@ -1000,6 +995,105 @@ main.container {
 .modal-dialog.modal-solid {
     background: var(--bg-1);
     backdrop-filter: none;
+}
+
+/* ── Custom module picker list ───────────────────────────────────────────── */
+
+.mod-list {
+    max-height: 210px;
+    overflow-y: auto;
+    margin: 6px 0 0;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    scrollbar-width: none;
+}
+.mod-list::-webkit-scrollbar { display: none; }
+
+.mod-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    transition: background var(--t-fast);
+    user-select: none;
+}
+.mod-item:last-child { border-bottom: none; }
+.mod-item:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
+.mod-item.active {
+    background: var(--grad-accent-soft);
+    border-left: 3px solid var(--violet);
+    padding-left: 9px;
+}
+.mod-item.active .mod-name { color: var(--text-1); font-weight: 700; }
+
+.mod-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.mod-name {
+    flex: 1;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mod-custom {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--violet);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    background: var(--grad-accent-soft);
+    border-radius: var(--radius-full);
+    padding: 1px 6px;
+    flex-shrink: 0;
+}
+
+.mod-delete {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+    color: var(--danger);
+    border-color: rgba(248, 113, 113, 0.35);
+    opacity: 0;
+    transition: opacity var(--t-fast), background var(--t-fast);
+}
+.mod-item:hover .mod-delete { opacity: 1; }
+.mod-delete:hover { background: rgba(248, 113, 113, 0.14); }
+
+.mod-item-new .mod-name {
+    color: var(--text-3);
+    font-weight: 500;
+    font-style: italic;
+}
+
+.mod-new-plus {
+    width: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
 }
 
 /* Module button in the studying dock (carries the current module name). */
@@ -1720,15 +1814,8 @@ main.container {
         <h3 id="sess-module-title">Pick a module</h3>
         <p class="muted" id="sess-module-hint">Switching modules keeps the time so far under the old one and starts a fresh session — both show up separately.</p>
 
-        <label for="sess-module-select">Module</label>
-        <select id="sess-module-select">
-            <?php foreach ($modules as $m): ?>
-                <option value="<?= htmlspecialchars($m["name"]) ?>">
-                    <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
-                </option>
-            <?php endforeach; ?>
-            <option value="__new__">+ Add new module…</option>
-        </select>
+        <label>Module</label>
+        <div class="mod-list" id="sess-mod-list"></div>
         <div class="new-module-wrap" id="sess-new-module-wrap">
             <input type="text" id="sess-new-module-input" maxlength="255" placeholder="New module name">
             <p class="module-hint">This module will join the shared list for everyone.</p>
@@ -1766,16 +1853,8 @@ main.container {
         </div>
 
         <div class="module-picker">
-            <label for="module-select">Module</label>
-            <select id="module-select">
-                <?php foreach ($modules as $i => $m): ?>
-                    <option value="<?= htmlspecialchars($m["name"]) ?>">
-                        <?= htmlspecialchars($m["name"]) ?><?= $m["custom"] ? "  (custom)" : "" ?>
-                    </option>
-                <?php endforeach; ?>
-                <option value="__new__">+ Add new module…</option>
-            </select>
-
+            <label>Module</label>
+            <div class="mod-list" id="manual-mod-list"></div>
             <div class="new-module-wrap" id="new-module-wrap">
                 <input type="text" id="new-module-input" maxlength="255" placeholder="New module name">
                 <p class="module-hint">This module will join the shared list for everyone.</p>
@@ -2366,27 +2445,79 @@ main.container {
         renderChart();
     });
 
-    // ── Module picker (reveal new-module input) ───────────────────────────
-    const moduleSelect = document.getElementById("module-select");
-    const newWrap      = document.getElementById("new-module-wrap");
-    const newInput     = document.getElementById("new-module-input");
+    // ── Custom module picker ──────────────────────────────────────────────
+    function deleteModule(name) {
+        if (!confirm(`Remove "${name}" from the module list?\nPast sessions using it are kept.`)) return;
+        const body = new FormData();
+        body.append("name", name);
+        fetch(BASE_PATH + "/api/delete-study-module.php", { method: "POST", body })
+            .then(r => r.ok ? r.text() : r.text().then(t => { throw new Error(t || "Delete failed."); }))
+            .then(() => window.location.reload())
+            .catch(err => alert(err.message));
+    }
 
-    moduleSelect.addEventListener("change", () => {
-        const isNew = moduleSelect.value === "__new__";
-        newWrap.classList.toggle("show", isNew);
-        if (isNew) newInput.focus();
-    });
+    function createModulePicker(listEl, newWrapEl, newInputEl) {
+        let value = MODULES.length > 0 ? MODULES[0].name : "__new__";
 
-    // No default modules yet → the only option is "+ Add new module…".
-    if (moduleSelect.value === "__new__") newWrap.classList.add("show");
+        function render() {
+            const items = MODULES.map(m => {
+                const color    = moduleColor[m.name] || "#64748b";
+                const isActive = value === m.name;
+                return `<div class="mod-item${isActive ? " active" : ""}" data-val="${escapeHtml(m.name)}">
+                    <span class="mod-dot" style="background:${color}"></span>
+                    <span class="mod-name">${escapeHtml(m.name)}</span>
+                    ${m.custom ? `<span class="mod-custom">custom</span>` : ""}
+                    ${m.custom ? `<button type="button" class="btn mod-delete" data-name="${escapeHtml(m.name)}" title="Remove module">&#x2715;</button>` : ""}
+                </div>`;
+            });
+            items.push(`<div class="mod-item mod-item-new${value === "__new__" ? " active" : ""}" data-val="__new__">
+                <span class="mod-new-plus">+</span>
+                <span class="mod-name">Add new module…</span>
+            </div>`);
+            listEl.innerHTML = items.join("");
+        }
+
+        function select(val) {
+            value = val;
+            render();
+            const isNew = val === "__new__";
+            newWrapEl.classList.toggle("show", isNew);
+            if (isNew) setTimeout(() => newInputEl.focus(), 0);
+        }
+
+        listEl.addEventListener("click", e => {
+            const del = e.target.closest(".mod-delete");
+            if (del) { e.stopPropagation(); deleteModule(del.dataset.name); return; }
+            const item = e.target.closest(".mod-item");
+            if (item) select(item.dataset.val);
+        });
+
+        render();
+        if (value === "__new__") newWrapEl.classList.add("show");
+
+        return {
+            getValue:   () => value,
+            getNewName: () => newInputEl.value.trim(),
+            setValue:   (v) => { if (value !== v) select(v); },
+        };
+    }
+
+    // Manual logging picker
+    const newWrap  = document.getElementById("new-module-wrap");
+    const newInput = document.getElementById("new-module-input");
+    const manualPicker = createModulePicker(
+        document.getElementById("manual-mod-list"),
+        newWrap,
+        newInput
+    );
 
     function selectedModulePayload() {
-        if (moduleSelect.value === "__new__") {
-            const name = newInput.value.trim();
+        if (manualPicker.getValue() === "__new__") {
+            const name = manualPicker.getNewName();
             if (name === "") return { error: "Enter a name for the new module." };
             return { new_module: name };
         }
-        return { module: moduleSelect.value };
+        return { module: manualPicker.getValue() };
     }
 
     // ── Feedback ──────────────────────────────────────────────────────────
@@ -2429,7 +2560,7 @@ main.container {
                 if (opts.onDone) opts.onDone();
                 // A new custom module changes the shared list — reload to pick up
                 // colors, legend, and the dropdown entry.
-                if (res.custom && moduleSelect.value === "__new__") {
+                if (res.custom && manualPicker.getValue() === "__new__") {
                     setTimeout(() => window.location.reload(), 600);
                 } else {
                     loadData();
@@ -3027,37 +3158,38 @@ main.container {
     });
 
     // ── Module picker modal (start a session, or switch its module) ─────────
-    const moduleModal      = document.getElementById("module-modal");
-    const sessModuleSelect = document.getElementById("sess-module-select");
-    const sessNewWrap      = document.getElementById("sess-new-module-wrap");
-    const sessNewInput     = document.getElementById("sess-new-module-input");
-    const sessTitle        = document.getElementById("sess-module-title");
-    const sessHint         = document.getElementById("sess-module-hint");
-    const sessSetBtn       = document.getElementById("sess-module-set");
+    const moduleModal  = document.getElementById("module-modal");
+    const sessNewWrap  = document.getElementById("sess-new-module-wrap");
+    const sessNewInput = document.getElementById("sess-new-module-input");
+    const sessTitle    = document.getElementById("sess-module-title");
+    const sessHint     = document.getElementById("sess-module-hint");
+    const sessSetBtn   = document.getElementById("sess-module-set");
+
+    const sessPicker = createModulePicker(
+        document.getElementById("sess-mod-list"),
+        sessNewWrap,
+        sessNewInput
+    );
 
     function openModuleModal() {
         const starting = !myState.active;
-        sessTitle.textContent = starting ? "Start studying" : "Change module";
-        sessHint.textContent  = starting
+        sessTitle.textContent  = starting ? "Start studying" : "Change module";
+        sessHint.textContent   = starting
             ? "Pick a module to track this session."
             : "Switching keeps the time so far under the old module and starts a fresh session — both show up separately.";
         sessSetBtn.textContent = starting ? "Start studying" : "Change module";
 
-        // Default to the current module when one is set.
-        if (myState.module && [...sessModuleSelect.options].some(o => o.value === myState.module)) {
-            sessModuleSelect.value = myState.module;
+        // Default to the current module if it's still in the list.
+        if (myState.module && MODULES.some(m => m.name === myState.module)) {
+            sessPicker.setValue(myState.module);
+        } else {
+            sessPicker.setValue(MODULES.length > 0 ? MODULES[0].name : "__new__");
         }
         sessNewInput.value = "";
-        sessNewWrap.classList.toggle("show", sessModuleSelect.value === "__new__");
+        sessNewWrap.classList.toggle("show", sessPicker.getValue() === "__new__");
         moduleModal.style.display = "flex";
     }
     function closeModuleModal() { moduleModal.style.display = "none"; }
-
-    sessModuleSelect.addEventListener("change", () => {
-        const isNew = sessModuleSelect.value === "__new__";
-        sessNewWrap.classList.toggle("show", isNew);
-        if (isNew) sessNewInput.focus();
-    });
 
     moduleBtn.addEventListener("click", () => {
         if (!myState.active) return;
@@ -3068,12 +3200,12 @@ main.container {
 
     sessSetBtn.addEventListener("click", () => {
         const extra = {};
-        if (sessModuleSelect.value === "__new__") {
+        if (sessPicker.getValue() === "__new__") {
             const name = sessNewInput.value.trim();
             if (name === "") { sessNewInput.focus(); return; }
             extra.new_module = name;
-        } else if (sessModuleSelect.value) {
-            extra.module = sessModuleSelect.value;
+        } else if (sessPicker.getValue()) {
+            extra.module = sessPicker.getValue();
         } else {
             return;
         }
