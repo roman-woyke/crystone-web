@@ -117,12 +117,6 @@ main.container {
     position: relative;
     width: 100%;
     height: 100%;
-    transition: transform 0.6s var(--ease-out);
-    transform-style: preserve-3d;
-}
-
-.flip-inner.flipped {
-    transform: rotateY(180deg);
 }
 
 .flip-face {
@@ -134,23 +128,24 @@ main.container {
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
-    /* overflow:hidden on a child of preserve-3d flattens it in Firefox (spec),
-       which breaks backface-visibility. Content is held by flexbox + face-body
-       scroller; no clip needed at this level. */
-    /* Fully OPAQUE (not the 0.85 --solid-glass): the 3D flip's backface-visibility
-       isn't honored on every browser/GPU, so a translucent face lets the mirrored
-       other side bleed through. An opaque background blocks that everywhere. */
     background: var(--bg-1);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
     box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-lift);
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
 }
 
+/* Back face hidden by default; JS drives visibility during the flip. */
 .flip-back {
-    transform: rotateY(180deg);
+    visibility: hidden;
 }
+
+/* Two-phase flip: outgoing rotates to 90° (edge-on), incoming rotates from 90°.
+   The parent .dock-card supplies the perspective. Forward = positive Y axis;
+   reverse = negative Y axis so going back feels like going the other way. */
+@keyframes flip-out     { to   { transform: rotateY(90deg);  } }
+@keyframes flip-in      { from { transform: rotateY(90deg);  } }
+@keyframes flip-out-rev { to   { transform: rotateY(-90deg); } }
+@keyframes flip-in-rev  { from { transform: rotateY(-90deg); } }
 
 .flip-btn {
     flex-shrink: 0;
@@ -3356,11 +3351,6 @@ main.container {
     const frontFace = dockCard.querySelector(".flip-front");
     const backFace  = dockCard.querySelector(".flip-back");
 
-    // Firefox doesn't reliably honour backface-visibility:hidden after a CSS
-    // transition fires on the parent. We manage the inactive face's visibility
-    // in JS as a bulletproof fallback. Start with back face hidden.
-    backFace.style.visibility = "hidden";
-
     let dockHeightInit = false;
     function syncDockHeight() {
         const face = flipInner.classList.contains("flipped") ? backFace : frontFace;
@@ -3378,28 +3368,45 @@ main.container {
         }
     }
 
-    let flipTimeout = null;
+    let flipPhase = [null, null];
     function flipDock(showBack) {
-        // Make both faces visible so the 3D rotation animation is actually seen.
-        frontFace.style.visibility = "";
-        backFace.style.visibility  = "";
+        clearTimeout(flipPhase[0]);
+        clearTimeout(flipPhase[1]);
 
-        flipInner.classList.toggle("flipped", showBack);
-        // Front = sticky; back = in-flow so a tall recap can scroll down the page.
-        dockCard.classList.toggle("recap", showBack);
-        syncDockHeight();
+        // Clear any mid-flight animation so restart is clean.
+        frontFace.style.animation = "";
+        backFace.style.animation  = "";
+        void dockCard.offsetHeight; // flush
 
-        // Hide the inactive face shortly after the 90° edge-on point. With
-        // cubic-bezier(0.22,1,0.36,1) over 600ms the face is already past 90°
-        // (and geometrically invisible) by ~80ms, so 100ms is a seamless cut.
-        // Firefox workaround: backface-visibility:hidden breaks after a CSS
-        // transition fires on a preserve-3d parent, so the hidden face bleeds
-        // through below the active face's bottom edge without this explicit hide.
-        clearTimeout(flipTimeout);
-        flipTimeout = setTimeout(() => {
-            frontFace.style.visibility = showBack ? "hidden" : "";
-            backFace.style.visibility  = showBack ? "" : "hidden";
-        }, 100);
+        const outFace = showBack ? frontFace : backFace;
+        const inFace  = showBack ? backFace  : frontFace;
+        const outAnim = showBack ? "flip-out"     : "flip-out-rev";
+        const inAnim  = showBack ? "flip-in"      : "flip-in-rev";
+
+        // Phase 1: outgoing face rotates to 90° (geometrically edge-on).
+        outFace.style.visibility = "visible";
+        outFace.style.animation  = `${outAnim} 280ms ease-in forwards`;
+
+        flipPhase[0] = setTimeout(() => {
+            // At the midpoint the face is invisible — safe to swap.
+            outFace.style.visibility = "hidden";
+            outFace.style.animation  = "";
+
+            // Flip state + height update happen here so the card resizes as
+            // the incoming face arrives, not before it's visible.
+            flipInner.classList.toggle("flipped", showBack);
+            dockCard.classList.toggle("recap", showBack);
+            syncDockHeight();
+
+            // Phase 2: incoming face rotates from 90° to face the viewer.
+            inFace.style.visibility = "visible";
+            inFace.style.animation  = `${inAnim} 280ms ease-out forwards`;
+
+            flipPhase[1] = setTimeout(() => {
+                inFace.style.animation = "";
+                flipPhase = [null, null];
+            }, 310);
+        }, 280);
     }
 
     document.getElementById("flip-to-recap").addEventListener("click", () => flipDock(true));
