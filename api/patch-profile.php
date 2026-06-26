@@ -53,11 +53,6 @@ if ($newUsername !== "" && $newUsername !== ($_SESSION["username"] ?? "")) {
 }
 
 if ($newPassword !== "") {
-    if (mb_strlen($newPassword) < 8) {
-        http_response_code(400);
-        echo "New password must be at least 8 characters.";
-        exit;
-    }
     $hash = password_hash($newPassword, PASSWORD_DEFAULT);
     $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?")->execute([$hash, $_SESSION["user_id"]]);
     $changed = true;

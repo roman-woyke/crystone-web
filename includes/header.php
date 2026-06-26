@@ -236,7 +236,7 @@
         <label for="profile-current-pw">Current password <span class="muted">(required)</span></label>
         <input type="password" id="profile-current-pw" autocomplete="current-password">
 
-        <label for="profile-new-pw">New password <span class="muted">(optional — min 8 chars)</span></label>
+        <label for="profile-new-pw">New password <span class="muted">(optional)</span></label>
         <input type="password" id="profile-new-pw" placeholder="Leave blank to keep current" autocomplete="new-password">
 
         <div class="modal-actions">
