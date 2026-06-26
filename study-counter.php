@@ -1002,7 +1002,7 @@ main.container {
 /* Wrapper: just provides the stacking context for the scroll-hint overlay. */
 .mod-list-wrap {
     position: relative;
-    margin: 6px 0 0;
+    margin: 6px 0 12px;
 }
 
 /* Fading arrow that appears when more items are below the fold. */
