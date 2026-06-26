@@ -95,9 +95,10 @@ main.container {
     position: sticky;
     top: 78px;
     perspective: 1800px;
-    /* Clip the hidden, full-height back face so it doesn't add phantom page
-       scroll while the (short) front is showing. */
-    overflow: hidden;
+    /* overflow: hidden was here to clip the back face, but it flattens
+       transform-style: preserve-3d in Firefox (spec-compliant but breaks
+       backface-visibility). JS sets the explicit height to match the visible
+       face, so absolute-positioned faces never add phantom scroll anyway. */
     /* Height tracks the visible face's content (set in JS); animating it makes
        the bottom edge retract/extend smoothly across a flip. */
     transition: height 0.5s var(--ease-out);
@@ -110,7 +111,6 @@ main.container {
 .dock-card.recap {
     position: relative;
     top: auto;
-    overflow: visible;
 }
 
 .flip-inner {
