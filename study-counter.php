@@ -134,7 +134,9 @@ main.container {
     display: flex;
     flex-direction: column;
     padding: 16px 18px;
-    overflow: hidden;
+    /* overflow:hidden on a child of preserve-3d flattens it in Firefox (spec),
+       which breaks backface-visibility. Content is held by flexbox + face-body
+       scroller; no clip needed at this level. */
     /* Fully OPAQUE (not the 0.85 --solid-glass): the 3D flip's backface-visibility
        isn't honored on every browser/GPU, so a translucent face lets the mirrored
        other side bleed through. An opaque background blocks that everywhere. */
