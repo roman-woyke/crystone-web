@@ -235,7 +235,7 @@ main.container {
     border-radius: var(--radius-full);
     cursor: pointer;
     white-space: nowrap;
-    transition: all var(--t-fast);
+    transition: color var(--t-fast), background var(--t-fast);
 }
 
 .recap-day-btn:hover:not(.active) {
