@@ -822,7 +822,7 @@ main.container { max-width: 1280px; }
                    title="${streakSelectable ? "Click to pay jokers with streak" : "Streak you can spend on jokers"}">🔥 ${me.streak || 0}${me.free_joker ? " · 1 free" : ""}</span>`;
         const freezeWallet =
             `<span class="fw-freeze-wallet${payFreezeNow ? " active" : ""}${freezeSelectable ? " selectable" : ""}" data-pay="freeze"
-                   title="${freezeSelectable ? "Click to pay your next joker with a freeze (keeps your streak)" : "Streak freezes — bridge a missed day, or exchange one for a joker (once/day)"}">🧊 ${me.freezes || 0}</span>`;
+                   title="${freezeSelectable ? "Click to pay your next joker with a freeze (keeps your streak)" : "Streak freezes — bridge a missed day, or exchange one for a joker"}">🧊 ${me.freezes || 0}</span>`;
 
         jokersEl.innerHTML = buttons + wallet + freezeWallet;
 
@@ -1239,9 +1239,12 @@ main.container { max-width: 1280px; }
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
             .then(state => {
                 // Don't clobber an in-progress guess: the local buffer is kept.
+                const savedScroll = window.scrollY;
                 STATE = state;
                 renderStatus(); renderJokers(); renderBoards(); renderHintRows();
                 renderControls(); renderKeyboard(); renderStats(); renderOpponents(); renderChoose();
+                // Safari resets scroll when large innerHTML sections are replaced.
+                if (window.scrollY !== savedScroll) window.scrollTo(0, savedScroll);
             })
             .catch(() => {});
     }

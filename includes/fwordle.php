@@ -562,8 +562,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     // Players with no streak to spend still get one joker free per day — it's
     // available only while they have 0 streak AND haven't used a joker yet.
     $freeJoker = ($myStreak < 1 && count($myHints) === 0);
-    // A freeze can be exchanged for a joker once a day.
-    $canFreezeJoker = ($myInfo['freezes'] >= 1 && !$myInfo['freeze_used_today'] && !$myFinished);
+    $canFreezeJoker = ($myInfo['freezes'] >= 1 && !$myFinished);
 
     $me = [
         'username'         => $myName,

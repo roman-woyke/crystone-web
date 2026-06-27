@@ -40,9 +40,9 @@ if ($hStmt->fetchColumn() !== false) {
 }
 
 // Payment: a joker costs 1 streak, but a player with no streak gets one free per
-// day (their first), and a freeze can be exchanged for a joker once a day. The
-// client may request `pay=freeze`; we also fall back to a freeze when there's no
-// streak left to spend. `$viaFreeze` records which.
+// day (their first), and a freeze can be exchanged for a joker (no daily limit).
+// The client may request `pay=freeze`; we also fall back to a freeze when there's
+// no streak left to spend. `$viaFreeze` records which.
 $info = fwordleStreakInfo($pdo, $date, $userId);
 $usedStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_hints WHERE game_date = ? AND user_id = ?");
 $usedStmt->execute([$date, $userId]);
@@ -51,7 +51,7 @@ $usedToday = (int) $usedStmt->fetchColumn();
 $wantFreeze = (($_POST["pay"] ?? "") === "freeze");
 $freeJoker  = ($info['effective'] < 1 && $usedToday === 0);
 $streakOk   = ($info['effective'] >= 1 || $freeJoker);
-$freezeOk   = ($info['freezes'] >= 1 && !$info['freeze_used_today']);
+$freezeOk   = ($info['freezes'] >= 1);
 
 $viaFreeze = 0;
 if ($wantFreeze) {
