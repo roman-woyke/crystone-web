@@ -1,0 +1,284 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// Introspected from the live MySQL schema (`prisma db pull`) and re-annotated
+// with camelCase field names mapped back to the original snake_case
+// columns/tables via @map/@@map, so the underlying tables are untouched.
+// `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` columns are nullable in MySQL unless
+// also marked NOT NULL, which is why most createdAt/updatedAt fields are
+// DateTime? rather than DateTime.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id                 Int                        @id @default(autoincrement())
+  username           String                     @unique(map: "username") @db.VarChar(50)
+  passwordHash       String                     @map("password_hash") @db.VarChar(255)
+  avatar             String?                    @db.MediumText
+  createdAt          DateTime?                  @default(now()) @map("created_at") @db.Timestamp(0)
+  applicationHistory ApplicationStatusHistory[]
+  applications       Application[]
+  fwordleChoices     FwordleChoice[]
+  fwordleGuesses     FwordleGuess[]
+  fwordleHints       FwordleHint[]
+  fwordleResults     FwordleResult[]
+  fwordleChosenWords FwordleWord[]              @relation("FwordleWordChooser")
+  projectTimeEntries ProjectTimeEntry[]
+  projects           Project[]
+  studySegments      StudySegment[]
+  studySessions      StudySession[]
+  studyStatus        StudyStatus?
+
+  @@map("users")
+}
+
+model Application {
+  id          Int                        @id @default(autoincrement())
+  userId      Int                        @map("user_id")
+  companyName String                     @map("company_name") @db.VarChar(255)
+  jobTitle    String?                    @map("job_title") @db.VarChar(255)
+  jobLink     String?                    @map("job_link") @db.Text
+  location    String?                    @db.VarChar(255)
+  status      ApplicationStatus          @default(PENDING)
+  tag         String?                    @db.VarChar(50)
+  notes       String?                    @db.Text
+  createdAt   DateTime?                  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime?                  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  history     ApplicationStatusHistory[]
+  user        User                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "applications_ibfk_1")
+
+  @@index([userId], map: "user_id")
+  @@map("applications")
+}
+
+// `user_id` isn't in the README's documented CREATE TABLE, but the live PHP
+// app inserts/deletes by it (patch-application.php, delete-application.php) —
+// the deployed schema has it even though the docs lag behind.
+model ApplicationStatusHistory {
+  id            Int               @id @default(autoincrement())
+  applicationId Int               @map("application_id")
+  userId        Int               @map("user_id")
+  status        ApplicationStatus
+  scoreDelta    Int               @default(0) @map("score_delta")
+  changedAt     DateTime?         @default(now()) @map("changed_at") @db.Timestamp(0)
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "application_status_history_ibfk_1")
+  user          User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "application_status_history_ibfk_2")
+
+  @@index([applicationId], map: "application_id")
+  @@index([userId], map: "user_id")
+  @@map("application_status_history")
+}
+
+model Exam {
+  id        Int        @id @default(autoincrement())
+  title     String     @db.VarChar(255)
+  professor String?    @db.VarChar(255)
+  examDate  DateTime   @map("exam_date") @db.Date
+  examTime  DateTime   @map("exam_time") @db.Time(0)
+  userExams UserExam[]
+
+  @@map("exams")
+}
+
+model UserExam {
+  username String @db.VarChar(50)
+  examId   Int    @map("exam_id")
+  exam     Exam   @relation(fields: [examId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "user_exams_ibfk_1")
+
+  @@id([username, examId])
+  @@index([examId], map: "exam_id")
+  @@map("user_exams")
+}
+
+model StudyModule {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdBy Int?      @map("created_by")
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@map("study_modules")
+}
+
+model StudySession {
+  id         Int            @id @default(autoincrement())
+  userId     Int            @map("user_id")
+  moduleName String         @map("module_name") @db.VarChar(255)
+  seconds    Int
+  startedAt  DateTime?      @map("started_at") @db.DateTime(0)
+  studiedOn  DateTime       @map("studied_on") @db.Date
+  atLibrary  Boolean        @default(false) @map("at_library")
+  createdAt  DateTime?      @default(now()) @map("created_at") @db.Timestamp(0)
+  segments   StudySegment[]
+  user       User           @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "study_sessions_ibfk_1")
+
+  @@index([userId], map: "user_id")
+  @@map("study_sessions")
+}
+
+model StudyStatus {
+  userId       Int       @id @map("user_id")
+  mode         StudyMode @default(presence)
+  moduleName   String?   @map("module_name") @db.VarChar(255)
+  startedAt    DateTime? @map("started_at") @db.DateTime(0)
+  accumulated  Int       @default(0)
+  sessionStart DateTime? @map("session_start") @db.DateTime(0)
+  atLibrary    Boolean   @default(false) @map("at_library")
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  user         User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "study_status_ibfk_1")
+
+  @@map("study_status")
+}
+
+model StudySegment {
+  id         Int           @id @default(autoincrement())
+  userId     Int           @map("user_id")
+  sessionId  Int?          @map("session_id")
+  moduleName String?       @map("module_name") @db.VarChar(255)
+  startedAt  DateTime      @map("started_at") @db.DateTime(0)
+  endedAt    DateTime?     @map("ended_at") @db.DateTime(0)
+  createdAt  DateTime?     @default(now()) @map("created_at") @db.Timestamp(0)
+  user       User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "study_segments_ibfk_1")
+  session    StudySession? @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "study_segments_ibfk_2")
+
+  @@index([sessionId], map: "session_id")
+  @@index([userId], map: "user_id")
+  @@map("study_segments")
+}
+
+model Project {
+  id          Int                @id @default(autoincrement())
+  userId      Int                @map("user_id")
+  name        String             @db.VarChar(255)
+  description String?            @db.Text
+  color       String             @default("#8b5cf6") @db.VarChar(20)
+  createdAt   DateTime?          @default(now()) @map("created_at") @db.Timestamp(0)
+  timeEntries ProjectTimeEntry[]
+  user        User               @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "projects_ibfk_1")
+
+  @@index([userId], map: "user_id")
+  @@map("projects")
+}
+
+model ProjectTimeEntry {
+  id        Int       @id @default(autoincrement())
+  projectId Int       @map("project_id")
+  userId    Int       @map("user_id")
+  seconds   Int
+  note      String?   @db.VarChar(255)
+  loggedAt  DateTime? @default(now()) @map("logged_at") @db.Timestamp(0)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "project_time_entries_ibfk_1")
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "project_time_entries_ibfk_2")
+
+  @@index([projectId], map: "project_id")
+  @@index([userId], map: "user_id")
+  @@map("project_time_entries")
+}
+
+model FwordleDay {
+  gameDate       DateTime  @id @map("game_date") @db.Date
+  wordLength     Int       @map("word_length") @db.UnsignedTinyInt
+  wordsFinalized Int       @default(0) @map("words_finalized") @db.TinyInt
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@map("fwordle_days")
+}
+
+model FwordleWord {
+  id        Int               @id @default(autoincrement())
+  gameDate  DateTime          @map("game_date") @db.Date
+  position  Int               @db.UnsignedTinyInt
+  word      String            @db.VarChar(10)
+  source    FwordleWordSource @default(random)
+  chooserId Int?              @map("chooser_id")
+  chooser   User?             @relation("FwordleWordChooser", fields: [chooserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_words_ibfk_1")
+
+  @@unique([gameDate, position], map: "uniq_day_pos")
+  @@index([chooserId], map: "chooser_id")
+  @@map("fwordle_words")
+}
+
+model FwordleChoice {
+  gameDate  DateTime  @map("game_date") @db.Date
+  userId    Int       @map("user_id")
+  word      String    @db.VarChar(10)
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_choices_ibfk_1")
+
+  @@id([gameDate, userId])
+  @@index([userId], map: "user_id")
+  @@map("fwordle_choices")
+}
+
+model FwordleResult {
+  gameDate    DateTime  @map("game_date") @db.Date
+  userId      Int       @map("user_id")
+  finished    Int       @default(0) @db.TinyInt
+  solved      Int       @default(0) @db.TinyInt
+  guessesUsed Int       @default(0) @map("guesses_used") @db.UnsignedTinyInt
+  solvedAt    DateTime? @map("solved_at") @db.DateTime(0)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  user        User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_results_ibfk_1")
+
+  @@id([gameDate, userId])
+  @@index([userId], map: "user_id")
+  @@map("fwordle_results")
+}
+
+model FwordleGuess {
+  gameDate   DateTime  @map("game_date") @db.Date
+  userId     Int       @map("user_id")
+  guessIndex Int       @map("guess_index") @db.UnsignedTinyInt
+  guess      String    @db.VarChar(10)
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  user       User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_guesses_ibfk_1")
+
+  @@id([gameDate, userId, guessIndex])
+  @@index([userId], map: "user_id")
+  @@map("fwordle_guesses")
+}
+
+model FwordleHint {
+  gameDate  DateTime        @map("game_date") @db.Date
+  userId    Int             @map("user_id")
+  type      FwordleHintType
+  boardPos  Int?            @map("board_pos") @db.UnsignedTinyInt
+  payload   String          @db.VarChar(64)
+  viaFreeze Int             @default(0) @map("via_freeze") @db.TinyInt
+  createdAt DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
+  user      User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_hints_ibfk_1")
+
+  @@id([gameDate, userId, type])
+  @@index([userId], map: "user_id")
+  @@map("fwordle_hints")
+}
+
+enum ApplicationStatus {
+  PENDING
+  INTERVIEW
+  OFFER
+  REJECTED
+  GHOSTED
+}
+
+enum StudyMode {
+  timer
+  presence
+}
+
+enum FwordleWordSource {
+  chosen
+  random
+}
+
+enum FwordleHintType {
+  armor
+  orange
+  green
+}
