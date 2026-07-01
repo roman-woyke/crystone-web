@@ -36,7 +36,10 @@ export function AddApplicationDialog() {
     setError(null);
     setSubmitting(true);
 
-    const form = new FormData(event.currentTarget);
+    // Capture the element now — event.currentTarget is nulled out once the
+    // synchronous dispatch finishes, i.e. before the `await` below resolves.
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const body = {
       company_name: String(form.get("company_name") ?? ""),
       job_title: String(form.get("job_title") ?? ""),
@@ -60,7 +63,7 @@ export function AddApplicationDialog() {
     }
 
     setOpen(false);
-    event.currentTarget.reset();
+    formEl.reset();
     router.refresh();
   }
 

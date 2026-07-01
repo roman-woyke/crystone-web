@@ -8,6 +8,8 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/study", label: "Study Counter" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/projects", label: "Projects" },
 ];
 
 export function Header({ username, avatar }: { username: string; avatar: string | null }) {

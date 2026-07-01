@@ -6,7 +6,7 @@
 - [x] Phase 2 — Auth-Seiten + Dashboard
 - [x] Phase 3 — Leaderboard + Avatar
 - [x] Phase 4 — Study Counter (inkl. Focus Mode, nicht ursprünglich geplant)
-- [ ] Phase 5 — Calendar + Projects
+- [x] Phase 5 — Calendar + Projects
 - [ ] Phase 6 — fWordle
 - [ ] Phase 7 — Landing Page + Cleanup
 
@@ -251,9 +251,17 @@ Tatsächliche Struktur: `StudyCounterApp.tsx` (Orchestrator), `Dock.tsx` + `Time
 
 ---
 
-## Phase 5 — Calendar + Projects
+## Phase 5 — Calendar + Projects ✅ erledigt
 
 **Ziel:** Kalender und Projekt-Tracker funktionieren.
+
+**Notizen:**
+- Tatsächliche API-Struktur weicht leicht vom Plan ab: Der Plan sah nur `projects/route.ts`, `projects/[id]/route.ts` und `time-entries/[id]/route.ts` vor, ohne eine Create-Route für Zeiteinträge zu nennen — ergänzt um `POST /api/time-entries/route.ts` (analog zu `POST /api/applications`).
+- `ProjectTimeEntry` hat in Prisma bereits `onDelete: Cascade` auf `Project` — anders als im PHP-Original (`delete-project.php` löscht Time Entries manuell zuerst) reicht ein einzelnes `prisma.project.deleteMany()`.
+- Kalender-Feature nutzt bewusst weiterhin die feste `["Roman", "Basti", "Ben", "Lorenz"]`-Liste (`lib/calendar.ts`) statt der `users`-Tabelle, identisch zum PHP-Original (`user_exams` ist über `username`-String verknüpft, nicht `user_id`) — Projects nutzt dagegen echte User-Records aus der DB, genau wie im Original.
+- `examCountdown()` aus Phase 4 (`lib/exam-countdown.ts`) wurde direkt wiederverwendet statt neu geschrieben — war schon exakt auf dieses Feature zugeschnitten.
+- Kein pixelgenauer Port des PHP-Designs (Glow-Karten, eigene CSS-Variablen) — wie in Phase 2–4 durchgängig auf shadcn/ui + Tailwind umgestellt.
+- Farb-Inkonsistenz aus dem Original bereinigt: `projects.php` (Erstellung) und `patch-project.php` (Validierung) hatten zwei unterschiedliche 8er-Paletten. Für den Port gilt einheitlich die Palette aus `projects.php` (`lib/project-colors.ts`), für Erstellung **und** Validierung.
 
 ### 5.1 Calendar
 
@@ -263,11 +271,8 @@ Tatsächliche Struktur: `StudyCounterApp.tsx` (Orchestrator), `Dock.tsx` + `Time
 ### 5.2 Projects
 
 - CRUD-Routes für Projects + Time Entries (analog zu Dashboard)
-- Client-Timer in `localStorage` bleibt identisch, nur als React Hook:
-  ```typescript
-  const [startEpoch, setStartEpoch] = useLocalStorage(`project_timer_${id}`, null)
-  ```
-- Standings-Podium als React-Komponente
+- Client-Timer in `localStorage` bleibt identisch, nur als React Hook (kein `useLocalStorage`-Hook nötig — `ProjectCard.tsx` liest/schreibt direkt in `useEffect`/Handlern, analog zum ursprünglichen inline-JS)
+- Standings-Podium als React-Komponente (`components/projects/Standings.tsx`)
 
 ---
 
