@@ -7,6 +7,7 @@ import { AvatarButton } from "@/components/layout/AvatarButton";
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/study", label: "Study Counter" },
 ];
 
 export function Header({ username, avatar }: { username: string; avatar: string | null }) {

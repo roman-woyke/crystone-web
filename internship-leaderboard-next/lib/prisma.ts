@@ -16,6 +16,11 @@ const adapter = new PrismaMariaDb({
   user: decodeURIComponent(url.username),
   password: decodeURIComponent(url.password),
   database: url.pathname.replace(/^\//, ""),
+  // MySQL 8's default `caching_sha2_password` auth plugin needs this to
+  // complete the handshake without TLS (the client can't otherwise fetch the
+  // server's RSA key to encrypt the password). Harmless no-op on servers
+  // using an older auth plugin.
+  allowPublicKeyRetrieval: true,
   // No explicit `timezone` here — that would issue `SET time_zone=...` on
   // every connection, which throws if the server's IANA zone tables aren't
   // loaded (common on shared MySQL hosts). Leaving it unset matches the PHP

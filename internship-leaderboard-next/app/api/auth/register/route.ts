@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
+import { dbNow } from "@/lib/dates";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const user = await prisma.user.create({
-      data: { username, passwordHash },
+      data: { username, passwordHash, createdAt: dbNow() },
     });
     return NextResponse.json({ id: user.id, username: user.username }, { status: 201 });
   } catch (error: unknown) {

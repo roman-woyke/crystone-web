@@ -50,7 +50,11 @@ model Application {
   tag         String?                    @db.VarChar(50)
   notes       String?                    @db.Text
   createdAt   DateTime?                  @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt   DateTime?                  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  // Not @updatedAt — every write path sets this explicitly via dbNow() (see
+  // lib/dates.ts) instead of letting Prisma stamp it with the Node process's
+  // own clock, which would disagree with the Europe/Berlin-wall-clock-as-UTC
+  // encoding every other DB timestamp in this app uses.
+  updatedAt   DateTime?                  @default(now()) @map("updated_at") @db.Timestamp(0)
   history     ApplicationStatusHistory[]
   user        User                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "applications_ibfk_1")
 
@@ -130,7 +134,11 @@ model StudyStatus {
   accumulated  Int       @default(0)
   sessionStart DateTime? @map("session_start") @db.DateTime(0)
   atLibrary    Boolean   @default(false) @map("at_library")
-  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  // Not @updatedAt: the "library" toggle deliberately writes this column back
+  // to its own current value (matching the PHP app's `updated_at = updated_at`)
+  // so break_elapsed — derived from this column — doesn't reset when BIB is
+  // toggled mid-break. Every other write path sets it to `new Date()` itself.
+  updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamp(0)
   user         User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "study_status_ibfk_1")
 
   @@map("study_status")

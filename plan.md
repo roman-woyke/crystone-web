@@ -1,16 +1,28 @@
 # Migrationsplan: PHP → Next.js
 
+## Fortschritt
+
+- [x] Phase 1 — Fundament
+- [x] Phase 2 — Auth-Seiten + Dashboard
+- [x] Phase 3 — Leaderboard + Avatar
+- [x] Phase 4 — Study Counter (inkl. Focus Mode, nicht ursprünglich geplant)
+- [ ] Phase 5 — Calendar + Projects
+- [ ] Phase 6 — fWordle
+- [ ] Phase 7 — Landing Page + Cleanup
+
+Abweichungen vom Plan siehe Notizen in den jeweiligen Phasen unten.
+
 ## Stack
 
 | Bereich | Technologie |
 |---|---|
-| Framework | Next.js 15 (App Router) |
+| Framework | Next.js 16 (App Router) — Plan sah 15 vor, 16 war zum Umsetzungszeitpunkt aktuell |
 | Sprache | TypeScript |
 | Styling | Tailwind CSS v4 + shadcn/ui |
-| Datenbank | MySQL (bleibt) via Prisma ORM |
+| Datenbank | MySQL (bleibt) via Prisma 7 ORM (`@prisma/adapter-mariadb`) |
 | Auth | Auth.js v5 (Credentials Provider) |
-| Data Fetching | SWR (Polling, Mutations) |
-| Deployment | Vercel + Hostinger Remote MySQL |
+| Data Fetching | Eigener `useState`/`useEffect`-Polling-Code statt SWR (siehe Phase 4) |
+| Deployment | Vercel + Hostinger Remote MySQL (noch nicht eingerichtet) |
 
 **Warum dieser Stack:**
 - Prisma versteht das bestehende MySQL-Schema 1:1, kein Datenverlust
@@ -81,9 +93,15 @@
 
 ---
 
-## Phase 1 — Fundament (ohne Features)
+## Phase 1 — Fundament (ohne Features) ✅ erledigt
 
 **Ziel:** Leeres Next.js-Projekt läuft lokal und auf Vercel, DB ist verbunden.
+
+**Notizen:**
+- Next.js 16 statt 15 (aktueller Stand zum Zeitpunkt der Umsetzung), Prisma 7 statt der impliziten älteren Version.
+- Prisma 7 verlangt für MySQL einen Driver-Adapter statt reiner Connection-URL → `@prisma/adapter-mariadb` installiert, inkl. `allowPublicKeyRetrieval: true` (nötig für MySQL 8 `caching_sha2_password` ohne TLS).
+- `prisma db pull` gegen eine lokale Docker-Test-DB (README-Schema) zeigte: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`-Spalten sind ohne `NOT NULL` nullable, `TINYINT` ohne `(1)` mappt auf `Int` statt `Boolean` — Schema entsprechend korrigiert.
+- Vercel/Hostinger-Verbindung (1.5) nicht umgesetzt — das sind Konten-Aktionen außerhalb meines Zugriffs; `.env.example` mit den drei nötigen Variablen vorbereitet.
 
 ### 1.1 Projekt anlegen
 
@@ -132,9 +150,15 @@ npx prisma generate
 
 ---
 
-## Phase 2 — Auth-Seiten + Dashboard (MVP)
+## Phase 2 — Auth-Seiten + Dashboard (MVP) ✅ erledigt
 
 **Ziel:** Einloggen, Bewerbungen sehen/bearbeiten funktioniert.
+
+**Notizen:**
+- `application_status_history` hat eine `user_id`-Spalte, die im README fehlt, aber vom PHP-Code vorausgesetzt wird — im Schema ergänzt.
+- Komponenten heißen `ApplicationsTable.tsx` (Tabelle mit Inline-Editing) statt `ApplicationCard.tsx`, da das Original eine Tabelle mit Status/Tag-Dropdowns, Peak-Status-Indikator und Link/Notes-Edit-Modal ist, keine Card-Grid-Ansicht.
+- bcryptjs-Kompatibilität mit PHPs `$2y$`-Hash-Präfix explizit getestet (funktioniert).
+- `api/patch-profile.php` (Username/Passwort im Profil ändern) bewusst nicht portiert — steht weder im Plan noch in der CLAUDE.md-API-Tabelle.
 
 ### 2.1 Login & Register
 
@@ -170,7 +194,7 @@ export function scorePoints(status: Status, tag: string | null): number { ... }
 
 ---
 
-## Phase 3 — Leaderboard + Avatar
+## Phase 3 — Leaderboard + Avatar ✅ erledigt
 
 **Ziel:** Leaderboard mit Chart funktioniert.
 
@@ -180,7 +204,9 @@ export function scorePoints(status: Status, tag: string | null): number { ... }
 - `GET /api/score-history` — tägliche kumulative Scores (für Chart)
 - `GET /api/raw-events` — Rohdaten für Tooltips
 
-**Chart:** Bestehende Chart-Logik aus `score-chart.php` in eine React-Komponente portieren. Alternativ: [Recharts](https://recharts.org) oder [Tremor](https://tremor.so) für weniger Aufwand.
+**Chart:** Chart.js direkt (nicht Recharts/Tremor) — die Original-Logik (Gradient-Strokes, gebündelte Sub-Punkte für gleichtägige Events, day-boundary-Achse) ist bereits auf Chart.js aufgebaut; 1:1-Port war weniger Aufwand als ein Rewrite.
+
+**Wichtiger Fund:** `@prisma/adapter-mariadb` kodiert DB-Timestamps so, dass die rohen gespeicherten Ziffern 1:1 als UTC gelesen werden (keine echte TZ-Konvertierung) — `lib/dates.ts` (`dbNow()`, `toDbDateStr()`) kodiert "jetzt" auf dieselbe Art, damit Tagesgrenzen-Berechnungen konsistent mit den Europe/Berlin-Wanduhrzeiten der PHP-App bleiben, unabhängig von der Serverzeitzone (z. B. Vercel/UTC). Kein `SET time_zone=...` auf der Verbindung, da das auf Shared-Hosting ohne geladene IANA-Zeitzonentabellen fehlschlagen kann.
 
 ### 3.2 Avatar Upload
 
@@ -190,7 +216,7 @@ export function scorePoints(status: Status, tag: string | null): number { ... }
 
 ---
 
-## Phase 4 — Study Counter
+## Phase 4 — Study Counter ✅ erledigt
 
 **Ziel:** Timer, Presence-Dock, manuelle Sessions, Charts funktionieren.
 
@@ -202,27 +228,26 @@ export function scorePoints(status: Status, tag: string | null): number { ... }
 - `POST /api/study/sessions` — manuelle Session loggen
 - `DELETE /api/study/sessions/[id]` — Session löschen
 - `GET /api/study/my-sessions` — eigene Sessions für Manage-Fenster
+- `POST /api/study/delete-module` — Custom-Modul löschen (undokumentiert im Original, aber von der UI benötigt)
 
-### 4.2 Polling mit SWR
+### 4.2 Polling
 
-```typescript
-const { data: status } = useSWR('/api/study/status', fetcher, {
-  refreshInterval: 15_000,
-})
-```
-
-Visibility-Change und bfcache pageshow via `useSWR`'s `revalidateOnFocus` + manuellem `mutate()`.
+Kein SWR — stattdessen eigener `useState`/`useEffect`-Orchestrator (`StudyCounterApp.tsx`) mit `setInterval(15s)`, `visibilitychange` und `pageshow` (bfcache), analog zum Original. SWR wurde nicht gebraucht, da der State (Timer, Presence, Recap) zu eng verzahnt ist für einfache Key-basierte Revalidierung.
 
 ### 4.3 Komponenten
 
-- `StudyDock.tsx` — Sticky Sidebar (Flip-Card: Front = live, Back = Tagesübersicht)
-- `StudyChart.tsx` — Grouped Bar Chart (kann mit shadcn Charts / Recharts neu gebaut werden)
-- `StudyPodium.tsx` — Podium mit Avataren
-- `ModuleModal.tsx` — Modul-Auswahl beim Start
-- `LogModal.tsx` — Trim/Drop per Modul beim Stoppen
+Tatsächliche Struktur: `StudyCounterApp.tsx` (Orchestrator), `Dock.tsx` + `Timeline.tsx`, `Chart.tsx`, `Podium.tsx`, `ModulePicker.tsx` + `ModuleModal.tsx`, `StopModal.tsx`, `ManualLogModal.tsx`, `ManageSessionsModal.tsx`, `FocusMode.tsx`, `Tooltip.tsx`.
 
-**Wichtig:** Server-Rendering der initialen Daten (`INITIAL_STATUS`) wird durch
-Next.js Server Components + `async/await` in der Page-Komponente ersetzt — kein Loading-Flash.
+**Wichtig:** Server-Rendering der initialen Daten (`INITIAL_STATUS`) wurde wie geplant durch Next.js Server Components + `async/await` in `app/(app)/study/page.tsx` ersetzt — kein Loading-Flash.
+
+**Zusatzfeature (nicht im Plan):** Focus Mode (Vollbild-Timer, 3 Wochen-Mini-Charts, persönliche Gesamtzeit) wurde auf Nutzerwunsch mit portiert.
+
+**Bewusste Vereinfachungen** (funktional vollständig, aber nicht pixelgenau zum Original):
+- Timeline-Achse: feste 07:00–06:00-Achse statt der Original-Optimierung, die leere Stunden zu einem "⋯"-Marker komprimiert.
+- Flip-Dock: einfacher Wechsel statt 3D-Y-Achsen-Rotation mit zwei Animationsphasen.
+- Focus Mode: Vollbild-Overlay statt eingebettetem Layout mit separat ein-/ausklappbarer Sidebar/Dock.
+
+**Kritischer, phasenübergreifender Fund:** Felder, die nicht explizit mit `dbNow()` gesetzt wurden, wurden von MySQLs eigenem `NOW()`/`ON UPDATE CURRENT_TIMESTAMP`-Trigger befüllt — das lief in der DB-Session-Zeitzone (lokal: UTC), nicht in `dbNow()`s Europe/Berlin, und verursachte reale 2h-Versätze (`break_elapsed` sprang auf ~7200s). Fix rückwirkend auch in Phase 2/3 angewendet: jeder Schreibzugriff auf `study_status`, `study_sessions`, `study_segments`, `applications`, `application_status_history`, `users.created_at` setzt Zeitstempel jetzt explizit über `dbNow()`.
 
 ---
 

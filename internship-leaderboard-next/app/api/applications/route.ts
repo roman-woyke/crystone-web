@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dbNow } from "@/lib/dates";
 import { ApplicationStatus } from "@/app/generated/prisma/enums";
 
 const ALLOWED_TAGS = ["MAYBE", "PROBABLY", "FOR SURE", "ABSOLUTE CINEMA"];
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
   const tag = ALLOWED_TAGS.includes(tagRaw) ? tagRaw : null;
 
   const application = await prisma.$transaction(async (tx) => {
+    const now = dbNow();
     const created = await tx.application.create({
       data: {
         userId,
@@ -52,6 +54,8 @@ export async function POST(request: NextRequest) {
         notes: notes || null,
         tag,
         status: ApplicationStatus.PENDING,
+        createdAt: now,
+        updatedAt: now,
       },
     });
 
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
         applicationId: created.id,
         userId,
         status: ApplicationStatus.PENDING,
+        changedAt: now,
       },
     });
 

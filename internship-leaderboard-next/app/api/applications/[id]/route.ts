@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dbNow } from "@/lib/dates";
 import { ApplicationStatus } from "@/app/generated/prisma/enums";
 
 const ALLOWED_STATUSES: string[] = Object.values(ApplicationStatus);
@@ -60,9 +61,11 @@ export async function PATCH(
     return new NextResponse("Nothing to update.", { status: 400 });
   }
 
+  const now = dbNow();
+
   const result = await prisma.application.updateMany({
     where: { id: applicationId, userId },
-    data,
+    data: { ...data, updatedAt: now },
   });
 
   if (result.count === 0) {
@@ -71,7 +74,7 @@ export async function PATCH(
 
   if (data.status !== undefined) {
     await prisma.applicationStatusHistory.create({
-      data: { applicationId, userId, status: data.status },
+      data: { applicationId, userId, status: data.status, changedAt: now },
     });
   }
 

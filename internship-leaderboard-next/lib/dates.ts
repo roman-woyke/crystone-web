@@ -31,6 +31,13 @@ export function toDbDateStr(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Equivalent to MySQL's `CURDATE()` — today's calendar date (Berlin
+// wall-clock), as a midnight-UTC-tagged Date for `@db.Date` columns.
+export function dbToday(): Date {
+  const now = dbNow();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 export function daysSince(date: Date | null): number | null {
   if (!date) return null;
   return Math.floor((dbNow().getTime() - date.getTime()) / 86_400_000);
@@ -40,4 +47,13 @@ export function relativeDaysLabel(days: number | null): string {
   if (days === null) return "—";
   if (days <= 0) return "today";
   return `${days}d ago`;
+}
+
+// TIMESTAMPDIFF(SECOND, a, b) / TIMESTAMPDIFF(MINUTE, a, b) equivalents.
+export function diffSeconds(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / 1000);
+}
+
+export function diffMinutes(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / 60_000);
 }
