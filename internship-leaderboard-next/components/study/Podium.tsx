@@ -181,7 +181,7 @@ export function Podium({
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setDetail({ username, rank: i + 1, secs });
               }}
-              className={`cursor-pointer space-y-2 rounded-xl border-2 p-4 text-center ${RANK_CARD_CLASS[i]}`}
+              className={`glow-card cursor-pointer space-y-2 overflow-hidden rounded-xl border-2 p-4 text-center ${RANK_CARD_CLASS[i]}`}
             >
               <div className="mx-auto size-14 overflow-hidden rounded-full bg-muted">
                 {userAvatars[username] ? (

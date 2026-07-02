@@ -139,7 +139,7 @@ export function ApplicationsTable({ applications }: { applications: ApplicationR
 
   return (
     <>
-      <div className="overflow-x-auto rounded-md border">
+      <div data-no-tilt className="glow-card overflow-x-auto rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>

@@ -57,7 +57,7 @@ export function Chart({ sessions }: { sessions: AggregatedSession[] }) {
   const legendUsers = [...legendTotals.keys()].sort();
 
   return (
-    <div className="rounded-xl border p-6">
+    <div data-no-tilt className="glow-card overflow-hidden rounded-xl border bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Hours per day - All modules</h2>
         <div className="flex items-center gap-2">

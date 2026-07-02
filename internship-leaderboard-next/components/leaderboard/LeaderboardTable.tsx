@@ -58,7 +58,7 @@ export function LeaderboardTable({ users }: { users: LeaderboardRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border">
+    <div data-no-tilt className="glow-card overflow-x-auto rounded-md border bg-card">
       <Table>
         <TableHeader>
           <TableRow>

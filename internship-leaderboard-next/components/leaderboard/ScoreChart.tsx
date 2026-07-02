@@ -294,7 +294,7 @@ export function ScoreChart() {
   }, []);
 
   return (
-    <div className="rounded-xl border p-6">
+    <div data-no-tilt className="glow-card overflow-hidden rounded-xl border bg-card p-6">
       <h2 className="mb-4 text-lg font-semibold">Score Evolution</h2>
       <div className="relative min-h-[360px] w-full">
         <canvas ref={canvasRef} />

@@ -43,7 +43,7 @@ export function ChooseWord({
 
   if (choose.already && !changing) {
     return (
-      <div className="rounded-xl border bg-card p-5">
+      <div className="glow-card overflow-hidden rounded-xl border bg-card p-5">
         <h2 className="mb-1 text-lg font-semibold">
           {choose.for_today ? "🗳️ Today's word — locked in" : "🗳️ Tomorrow's word — locked in"}
         </h2>
@@ -76,7 +76,7 @@ export function ChooseWord({
   }
 
   return (
-    <div className="rounded-xl border bg-card p-5">
+    <div className="glow-card overflow-hidden rounded-xl border bg-card p-5">
       <h2 className="mb-1 text-lg font-semibold">
         {choose.for_today ? "The day just started — still time to set your word!" : "🎉 You solved it — set a word for tomorrow"}
       </h2>

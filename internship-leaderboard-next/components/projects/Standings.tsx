@@ -34,7 +34,8 @@ export function Standings({
           <Link
             key={s.userId}
             href={`/projects?user=${encodeURIComponent(s.username)}`}
-            className={`block rounded-xl border-2 p-4 text-center transition-transform hover:-translate-y-1 ${RANK_STYLES[i]} ${
+            data-no-tilt
+            className={`glow-card block overflow-hidden rounded-xl border-2 p-4 text-center transition-transform hover:-translate-y-1 ${RANK_STYLES[i]} ${
               s.userId === viewUserId ? "ring-2 ring-primary/40" : ""
             }`}
           >

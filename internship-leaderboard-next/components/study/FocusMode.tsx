@@ -126,7 +126,7 @@ export function FocusMode({
   const onBreak = myState.active && !myState.running;
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-8 bg-background p-8">
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-8 bg-background p-8">
       <Button variant="outline" className="absolute right-6 top-6" onClick={onExit}>
         Exit focus
       </Button>

@@ -257,7 +257,7 @@ export function StudyCounterApp({
             <h1 className="text-2xl font-semibold tracking-tight">
               Study <span className="text-primary">Counter</span>
             </h1>
-            <div className="rounded-xl border p-4 text-center">
+            <div className="glow-card overflow-hidden rounded-xl border bg-card p-4 text-center">
               <div className="text-3xl font-bold">{examLine.value}</div>
               <div className="text-xs text-muted-foreground">{examLine.label}</div>
               <div className="mt-3 border-t pt-3">
@@ -282,7 +282,7 @@ export function StudyCounterApp({
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[auto_minmax(0,1fr)]">
-          <div className="w-full space-y-3 rounded-xl border p-4 md:w-64">
+          <div className="glow-card w-full space-y-3 overflow-hidden rounded-xl border bg-card p-4 md:w-64">
             <h2 className="font-semibold">Session Management</h2>
             <Button className="w-full" variant="outline" onClick={() => setManualModalOpen(true)}>
               Manual logging

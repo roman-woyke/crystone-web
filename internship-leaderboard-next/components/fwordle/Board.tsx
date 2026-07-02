@@ -115,7 +115,7 @@ export function Board({
     <div
       onClick={pickable ? onPick : undefined}
       className={cn(
-        "rounded-xl border p-3 [container-type:inline-size]",
+        "glow-card overflow-hidden rounded-xl border p-3 [container-type:inline-size]",
         solved && "border-emerald-500/60 bg-emerald-500/5",
         failed && "border-destructive/50",
         pickable && "cursor-pointer border-primary/70 ring-2 ring-primary/30 hover:bg-primary/5",

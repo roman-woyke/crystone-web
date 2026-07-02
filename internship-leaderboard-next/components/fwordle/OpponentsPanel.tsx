@@ -26,7 +26,10 @@ export function OpponentsPanel({
             : `${o.guesses_used}/${o.max_guesses} guesses`) + jokerTxt;
 
         return (
-          <div key={o.username} className={`rounded-md border bg-card p-3 ${o.finished && o.solved ? "border-emerald-500/40" : ""}`}>
+          <div
+            key={o.username}
+            className={`glow-card overflow-hidden rounded-md border bg-card p-3 ${o.finished && o.solved ? "border-emerald-500/40" : ""}`}
+          >
             <div className="mb-2 flex items-baseline justify-between gap-2">
               <span className={`text-sm font-bold ${o.finished && o.solved ? "text-emerald-500" : ""}`}>{o.username}</span>
               <span className="text-xs text-muted-foreground tabular-nums">{statusTxt}</span>

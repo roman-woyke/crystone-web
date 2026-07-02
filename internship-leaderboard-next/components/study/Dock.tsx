@@ -62,7 +62,7 @@ export function Dock({
   const extraUsersToday = new Set<string>([...running, ...paused].map((s) => s.username));
 
   return (
-    <div className="sticky top-[78px] overflow-hidden rounded-xl border">
+    <div data-no-tilt className="glow-card sticky top-[78px] overflow-hidden rounded-xl border bg-card">
       {!showBack ? (
         <div className="space-y-4 p-4">
           <div className="flex items-center justify-between">

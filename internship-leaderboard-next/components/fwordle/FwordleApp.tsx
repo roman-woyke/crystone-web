@@ -363,7 +363,10 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
           <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
             {state.board_hints.map((hint, b) =>
               hint?.trim() ? (
-                <div key={b} className="rounded-md border bg-card p-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                <div
+                  key={b}
+                  className="glow-card overflow-hidden rounded-md border bg-card p-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground"
+                >
                   <span className="mb-1.5 block text-[0.68rem] font-bold tracking-wide text-muted-foreground/70 uppercase">
                     Board {b + 1} clue
                   </span>
@@ -435,7 +438,7 @@ function HintRow({
   const cls = type === "green" ? "bg-emerald-600 text-white" : "bg-amber-500 text-white";
 
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div className="glow-card overflow-hidden rounded-xl border bg-card p-3">
       <div className="mb-1.5 flex items-center justify-between text-[0.68rem] font-bold tracking-wide text-muted-foreground uppercase">
         <span>Board {board + 1} hint</span>
         <span>{label}</span>
