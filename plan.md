@@ -7,8 +7,8 @@
 - [x] Phase 3 — Leaderboard + Avatar
 - [x] Phase 4 — Study Counter (inkl. Focus Mode, nicht ursprünglich geplant)
 - [x] Phase 5 — Calendar + Projects
-- [ ] Phase 6 — fWordle
-- [ ] Phase 7 — Landing Page + Cleanup
+- [x] Phase 6 — fWordle
+- [~] Phase 7 — Landing Page + Cleanup (Landing Page erledigt, PHP-Löschung + Doku-Umbau ausstehend, siehe Notizen)
 
 Abweichungen vom Plan siehe Notizen in den jeweiligen Phasen unten.
 
@@ -276,9 +276,19 @@ Tatsächliche Struktur: `StudyCounterApp.tsx` (Orchestrator), `Dock.tsx` + `Time
 
 ---
 
-## Phase 6 — fWordle
+## Phase 6 — fWordle ✅ erledigt
 
 **Ziel:** fWordle vollständig portiert. (Komplexeste Phase — zuletzt.)
+
+**Notizen:**
+- `fwordle_words.hint` / `fwordle_choices.hint` sind wie `application_status_history.user_id` (Phase 2) nicht im README dokumentiert, aber vom PHP-Code gelesen/geschrieben (der Wortpicker-Hinweistext) — in Prisma-Schema + README ergänzt, inkl. `ALTER TABLE`-Migrationshinweis analog zum `via_freeze`-Eintrag.
+- `lib/fwordle.ts` ist bewusst in vier Dateien aufgeteilt (`fwordle-words.ts`, `fwordle-score.ts`, `fwordle-streak.ts`, `fwordle.ts` als Orchestrator), analog zur Aufteilung von Phase 4 (`study-status.ts`, `study-segments.ts`, `study-modules.ts`, …) statt einer 750-Zeilen-Datei.
+- `fwordleFinalizeWords()` nutzt `prisma.$transaction` mit `SELECT ... FOR UPDATE` (Raw Query) für dieselbe Race-Sicherheit wie das PHP-Original — als erste Stelle im Next-Port, die eine interaktive Prisma-Transaktion braucht.
+- API-Routes nehmen JSON-Bodies (`request.json()`) statt der Original-`FormData`/`$_POST`-Bodies entgegen, konsistent zu allen anderen Next-Routes (z. B. `study/timer`) statt eine Sonderform beizubehalten.
+- Kein SWR: Polling läuft wie beim Study Counter über `setInterval(6000)` + `visibilitychange` + `pageshow`, aus demselben in Phase 4 notierten Grund (der State ist ein einziger eng verzahnter Blob, für den ein einfacher Fetch-Loop weniger Overhead ist als SWR-Keys). Weicht vom ursprünglichen Plan-Eintrag "Polling alle 6s via SWR" ab.
+- UI ist wie in Phase 2–5 auf shadcn/ui + Tailwind umgestellt statt das Original-Neon/Glow-CSS zu portieren. Zwei bewusste kosmetische Vereinfachungen: Wortpicker-Hinweiskarten und Joker-Reveal-Zeilen rendern in natürlicher Reihenfolge statt exakt unter ihrer Board-Spalte einjustiert zu sein (jede Karte trägt weiterhin ihr "Board N"-Label, funktional identisch).
+- Joker-Kaufbestätigung nutzt weiterhin das native `confirm()`, konsistent mit bestehenden Stellen im Next-Port (z. B. Modul löschen im Study Counter).
+- Getestet: lokale Docker-DB hochgefahren, `hint`-Migration angewendet, End-to-End über die API verifiziert (State-Abruf inkl. Tages-/Board-Erzeugung, Guess-Submission inkl. Scoring + Board-Freeze bei Sieg, Joker-Kauf inkl. Free-Joker-Logik, sowie dass Gegner nur Farben und nie Buchstaben sehen).
 
 ### 6.1 Logik portieren
 
@@ -308,11 +318,16 @@ Wortlisten (`includes/fwordle/*.txt`) können direkt bleiben, werden per `fs` ge
 
 ---
 
-## Phase 7 — Landing Page + Cleanup
+## Phase 7 — Landing Page + Cleanup (teilweise erledigt)
 
-- `app/page.tsx` — Landing Page (Server Component, direkte Prisma-Queries)
-- Alle PHP-Dateien entfernen
-- `CLAUDE.md` aktualisieren
+- [x] `app/page.tsx` — Landing Page
+- [ ] Alle PHP-Dateien entfernen
+- [ ] `CLAUDE.md` aktualisieren
+
+**Notizen:**
+- **Abweichung von CLAUDE.md:** `index.php` wurde entgegen der (offenbar veralteten/nie umgesetzten) CLAUDE.md-Beschreibung einer "Marketing-Landingpage mit Live-Stats" seit dem allerersten Commit tatsächlich immer nur als reiner Redirect implementiert (`isset($_SESSION["user_id"]) ? study-counter.php : login.php`). Auf Nutzerentscheidung hin 1:1 als reiner Redirect portiert (`app/page.tsx`: eingeloggt → `/study`, ausgeloggt → `/login`), keine neue Marketing-Seite gebaut.
+- Echte Favicons/`site.webmanifest` (bisher nur die create-next-app-Platzhalter-SVGs in `public/`) nach `internship-leaderboard-next/public/` übernommen und über `app/layout.tsx`s `metadata.icons`/`metadata.manifest` verlinkt; `app/favicon.ico` durch das echte Favicon ersetzt.
+- **PHP-Löschung + CLAUDE.md/README-Umbau bewusst zurückgestellt:** Der Auto-Mode-Klassifiker hat das Massen-`git rm` der PHP-App (api/, includes/, assets/, alle `*.php`, htaccess, PHP-Docker-Service) als irreversible Aktion in einem geteilten, bei jedem Push live deployenden Repo blockiert. Auf Nachfrage hat der Nutzer explizit "erstmal nicht" gewählt. Die PHP-App bleibt bis auf Weiteres vollständig unangetastet lauffähig; `docker-compose.yml`/`docker/Dockerfile`/`docker/config.local.php` (PHP-Webservice) und die Doku-Umschreibung von `CLAUDE.md`/`README.md` hängen inhaltlich an dieser Löschung und sind daher ebenfalls offen. Sobald grünes Licht für die Löschung kommt, sind das die nächsten Schritte, um Phase 7 abzuschließen.
 
 ---
 

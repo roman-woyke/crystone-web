@@ -198,6 +198,10 @@ model FwordleDay {
   @@map("fwordle_days")
 }
 
+// `hint` isn't in the README's documented CREATE TABLE (same docs-lag pattern
+// as ApplicationStatusHistory.userId) — the live PHP app reads/writes it on
+// both fwordle_words and fwordle_choices (the word-picker's optional clue
+// text for players), so the deployed schema has it.
 model FwordleWord {
   id        Int               @id @default(autoincrement())
   gameDate  DateTime          @map("game_date") @db.Date
@@ -205,6 +209,7 @@ model FwordleWord {
   word      String            @db.VarChar(10)
   source    FwordleWordSource @default(random)
   chooserId Int?              @map("chooser_id")
+  hint      String?           @db.VarChar(500)
   chooser   User?             @relation("FwordleWordChooser", fields: [chooserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_words_ibfk_1")
 
   @@unique([gameDate, position], map: "uniq_day_pos")
@@ -216,6 +221,7 @@ model FwordleChoice {
   gameDate  DateTime  @map("game_date") @db.Date
   userId    Int       @map("user_id")
   word      String    @db.VarChar(10)
+  hint      String?   @db.VarChar(500)
   createdAt DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
   user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_choices_ibfk_1")
 

@@ -188,6 +188,7 @@ CREATE TABLE fwordle_words (
     word       VARCHAR(10) NOT NULL,
     source     ENUM('chosen','random') NOT NULL DEFAULT 'random',
     chooser_id INT NULL REFERENCES users(id),
+    hint       VARCHAR(500) NULL,
     UNIQUE KEY uniq_day_pos (game_date, position)
 );
 
@@ -197,6 +198,7 @@ CREATE TABLE fwordle_choices (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     word       VARCHAR(10) NOT NULL,
+    hint       VARCHAR(500) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (game_date, user_id)
 );
@@ -267,6 +269,13 @@ CREATE TABLE fwordle_hints (
 > jokers, recorded on the hint row:
 > ```sql
 > ALTER TABLE fwordle_hints ADD COLUMN via_freeze TINYINT NOT NULL DEFAULT 0;
+> ```
+>
+> **fwordle_words.hint / fwordle_choices.hint migration:** the word picker can
+> attach an optional clue shown under a board from the start:
+> ```sql
+> ALTER TABLE fwordle_words ADD COLUMN hint VARCHAR(500) NULL;
+> ALTER TABLE fwordle_choices ADD COLUMN hint VARCHAR(500) NULL;
 > ```
 >
 > **study_segments migration:** the "I'm studying" session can now be split
