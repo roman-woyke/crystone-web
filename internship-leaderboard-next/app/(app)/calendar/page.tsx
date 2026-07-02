@@ -1,11 +1,16 @@
-import Link from "next/link";
+import { BookOpenCheck, CalendarClock } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { dbToday, toDbDateStr } from "@/lib/dates";
 import { examCountdown } from "@/lib/exam-countdown";
 import { CALENDAR_USERS, canonicalUser, calendarDays, examTimeHM, formatExamMeta, toDateStr } from "@/lib/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExamChecklist } from "@/components/calendar/ExamChecklist";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PillTabs } from "@/components/layout/PillTabs";
+import { StatTile } from "@/components/layout/StatTile";
+import { InfoBanner } from "@/components/layout/InfoBanner";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -37,80 +42,75 @@ export default async function CalendarPage({
   }
 
   const days = calendarDays();
+  const todayStr = toDbDateStr(dbToday());
+
+  const dDay =
+    countdown.daysUntilExam > 0
+      ? `D-${countdown.daysUntilExam}`
+      : countdown.daysUntilExam === 0
+        ? "D-Day"
+        : "Done";
+  const dDayLabel =
+    countdown.daysUntilExam > 0
+      ? "until first exam"
+      : countdown.daysUntilExam === 0
+        ? "first exam today"
+        : "exams done";
 
   return (
-    // Breaks out of the layout's max-w-5xl container (like calendar.php's
+    // Breaks out of the layout's max-width container (like calendar.php's
     // `main.container { max-width: none }` override) — a 7-column week grid
     // needs more room than the rest of the app.
     <div className="relative left-1/2 w-screen -translate-x-1/2 px-4 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-[1400px] space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-3">
-            <h1 className="text-2xl font-semibold tracking-tight">Exam Calendar — July 2026</h1>
-            <div className="flex flex-wrap gap-2">
-              {CALENDAR_USERS.map((u) => (
-                <Link
-                  key={u}
-                  href={`/calendar?user=${encodeURIComponent(u)}`}
-                  className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                    u === selectedUser
-                      ? "border-transparent bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                  }`}
-                >
-                  {u}
-                </Link>
-              ))}
+        <PageHeader
+          eyebrow="Exam season"
+          title={
+            <>
+              Exam <span className="gradient-text">Calendar</span>
+            </>
+          }
+          description="July 2026 — everyone's exams in one shared view."
+          actions={
+            <div className="grid w-full grid-cols-2 gap-3 sm:w-auto">
+              <StatTile
+                label="exams written"
+                value={`${countdown.passedExams}/${countdown.totalExams}`}
+                icon={<BookOpenCheck />}
+                accent="#34d399"
+              />
+              <StatTile label={dDayLabel} value={dDay} icon={<CalendarClock />} accent="#f87171" />
             </div>
-          </div>
+          }
+        />
 
-          <div className="flex gap-3">
-            <Card>
-              <CardContent className="flex flex-col items-center gap-1 px-6 py-4">
-                <span className="text-2xl font-bold text-emerald-500">
-                  {countdown.passedExams}/{countdown.totalExams}
-                </span>
-                <span className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  exams written
-                </span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col items-center gap-1 px-6 py-4">
-                <span className="text-2xl font-bold text-destructive">
-                  {countdown.daysUntilExam > 0
-                    ? `D-${countdown.daysUntilExam}`
-                    : countdown.daysUntilExam === 0
-                      ? "D-Day"
-                      : "🎉"}
-                </span>
-                <span className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {countdown.daysUntilExam > 0
-                    ? "until first exam"
-                    : countdown.daysUntilExam === 0
-                      ? "first exam today"
-                      : "exams done"}
-                </span>
-              </CardContent>
-            </Card>
-          </div>
+        <div className="rise rise-1 flex flex-wrap items-center gap-4">
+          <PillTabs
+            tabs={CALENDAR_USERS.map((u) => ({
+              href: `/calendar?user=${encodeURIComponent(u)}`,
+              label: u,
+              active: u === selectedUser,
+            }))}
+          />
         </div>
 
-        <p className="rounded-md border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
-          Viewing exams for <strong className="text-foreground">{selectedUser}</strong>.{" "}
-          {canEdit ? (
-            "Toggle the checkboxes to add or remove your highlights."
-          ) : (
-            <em>Read only — switch to your own tab to edit.</em>
-          )}
-        </p>
+        <div className="rise rise-2">
+          <InfoBanner>
+            Viewing exams for <strong className="text-foreground">{selectedUser}</strong>.{" "}
+            {canEdit ? (
+              "Toggle the checkboxes to add or remove your highlights."
+            ) : (
+              <em>Read only — switch to your own tab to edit.</em>
+            )}
+          </InfoBanner>
+        </div>
 
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="rise rise-3 flex flex-col gap-6 lg:flex-row lg:items-start">
           <aside className="w-full shrink-0 lg:w-72">
             <Card>
               <CardContent className="space-y-3 py-4">
                 <div>
-                  <h3 className="font-semibold">{selectedUser}&apos;s exams</h3>
+                  <h3 className="font-heading font-semibold">{selectedUser}&apos;s exams</h3>
                   <p className="text-xs text-muted-foreground">
                     {canEdit ? "Check the exams you're writing." : `Selections set by ${selectedUser}.`}
                   </p>
@@ -143,13 +143,27 @@ export default async function CalendarPage({
               const key = toDateStr(d);
               const dow = d.getUTCDay();
               const weekend = dow === 0 || dow === 6;
+              const isToday = key === todayStr;
               const todays = examsByDay.get(key) ?? [];
               return (
-                <Card key={key} className={weekend ? "bg-muted/30" : ""}>
+                <Card
+                  key={key}
+                  className={`${weekend ? "bg-muted/20" : ""} ${
+                    isToday ? "ring-2 ring-primary/60" : ""
+                  }`}
+                >
                   <CardContent className="flex min-h-40 flex-col gap-2 py-4">
-                    <div className="text-lg font-bold">
-                      {d.getUTCDate()}
-                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                    <div className="flex items-baseline gap-1.5">
+                      <span
+                        className={`font-heading text-lg font-bold ${
+                          isToday
+                            ? "flex size-7 items-center justify-center rounded-full bg-primary text-sm text-primary-foreground"
+                            : ""
+                        }`}
+                      >
+                        {d.getUTCDate()}
+                      </span>
+                      <span className="text-xs font-normal text-muted-foreground">
                         {d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })}
                       </span>
                     </div>
@@ -159,13 +173,15 @@ export default async function CalendarPage({
                         <div
                           key={e.id}
                           title={`${e.title} — ${e.professor ?? ""}`}
-                          className={`rounded-md border px-2.5 py-1.5 text-sm leading-snug ${
+                          className={`rounded-md border px-2.5 py-1.5 text-sm leading-snug transition-colors ${
                             isSel
-                              ? "border-primary/40 bg-primary/10 text-foreground"
+                              ? "border-primary/40 bg-primary/15 text-foreground shadow-[0_0_16px_-6px_rgba(139,92,246,0.5)]"
                               : "border-transparent bg-muted/40 text-muted-foreground opacity-60"
                           }`}
                         >
-                          <span className="block font-semibold">{examTimeHM(e.examTime)}</span>
+                          <span className={`block font-semibold ${isSel ? "text-primary" : ""}`}>
+                            {examTimeHM(e.examTime)}
+                          </span>
                           <span className="block break-words">{e.title}</span>
                         </div>
                       );

@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-space-grotesk);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -72,7 +72,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.7rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -87,36 +87,36 @@
    PHP app's glass/glow look), violet primary, translucent cards that sit as
    glass panels over the animated WebGL background. */
 .dark {
-  --background: oklch(0.13 0.015 290);
+  --background: oklch(0.115 0.018 290);
   --foreground: oklch(0.97 0.005 290);
-  --card: oklch(0.2 0.02 292 / 72%);
+  --card: oklch(0.19 0.022 292 / 68%);
   --card-foreground: oklch(0.97 0.005 290);
-  --popover: oklch(0.19 0.02 292);
+  --popover: oklch(0.18 0.022 292);
   --popover-foreground: oklch(0.97 0.005 290);
   --primary: oklch(0.63 0.21 293);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.27 0.03 292);
   --secondary-foreground: oklch(0.97 0.005 290);
   --muted: oklch(0.27 0.02 292);
-  --muted-foreground: oklch(0.72 0.02 290);
+  --muted-foreground: oklch(0.73 0.02 290);
   --accent: oklch(0.28 0.04 292);
   --accent-foreground: oklch(0.97 0.005 290);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.63 0.21 293 / 60%);
   --chart-1: oklch(0.63 0.21 293);
   --chart-2: oklch(0.65 0.15 250);
   --chart-3: oklch(0.72 0.13 200);
   --chart-4: oklch(0.68 0.16 320);
   --chart-5: oklch(0.75 0.12 160);
-  --sidebar: oklch(0.19 0.02 292);
+  --sidebar: oklch(0.18 0.022 292);
   --sidebar-foreground: oklch(0.97 0.005 290);
   --sidebar-primary: oklch(0.63 0.21 293);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.28 0.04 292);
   --sidebar-accent-foreground: oklch(0.97 0.005 290);
-  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-border: oklch(1 0 0 / 11%);
   --sidebar-ring: oklch(0.63 0.21 293 / 60%);
 }
 
@@ -126,9 +126,43 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss03", "cv02";
   }
   html {
     @apply font-sans;
+    scrollbar-gutter: stable;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading tracking-tight;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: oklch(0.63 0.21 293 / 35%);
+    color: oklch(0.985 0 0);
+  }
+
+  /* Thin, glassy scrollbars everywhere. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(1 0 0 / 18%) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(1 0 0 / 14%);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(1 0 0 / 26%);
   }
 }
 
@@ -183,10 +217,116 @@
   backdrop-filter: blur(14px);
 }
 
-/* Brand gradient accent (header wordmark, page-heading highlights). */
+/* Brand gradient accent (header wordmark, page-heading highlights). The
+   background is oversized and slowly drifts so the gradient shimmers. */
 .gradient-text {
-  background: linear-gradient(100deg, #a78bfa 0%, #818cf8 50%, #38bdf8 100%);
+  background: linear-gradient(
+    100deg,
+    #a78bfa 0%,
+    #818cf8 30%,
+    #38bdf8 50%,
+    #818cf8 70%,
+    #a78bfa 100%
+  );
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  animation: gradient-drift 8s linear infinite;
+}
+
+@keyframes gradient-drift {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Tiny uppercase section label above page titles. */
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: oklch(0.75 0.12 293);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.eyebrow::before {
+  content: "";
+  width: 1.4rem;
+  height: 1.5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #a78bfa, transparent);
+}
+
+/* Gradient hairline used under the header / above the footer. */
+.hairline {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(0.63 0.21 293 / 45%) 30%,
+    oklch(0.7 0.14 250 / 45%) 70%,
+    transparent
+  );
+}
+
+/* Entrance animation: content rises in with a small stagger. Applied to
+   page-level blocks; disabled entirely under prefers-reduced-motion. */
+.rise {
+  animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.rise-1 { animation-delay: 0.05s; }
+.rise-2 { animation-delay: 0.12s; }
+.rise-3 { animation-delay: 0.19s; }
+.rise-4 { animation-delay: 0.26s; }
+.rise-5 { animation-delay: 0.33s; }
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .rise-1,
+  .rise-2,
+  .rise-3,
+  .rise-4,
+  .rise-5 {
+    animation: none;
+  }
+  .gradient-text {
+    animation: none;
+  }
+}
+
+/* Numbers that should line up (scores, timers, stats). */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Soft violet halo behind hero elements (podium winner, auth panel). */
+.halo {
+  position: relative;
+}
+.halo::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    oklch(0.63 0.21 293 / 22%) 0%,
+    transparent 65%
+  );
+  pointer-events: none;
+  z-index: -1;
 }

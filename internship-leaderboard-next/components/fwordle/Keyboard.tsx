@@ -46,7 +46,7 @@ export function Keyboard({
           ))}
         </div>
       )}
-      <div className="flex max-w-xl flex-col gap-1.5">
+      <div className="flex w-full max-w-3xl flex-col gap-1.5">
         {ROWS.map((row, idx) => (
           <div key={idx} className="flex justify-center gap-1.5">
             {idx === 2 && <Key label="Enter" k="enter" wide disabled={disabled} onKey={onKey} pressedKey={pressedKey} />}
@@ -89,9 +89,9 @@ function Key({
       disabled={disabled}
       onClick={() => onKey(k)}
       className={cn(
-        "h-12 max-w-11 flex-1 rounded-md bg-muted text-sm font-semibold uppercase transition-transform disabled:cursor-not-allowed disabled:opacity-50",
-        wide && "max-w-16 text-xs",
-        space && "max-w-64 text-xs tracking-widest",
+        "h-12 max-w-16 flex-1 rounded-md bg-muted text-sm font-semibold uppercase transition-transform disabled:cursor-not-allowed disabled:opacity-50",
+        wide && "max-w-24 text-xs",
+        space && "max-w-96 text-xs tracking-widest",
         state === "green" && "bg-emerald-600 text-white",
         state === "orange" && "bg-amber-500 text-white",
         state === "grey" && "bg-neutral-500 text-white opacity-85",

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { FwordleState } from "@/lib/fwordle";
 import type { ParsedHint } from "@/lib/fwordle-score";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Board } from "@/components/fwordle/Board";
 import { Keyboard } from "@/components/fwordle/Keyboard";
 import { JokerBar } from "@/components/fwordle/JokerBar";
@@ -284,18 +285,17 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            B<span className="text-primary">oardle</span>
-          </h1>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            4 board puzzle a day. Solve every board before the guesses run out. A guess can be any word from 5
-            letters up to the day&apos;s length (use the space bar to place it). Beat the day and you get to set
-            one of tomorrow&apos;s words.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="Daily puzzle"
+          title={
+            <>
+              B<span className="gradient-text">oardle</span>
+            </>
+          }
+          description="4 board puzzle a day. Solve every board before the guesses run out. A guess can be any word from 5 letters up to the day's length (use the space bar to place it). Beat the day and you get to set one of tomorrow's words."
+        />
 
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <div className="rise rise-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Pill>
             📅 <strong className="text-foreground">{state.date}</strong>
           </Pill>
@@ -404,13 +404,13 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
         {showChoose && <ChooseWord choose={state.choose} onSubmit={submitChoice} />}
       </div>
 
-      <aside className="space-y-6">
+      <aside className="space-y-8">
         <div>
-          <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">🔥 Streaks</h2>
+          <p className="eyebrow mb-3">Streaks</p>
           <StatsPanel stats={state.stats} />
         </div>
         <div>
-          <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">⚔️ Competition</h2>
+          <p className="eyebrow mb-3">Competition</p>
           <OpponentsPanel opponents={state.opponents} numBoards={state.num_boards} length={L} />
         </div>
       </aside>

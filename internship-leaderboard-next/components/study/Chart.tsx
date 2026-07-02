@@ -20,10 +20,10 @@ export function Chart({ sessions }: { sessions: AggregatedSession[] }) {
   const weekLabel =
     weekOffset === 0
       ? "This week"
-      : `${weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${addDays(
+      : `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${addDays(
           weekStart,
           6,
-        ).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        ).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   const byDay = new Map<string, Map<string, { total: number; mods: Map<string, number> }>>();
   for (const s of sessions) {
@@ -141,7 +141,10 @@ export function Chart({ sessions }: { sessions: AggregatedSession[] }) {
                   })}
                 </div>
                 <span className={`text-xs ${isToday ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
-                  {d.toLocaleDateString(undefined, { weekday: "short" })}
+                  {/* Fixed locale: this renders during SSR too, and the server
+                      locale differing from the browser's caused a hydration
+                      mismatch ("Mon" vs "Mo"). */}
+                  {d.toLocaleDateString("en-US", { weekday: "short" })}
                   <br />
                   {d.getDate()}
                 </span>

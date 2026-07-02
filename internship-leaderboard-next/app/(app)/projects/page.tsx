@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { CalendarRange, Clock, FolderKanban, ListChecks, Sun } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AddProjectDialog } from "@/components/projects/AddProjectDialog";
 import { ProjectCard, type ProjectData } from "@/components/projects/ProjectCard";
 import { Standings, type StandingRow } from "@/components/projects/Standings";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PillTabs } from "@/components/layout/PillTabs";
+import { StatTile } from "@/components/layout/StatTile";
+import { InfoBanner } from "@/components/layout/InfoBanner";
 
 export default async function ProjectsPage({
   searchParams,
@@ -87,77 +91,64 @@ export default async function ProjectsPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Project <span className="text-primary">Time</span>
-        </h1>
-        <p className="mt-1 max-w-2xl text-muted-foreground">
-          Track the hours you pour into each project. Run a live timer or log time you spent offline,
-          jot down what it&apos;s about, and watch your contribution add up.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {users.map((u) => (
-          <Link
-            key={u.id}
-            href={`/projects?user=${encodeURIComponent(u.username)}`}
-            className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-              u.id === viewUserId
-                ? "border-transparent bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-            }`}
-          >
-            {u.username}
-            {u.id === myUserId ? " (you)" : ""}
-          </Link>
-        ))}
-      </div>
-
-      <p className="rounded-md border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
-        {canEdit ? (
+      <PageHeader
+        eyebrow="Side quests"
+        title={
           <>
-            Viewing <strong className="text-foreground">your</strong> projects — log time, add projects, and
-            edit freely.
+            Project <span className="gradient-text">Time</span>
           </>
-        ) : (
-          <>
-            Viewing <strong className="text-foreground">{viewUsername}</strong>&apos;s projects.{" "}
-            <em>Read only — switch to your own tab to make changes.</em>
-          </>
-        )}
-      </p>
+        }
+        description="Track the hours you pour into each project. Run a live timer or log time you spent offline, and watch your contribution add up."
+        actions={canEdit ? <AddProjectDialog /> : undefined}
+      />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        {[
-          { label: "Total tracked", value: fmtTime(grand.total) },
-          { label: "Today", value: fmtTime(grand.today) },
-          { label: "Last 7 days", value: fmtTime(grand.week) },
-          { label: "Projects", value: String(projectRows.length) },
-          { label: "Sessions", value: String(grand.entries) },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="flex flex-col items-center gap-1 py-4">
-              <span className="text-xl font-bold">{stat.value}</span>
-              <span className="text-xs text-muted-foreground">{stat.label}</span>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="rise rise-1 flex flex-wrap items-center gap-4">
+        <PillTabs
+          tabs={users.map((u) => ({
+            href: `/projects?user=${encodeURIComponent(u.username)}`,
+            label: u.id === myUserId ? `${u.username} (you)` : u.username,
+            active: u.id === viewUserId,
+          }))}
+        />
       </div>
 
-      {canEdit && <AddProjectDialog />}
+      <div className="rise rise-2">
+        <InfoBanner>
+          {canEdit ? (
+            <>
+              Viewing <strong className="text-foreground">your</strong> projects — log time, add
+              projects, and edit freely.
+            </>
+          ) : (
+            <>
+              Viewing <strong className="text-foreground">{viewUsername}</strong>&apos;s projects.{" "}
+              <em>Read only — switch to your own tab to make changes.</em>
+            </>
+          )}
+        </InfoBanner>
+      </div>
+
+      <div className="rise rise-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label="Total tracked" value={fmtTime(grand.total)} icon={<Clock />} accent="#a78bfa" />
+        <StatTile label="Today" value={fmtTime(grand.today)} icon={<Sun />} accent="#fbbf24" />
+        <StatTile label="Last 7 days" value={fmtTime(grand.week)} icon={<CalendarRange />} accent="#38bdf8" />
+        <StatTile label="Projects" value={projectRows.length} icon={<FolderKanban />} accent="#34d399" />
+        <StatTile label="Sessions" value={grand.entries} icon={<ListChecks />} accent="#f472b6" />
+      </div>
 
       {projectRows.length === 0 ? (
-        <Card>
-          <CardContent className="py-14 text-center text-muted-foreground">
-            <span className="mb-2 block text-3xl">🗂️</span>
+        <Card className="rise rise-4">
+          <CardContent className="flex flex-col items-center gap-3 py-14 text-center text-muted-foreground">
+            <span className="flex size-12 items-center justify-center rounded-xl border border-white/10 bg-primary/10 text-primary">
+              <FolderKanban className="size-5" />
+            </span>
             {canEdit
               ? "No projects yet — create one above and start logging your hours."
               : `${viewUsername} hasn't created any projects yet.`}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="rise rise-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projectRows.map((p) => (
             <ProjectCard key={p.id} project={p} canEdit={canEdit} />
           ))}

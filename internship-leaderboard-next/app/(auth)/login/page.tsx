@@ -6,13 +6,7 @@ import { auth, signIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AuthShell } from "@/components/layout/AuthShell";
 
 // Only accept `next` if it's a same-app relative path (prevents open redirects).
 function safeNext(next: string | undefined): string {
@@ -55,42 +49,50 @@ export default async function LoginPage({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Log in to keep climbing the leaderboard.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {params.error && (
-            <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              Invalid username or password.
-            </p>
-          )}
+    <AuthShell>
+      <div className="rise space-y-2">
+        <h2 className="font-heading text-3xl font-bold tracking-tight">Welcome back</h2>
+        <p className="text-sm text-muted-foreground">Log in to keep climbing the leaderboard.</p>
+      </div>
 
-          <form action={login} className="space-y-4">
-            <input type="hidden" name="next" value={next} />
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" name="username" type="text" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-            <Button type="submit" className="w-full">
-              Login
-            </Button>
-          </form>
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            No account yet?{" "}
-            <Link href="/register" className="underline underline-offset-4">
-              Register
-            </Link>
+      <div className="rise rise-1 mt-8">
+        {params.error && (
+          <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Invalid username or password.
           </p>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+
+        <form action={login} className="space-y-5">
+          <input type="hidden" name="next" value={next} />
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input id="username" name="username" type="text" autoComplete="username" required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <Button type="submit" size="lg" className="w-full">
+            Login
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          No account yet?{" "}
+          <Link
+            href="/register"
+            className="font-medium text-primary underline-offset-4 transition-colors hover:text-foreground hover:underline"
+          >
+            Register
+          </Link>
+        </p>
+      </div>
+    </AuthShell>
   );
 }

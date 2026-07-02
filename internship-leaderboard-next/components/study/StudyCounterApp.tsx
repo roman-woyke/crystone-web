@@ -10,6 +10,7 @@ import type { MyStudyStatus, StudyingEntry, RecapBlock } from "@/lib/study-statu
 import type { ExamCountdown } from "@/lib/exam-countdown";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Dock } from "@/components/study/Dock";
 import { Chart } from "@/components/study/Chart";
 import { Podium } from "@/components/study/Podium";
@@ -250,26 +251,40 @@ export function StudyCounterApp({
         : { value: "done", label: "exams finished" };
 
   return (
-    <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Grind together"
+        title={
+          <>
+            Study <span className="gradient-text">Counter</span>
+          </>
+        }
+        description="Log your hours, see who is studying right now, and race for the podium."
+        actions={
+          <Button variant="outline" onClick={toggleFocusMode}>
+            Focus mode
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-8 lg:order-1">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="rise rise-1 grid grid-cols-1 gap-8 md:grid-cols-[220px_minmax(0,1fr)]">
           <div className="space-y-4">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Study <span className="text-primary">Counter</span>
-            </h1>
-            <div className="glow-card overflow-hidden rounded-xl border bg-card p-4 text-center">
-              <div className="text-3xl font-bold">{examLine.value}</div>
-              <div className="text-xs text-muted-foreground">{examLine.label}</div>
+            <div className="glow-card overflow-hidden rounded-xl border bg-card p-4 text-center backdrop-blur-md">
+              <div className="tabular font-heading text-4xl font-bold text-destructive">{examLine.value}</div>
+              <div className="mt-1 text-[0.7rem] font-semibold tracking-wider text-muted-foreground uppercase">
+                {examLine.label}
+              </div>
               <div className="mt-3 border-t pt-3">
-                <div className="text-lg font-semibold">
+                <div className="tabular font-heading text-xl font-semibold text-emerald-400">
                   {examCountdown.passedExams}/{examCountdown.totalExams}
                 </div>
-                <div className="text-xs text-muted-foreground">exams written</div>
+                <div className="text-[0.7rem] font-semibold tracking-wider text-muted-foreground uppercase">
+                  exams written
+                </div>
               </div>
             </div>
-            <Button variant="outline" className="w-full" onClick={toggleFocusMode}>
-              Focus mode
-            </Button>
           </div>
 
           <Podium
@@ -352,6 +367,7 @@ export function StudyCounterApp({
         onBreakToggle={handleBreakToggle}
         onStop={() => setStopModalOpen(true)}
       />
+      </div>
     </div>
   );
 }

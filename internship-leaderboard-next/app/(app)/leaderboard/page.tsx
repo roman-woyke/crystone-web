@@ -3,6 +3,7 @@ import { daysSince, relativeDaysLabel } from "@/lib/dates";
 import { Podium } from "@/components/leaderboard/Podium";
 import { LeaderboardTable, type LeaderboardRow } from "@/components/leaderboard/LeaderboardTable";
 import { ScoreChart } from "@/components/leaderboard/ScoreChart";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 function lastUpdateColor(
   days: number | null,
@@ -52,14 +53,29 @@ export default async function LeaderboardPage() {
   }));
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Internship Application Leaderboard</h1>
+    <div className="space-y-10">
+      <PageHeader
+        eyebrow="Competition"
+        title={
+          <>
+            Application <span className="gradient-text">Leaderboard</span>
+          </>
+        }
+        description="Every status change scores points — permanently. Click a row to see everyone's applications."
+      />
 
-      <Podium users={rows} />
+      <div className="rise rise-1">
+        <Podium users={rows} />
+      </div>
 
-      <LeaderboardTable users={rows} />
+      <div className="rise rise-2 space-y-4">
+        <h2 className="font-heading text-xl font-semibold tracking-tight">Standings</h2>
+        <LeaderboardTable users={rows} />
+      </div>
 
-      <ScoreChart />
+      <div className="rise rise-3">
+        <ScoreChart />
+      </div>
     </div>
   );
 }

@@ -1,10 +1,13 @@
+import { Files, Hourglass, MessagesSquare, BadgeCheck, Sparkles } from "lucide-react";
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { scorePoints, peakStatus } from "@/lib/scoring";
 import { daysSince, relativeDaysLabel } from "@/lib/dates";
 import { AddApplicationDialog } from "@/components/dashboard/AddApplicationDialog";
 import { ApplicationsTable, type ApplicationRow } from "@/components/dashboard/ApplicationsTable";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { StatTile } from "@/components/layout/StatTile";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -53,34 +56,37 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">My Dashboard</h1>
-        <p className="text-muted-foreground">
-          Logged in as <strong className="text-foreground">{session!.user.name}</strong>
-        </p>
+      <PageHeader
+        eyebrow="Overview"
+        title={
+          <>
+            My <span className="gradient-text">Dashboard</span>
+          </>
+        }
+        description={
+          <>
+            Logged in as <strong className="text-foreground">{session!.user.name}</strong> — track
+            your applications and keep the score climbing.
+          </>
+        }
+        actions={<AddApplicationDialog />}
+      />
+
+      <div className="rise rise-1 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label="Applications" value={applications.length} icon={<Files />} accent="#a78bfa" />
+        <StatTile label="Pending" value={pendingCount} icon={<Hourglass />} accent="#38bdf8" />
+        <StatTile label="Interviews" value={interviewCount} icon={<MessagesSquare />} accent="#fbbf24" />
+        <StatTile label="Offers" value={offerCount} icon={<BadgeCheck />} accent="#34d399" />
+        <StatTile label="My Score" value={myScore} icon={<Sparkles />} accent="#f472b6" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        {[
-          { label: "Applications", value: applications.length },
-          { label: "Pending", value: pendingCount },
-          { label: "Interviews", value: interviewCount },
-          { label: "Offers", value: offerCount },
-          { label: "My Score", value: myScore },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="flex flex-col items-center gap-1 py-4">
-              <span className="text-2xl font-bold">{stat.value}</span>
-              <span className="text-xs text-muted-foreground">{stat.label}</span>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <AddApplicationDialog />
-
-      <div>
-        <h2 className="mb-4 text-lg font-semibold">My applications</h2>
+      <div className="rise rise-2 space-y-4">
+        <div className="flex items-baseline gap-3">
+          <h2 className="font-heading text-xl font-semibold tracking-tight">My applications</h2>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+            {applications.length}
+          </span>
+        </div>
         <ApplicationsTable applications={rows} />
       </div>
     </div>
