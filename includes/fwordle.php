@@ -95,6 +95,17 @@ function fwordleSuggestions(int $len, int $userId, string $forDate, int $count =
     return array_slice($pool, 0, $count);
 }
 
+// A fresh, non-deterministic set of suggestions of the given length — backs the
+// "randomize" button in the word picker (unlike fwordleSuggestions, which stays
+// stable across polls).
+function fwordleRandomSuggestions(int $len, int $count = 3): array
+{
+    $pool = array_values(array_unique(fwordleAnswerPool($len)));
+    if (!$pool) return [];
+    shuffle($pool);
+    return array_slice($pool, 0, min($count, count($pool)));
+}
+
 // ── Day length + lifecycle ───────────────────────────────────────────────────
 
 // Weighted random length: 5→30%, 6→30%, 7→20%, 8→10%, 9→5%, 10→5%.

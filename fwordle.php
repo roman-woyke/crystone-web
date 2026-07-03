@@ -281,6 +281,23 @@ main.container { max-width: 1280px; }
     color: var(--text-1);
 }
 
+/* "Add a hint" CTA that fills a .fw-board-hint card in place of clue text —
+   same card, same footprint, for a board you've solved that has no community
+   clue yet. The two states never coexist for a given board. The whole card is
+   the click/hover target, not just the CTA text. */
+.fw-board-hint-cta {
+    cursor: pointer;
+    transition: background var(--t-fast), border-color var(--t-fast);
+}
+.fw-board-hint-cta:hover {
+    background: var(--grad-accent-soft);
+    border-color: rgba(139, 92, 246, 0.4);
+}
+.fw-add-hint {
+    font-weight: 600;
+    color: var(--text-2);
+}
+
 :root {
     --fw-green:  #2e9e5b;
     --fw-orange: #c2992f;
@@ -417,6 +434,30 @@ main.container { max-width: 1280px; }
 .fw-choose h2 { margin: 0 0 4px; font-size: 1.1rem; }
 .fw-choose p.muted { margin: 0 0 14px; font-size: 0.86rem; }
 
+/* Same #fw-choose card, just re-parented into the centered popup on solve —
+   this class only adds the sizing/entrance animation a modal dialog needs. */
+#fw-choose.fw-choose-modal {
+    width: min(520px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    animation: modal-in var(--t-med) var(--ease-out);
+}
+.fw-choose-modal-close {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: var(--text-2);
+}
+.fw-choose-modal-close:hover { color: var(--text-1); }
+
 .fw-suggests {
     display: flex;
     flex-wrap: wrap;
@@ -424,14 +465,36 @@ main.container { max-width: 1280px; }
     margin-bottom: 14px;
 }
 
+/* Fixed width (big enough for the max 10-letter word) so swapping in new
+   suggestions — or hitting Randomize — never reflows the row. */
 .fw-suggest {
-    width: auto;
+    width: 128px;
+    flex: 0 0 128px;
     margin: 0;
-    padding: 9px 16px;
+    padding: 9px 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-family: var(--font-display);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+/* Reroll the three suggestions — a small icon-only die inline with them, sized
+   to match the suggestion buttons' height without stealing their width. */
+.fw-randomize {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    line-height: 1;
+    white-space: nowrap;
+    align-self: center;
 }
 
 .fw-custom-row {
@@ -443,11 +506,20 @@ main.container { max-width: 1280px; }
 .fw-custom-row input {
     flex: 1;
     min-width: 160px;
+    height: 46px;
+    margin: 0;
+    box-sizing: border-box;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-family: var(--font-display);
 }
-.fw-custom-row button { width: auto; margin: 0; padding: 0 20px; }
+.fw-custom-row button {
+    width: auto;
+    height: 46px;
+    margin: 0;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
 
 .fw-chosen {
     padding: 12px 16px;
@@ -522,43 +594,48 @@ main.container { max-width: 1280px; }
 }
 .fw-sidebar > h2:not(:first-child) { margin-top: 22px; }
 
-/* Streak / average-guesses slots — one per player. */
+/* Standings — one compact container, one line per player. */
 .fw-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
-.fw-stat {
-    padding: 9px 11px;
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
     background: var(--solid-glass);
+    overflow: hidden;
 }
+
+.fw-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 11px;
+    font-size: 0.8rem;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+.fw-stat + .fw-stat { border-top: 1px solid var(--glass-border); }
 .fw-stat.empty { opacity: 0.5; }
 
+/* Podium tint for the top 3 rows (list is already sorted by rank). */
+.fw-stat.rank-1 { border-left: 3px solid #f59e0b; background: linear-gradient(90deg, rgba(251, 191, 36, 0.14), transparent 65%); }
+.fw-stat.rank-2 { border-left: 3px solid #9ca3af; background: linear-gradient(90deg, rgba(209, 213, 219, 0.14), transparent 65%); }
+.fw-stat.rank-3 { border-left: 3px solid #b45309; background: linear-gradient(90deg, rgba(217, 119, 6, 0.14), transparent 65%); }
+.fw-stat.rank-1 .fw-stat-name { color: #fbbf24; }
+.fw-stat.rank-2 .fw-stat-name { color: #d1d5db; }
+.fw-stat.rank-3 .fw-stat-name { color: #d97706; }
+
 .fw-stat-name {
+    flex: 1;
+    min-width: 0;
     font-weight: 700;
-    font-size: 0.86rem;
-    margin-bottom: 5px;
+    font-size: 0.84rem;
+    color: var(--text-1);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.fw-stat-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 6px;
-    font-size: 0.78rem;
-    color: var(--text-2);
-    font-variant-numeric: tabular-nums;
-}
-.fw-stat-left { display: inline-flex; align-items: baseline; gap: 9px; }
 .fw-stat-streak { font-weight: 700; color: var(--text-1); }
 .fw-stat-freeze { font-weight: 700; color: var(--info, #38bdf8); }
-.fw-stat-avg { color: var(--text-3); }
+.fw-stat-avg { color: var(--text-3); white-space: nowrap; }
 
 .fw-opp {
     padding: 12px 14px;
@@ -640,16 +717,42 @@ main.container { max-width: 1280px; }
         <p class="fw-msg" id="fw-msg"></p>
     </div>
 
-    <div class="fw-choose glass-card" id="fw-choose" style="display:none;"></div>
-
 </div><!-- /fw-main -->
 
+<!-- ── "You solved it!" popup — #fw-choose is re-parented in here so the exact
+     same picker (suggestions, custom word, hint, randomize) pops up the moment
+     the last board is solved, without needing to scroll to the bottom. ────── -->
+<div id="fw-choose-modal" class="modal-overlay" style="display:none;">
+    <button type="button" class="fw-choose-modal-close" id="fw-choose-modal-close" title="Choose later">✕</button>
+</div>
+
+<!-- ── Add-a-hint modal (styled like the tomorrow's-word picker) ─────────────── -->
+<div id="fw-hint-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card fw-choose">
+        <h2>Add a hint for others</h2>
+        <p class="muted">Give the next players a clue without spoiling the word.</p>
+        <div class="fw-hint-wrap">
+            <textarea id="fw-hint-input" maxlength="500" placeholder="e.g. Think kitchen appliances..."></textarea>
+        </div>
+        <p class="fw-choose-msg" id="fw-hint-modal-msg"></p>
+        <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="fw-hint-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="fw-hint-save">Save hint</button>
+        </div>
+    </div>
+</div>
+
 <aside class="fw-sidebar">
-    <h2>🔥 Streaks</h2>
+    <h2>🔥 Standings</h2>
     <div class="fw-stats" id="fw-stats"></div>
 
     <h2>⚔️ Competition</h2>
     <div id="fw-opponents"></div>
+
+    <div class="fw-choose glass-card" id="fw-choose" style="display:none;"></div>
+    <!-- Anchor marking #fw-choose's resting spot — it's re-parented into the
+         popup on solve and moved back here when dismissed/submitted. -->
+    <div id="fw-choose-anchor"></div>
 </aside>
 
 </div><!-- /fw-layout -->
@@ -687,6 +790,12 @@ main.container { max-width: 1280px; }
     const chooseEl    = document.getElementById("fw-choose");
     const oppEl       = document.getElementById("fw-opponents");
     const statsEl     = document.getElementById("fw-stats");
+    const hintModalEl = document.getElementById("fw-hint-modal");
+    const hintInputEl = document.getElementById("fw-hint-input");
+    const hintModalMsgEl = document.getElementById("fw-hint-modal-msg");
+    const chooseAnchorEl = document.getElementById("fw-choose-anchor");
+    const chooseModalEl  = document.getElementById("fw-choose-modal");
+    const chooseModalCloseEl = document.getElementById("fw-choose-modal-close");
 
     function escapeHtml(v) {
         return String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -813,17 +922,34 @@ main.container { max-width: 1280px; }
     function renderBoardHints() {
         const n = STATE.num_boards;
         const hints = STATE.board_hints || [];
-        const anyHint = hints.some(h => h && h.trim());
-        if (n === 0 || !anyHint) { boardHintsEl.innerHTML = ""; return; }
+        const me = STATE.me;
+        const owned = me.owned || [];
+
+        // A hintless board slot still earns a place here if I can add a hint to
+        // it (solved it, or own it) — offer the "+ Add a hint" CTA in its place.
+        const anyContent = n > 0 && Array.from({ length: n }, (_, b) => {
+            const hint = (hints[b] || "").trim();
+            return hint || (me.solved_boards[b] || owned.includes(b));
+        }).some(Boolean);
+        if (!anyContent) { boardHintsEl.innerHTML = ""; return; }
 
         boardHintsEl.style.setProperty("--boards", n);
         let html = "";
         for (let b = 0; b < n; b++) {
             const hint = (hints[b] || "").trim();
-            if (!hint) continue;
-            html += `<div class="fw-board-hint" style="grid-column:${b + 1}"><span class="fw-board-hint-label">Board ${b + 1} clue</span>${escapeHtml(hint)}</div>`;
+            if (hint) {
+                html += `<div class="fw-board-hint" style="grid-column:${b + 1}"><span class="fw-board-hint-label">Board ${b + 1} clue</span>${escapeHtml(hint)}</div>`;
+            } else if (me.solved_boards[b] || owned.includes(b)) {
+                // Same card, same footprint — the hover/click affordance lives on
+                // the whole card, not just the CTA text. The two states never
+                // coexist for a given board.
+                html += `<div class="fw-board-hint fw-board-hint-cta" style="grid-column:${b + 1}" data-add-hint="${b}"><span class="fw-board-hint-label">Board ${b + 1} clue</span><span class="fw-add-hint">+ Add a hint for others</span></div>`;
+            }
         }
         boardHintsEl.innerHTML = html;
+
+        boardHintsEl.querySelectorAll("[data-add-hint]").forEach(el =>
+            el.addEventListener("click", () => openHintModal(parseInt(el.dataset.addHint, 10))));
     }
 
     // ── Jokers: one shared bar of 3 buttons, doubling as the legend. Each costs
@@ -1000,6 +1126,43 @@ main.container { max-width: 1280px; }
             .finally(() => { busy = false; });
     }
 
+    // Write a shared clue for a board you've solved that has none yet — it then
+    // shows to every player under that board. Opens a styled modal (matching the
+    // tomorrow's-word picker) rather than an inline field, since renderBoards
+    // re-runs on every keystroke/poll and would wipe an embedded input mid-edit.
+    let hintModalBoard = null;
+    function openHintModal(board) {
+        if (busy) return;
+        hintModalBoard = board;
+        hintInputEl.value = "";
+        hintModalMsgEl.textContent = "";
+        hintModalMsgEl.classList.remove("ok");
+        hintModalEl.style.display = "flex";
+        hintInputEl.focus();
+    }
+    function closeHintModal() {
+        hintModalEl.style.display = "none";
+        hintModalBoard = null;
+    }
+    function saveBoardHint() {
+        const hint = hintInputEl.value.trim();
+        if (!hint) { hintModalMsgEl.textContent = "Write something first."; return; }
+        if (busy || hintModalBoard === null) return;
+        busy = true;
+        hintModalMsgEl.textContent = "";
+        const body = new FormData();
+        body.append("board", hintModalBoard);
+        body.append("hint", hint);
+        fetch(BASE_PATH + "/api/fwordle-add-hint.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Could not save hint."); }))
+            .then(state => { STATE = state; closeHintModal(); renderAll(); })
+            .catch(err => { hintModalMsgEl.classList.remove("ok"); hintModalMsgEl.textContent = err.message; })
+            .finally(() => { busy = false; });
+    }
+    document.getElementById("fw-hint-cancel").addEventListener("click", closeHintModal);
+    document.getElementById("fw-hint-save").addEventListener("click", saveBoardHint);
+    hintModalEl.addEventListener("click", e => { if (e.target === hintModalEl) closeHintModal(); });
+
     // ── Keyboard ───────────────────────────────────────────────────────────
     const KB_ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
     function buildKeyboard() {
@@ -1080,19 +1243,16 @@ main.container { max-width: 1280px; }
     // ── Streak / average-guesses stats (one slot per player) ──────────────
     function renderStats() {
         const stats = STATE.stats || [];
-        statsEl.innerHTML = stats.map(s => {
+        statsEl.innerHTML = stats.map((s, i) => {
             const played = s.solves > 0 || s.streak > 0;
             const avg = s.avg_guesses != null ? s.avg_guesses + " avg" : "—";
+            const rank = i < 3 ? ` rank-${i + 1}` : "";
             return `
-                <div class="fw-stat ${played ? "" : "empty"}">
-                    <div class="fw-stat-name">${escapeHtml(s.username)}</div>
-                    <div class="fw-stat-row">
-                        <span class="fw-stat-left">
-                            <span class="fw-stat-streak" title="Day streak">🔥 ${s.streak}</span>
-                            <span class="fw-stat-freeze" title="Streak freezes">🧊 ${s.freezes ?? 0}</span>
-                        </span>
-                        <span class="fw-stat-avg" title="Average guesses on solved days">${avg}</span>
-                    </div>
+                <div class="fw-stat${played ? "" : " empty"}${rank}">
+                    <span class="fw-stat-name">${escapeHtml(s.username)}</span>
+                    <span class="fw-stat-streak" title="Day streak">🔥 ${s.streak}</span>
+                    <span class="fw-stat-freeze" title="Streak freezes">🧊 ${s.freezes ?? 0}</span>
+                    <span class="fw-stat-avg" title="Average guesses on solved days">${avg}</span>
                 </div>
             `;
         }).join("");
@@ -1161,14 +1321,39 @@ main.container { max-width: 1280px; }
 
     // ── Tomorrow's word picker ─────────────────────────────────────────────
     let changing = false;
+    let suggestOverride = null; // rerolled suggestions from the randomize button
     let lastChooseSig = null;
+    let choosePrompted = false; // popped the "you solved it!" modal already this pageview?
+    let chooseModalDismissedOnce = false; // has the win popup been shown & closed yet this pageview?
+
+    // Persist "already shown" across reloads (per browser, per today's date) so
+    // the popup only ever fires once for a given solve — not again on every
+    // refresh. If it was already shown, treat it as pre-dismissed: skip the
+    // schedule and don't suppress the resting sidebar slot either.
+    const CHOOSE_SEEN_KEY = `fwordle_choose_seen_${BASE_PATH}_${STATE.date}`;
+    if (localStorage.getItem(CHOOSE_SEEN_KEY)) {
+        choosePrompted = true;
+        chooseModalDismissedOnce = true;
+    }
+
     function renderChoose() {
         const c = STATE.choose;
-        const visible = c.eligible && (STATE.me.solved || c.for_today);
+        const eligibleForPopup = c.eligible && !c.for_today && STATE.me.solved && !c.already;
+        // Until the "you solved it" popup has been shown & dismissed once, keep
+        // the resting sidebar slot empty — no flash/duplicate of the picker
+        // before the popup appears. While the popup is actually open (#fw-choose
+        // is currently parented inside it), it must stay visible there
+        // regardless — openChooseModal forces that directly, this only governs
+        // the resting sidebar spot.
+        const inModal = chooseEl.parentElement === chooseModalEl;
+        const suppressResting = eligibleForPopup && !chooseModalDismissedOnce && !inModal;
+        const visible = c.eligible && (STATE.me.solved || c.for_today) && !suppressResting;
 
         // Only rebuild when something actually changed — otherwise a background
-        // poll would wipe the custom-word input you're typing in.
-        const sig = visible ? `${c.already || ""}|${c.already_hint || ""}|${changing}|${c.tomorrow_length}` : "hidden";
+        // poll would wipe the custom-word input you're typing in. The rerolled
+        // suggestions are part of the signature so they survive polls.
+        const overrideSig = suggestOverride ? suggestOverride.join(",") : "";
+        const sig = visible ? `${c.already || ""}|${c.already_hint || ""}|${changing}|${c.tomorrow_length}|${overrideSig}` : "hidden";
         if (sig === lastChooseSig) return;
         lastChooseSig = sig;
 
@@ -1183,7 +1368,7 @@ main.container { max-width: 1280px; }
             const lockedMsg = c.for_today
                 ? "Saved. You can still change it until the first guess is made."
                 : "Saved. You can change it until tomorrow begins.";
-            const lockedTitle = c.for_today ? "🗳️ Today's word — locked in" : "🗳️ Tomorrow's word — locked in";
+            const lockedTitle = c.for_today ? "🗳️ Today's word" : "🗳️ Tomorrow's word";
             chooseEl.innerHTML = `
                 <h2>${lockedTitle}</h2>
                 <div class="fw-chosen">
@@ -1203,13 +1388,14 @@ main.container { max-width: 1280px; }
             return;
         }
 
-        const sugg = (c.suggestions || []).map(w =>
+        const suggestions = suggestOverride || c.suggestions || [];
+        const sugg = suggestions.map(w =>
             `<button type="button" class="btn fw-suggest" data-word="${escapeHtml(w)}">${escapeHtml(w)}</button>`
         ).join("");
 
         const pickTitle = c.for_today
             ? "The day just started — still time to set your word!"
-            : "🎉 You solved it — set a word for tomorrow";
+            : "🎉 Set a word for tomorrow";
         const pickDesc = c.for_today
             ? `Today is a <strong>${tlen}-letter</strong> day. Pick a suggestion or enter your own (must be a real ${tlen}-letter word). Once someone guesses, the word is final.`
             : `Tomorrow is a <strong>${tlen}-letter</strong> day. Pick a suggestion or enter your own (must be a real ${tlen}-letter word).`;
@@ -1217,7 +1403,7 @@ main.container { max-width: 1280px; }
         chooseEl.innerHTML = `
             <h2>${pickTitle}</h2>
             <p class="muted">${pickDesc}</p>
-            <div class="fw-suggests">${sugg}</div>
+            <div class="fw-suggests">${sugg}<button type="button" class="btn fw-randomize" id="fw-randomize" title="Get three new suggestions" aria-label="Randomize suggestions">🎲</button></div>
             <div class="fw-custom-row">
                 <input type="text" id="fw-custom" maxlength="${tlen}" placeholder="Your own ${tlen}-letter word" value="${escapeHtml(changing && c.already ? c.already : "")}">
                 <button type="button" class="btn-primary" id="fw-custom-go">Set word</button>
@@ -1230,6 +1416,8 @@ main.container { max-width: 1280px; }
         `;
         chooseEl.querySelectorAll(".fw-suggest").forEach(btn =>
             btn.addEventListener("click", () => submitChoice(btn.dataset.word)));
+        const randBtn = document.getElementById("fw-randomize");
+        if (randBtn) randBtn.addEventListener("click", randomizeSuggestions);
         document.getElementById("fw-custom-go").addEventListener("click", () => {
             submitChoice(document.getElementById("fw-custom").value.trim().toLowerCase());
         });
@@ -1237,6 +1425,49 @@ main.container { max-width: 1280px; }
             if (e.key === "Enter") { e.preventDefault(); submitChoice(e.target.value.trim().toLowerCase()); }
         });
     }
+
+    // ── "You solved it!" popup ──────────────────────────────────────────────
+    // #fw-choose is a single node re-parented between its resting spot at the
+    // bottom of the page and this popup — same element, same event listeners,
+    // so opening/closing never duplicates the picker's logic.
+    function openChooseModal() {
+        chooseEl.classList.add("fw-choose-modal");
+        chooseModalEl.appendChild(chooseEl);
+        chooseEl.style.display = ""; // force visible — it may have been hidden while resting
+        chooseModalEl.style.display = "flex";
+    }
+    function closeChooseModal() {
+        if (chooseModalEl.style.display === "none") return;
+        chooseModalDismissedOnce = true; // reveal the resting sidebar slot from now on
+        chooseEl.classList.remove("fw-choose-modal");
+        chooseAnchorEl.insertAdjacentElement("beforebegin", chooseEl);
+        chooseModalEl.style.display = "none";
+    }
+    // Pop up once ever per solve (persisted in localStorage, not just this
+    // pageview) the moment the picker becomes available after a win — lets the
+    // player choose without scrolling. Doesn't reopen on a refresh, and never
+    // fires for the "already picked" / for-today late-pick states (those just
+    // show inline at the bottom).
+    const CHOOSE_MODAL_DELAY_MS = 1800; // let the win sink in before popping the picker up
+    function maybeOpenChooseModal() {
+        if (choosePrompted) return;
+        const c = STATE.me.finished && STATE.choose;
+        if (c && c.eligible && !c.for_today && STATE.me.solved && !c.already) {
+            choosePrompted = true; // set immediately so a re-render during the delay can't re-schedule it
+            localStorage.setItem(CHOOSE_SEEN_KEY, "1"); // never pop again for this solve, even across reloads
+            setTimeout(() => {
+                openChooseModal();
+                // renderChoose() was a no-op while resting-suppressed (sig was
+                // "hidden"), so #fw-choose never got its content built. Now that
+                // it's parented inside the modal (inModal), re-run it so the
+                // picker actually renders instead of sitting empty until the
+                // next poll fills it in.
+                renderChoose();
+            }, CHOOSE_MODAL_DELAY_MS);
+        }
+    }
+    chooseModalCloseEl.addEventListener("click", closeChooseModal);
+    chooseModalEl.addEventListener("click", e => { if (e.target === chooseModalEl) closeChooseModal(); });
 
     function submitChoice(word) {
         const tlen = STATE.choose.tomorrow_length;
@@ -1257,7 +1488,18 @@ main.container { max-width: 1280px; }
                 STATE.choose.already_hint = res.hint || null;
                 changing = false;
                 renderChoose();
+                closeChooseModal(); // picked — send it back to its resting spot at the bottom
             })
+            .catch(err => { if (cmsg) { cmsg.classList.remove("ok"); cmsg.textContent = err.message; } });
+    }
+
+    // Reroll the three suggestions (server picks fresh random words of the right
+    // length). Kept in suggestOverride so polls don't reset them.
+    function randomizeSuggestions() {
+        const cmsg = document.getElementById("fw-choose-msg");
+        fetch(BASE_PATH + "/api/fwordle-suggest.php")
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Could not shuffle."); }))
+            .then(res => { suggestOverride = res.suggestions || []; renderChoose(); })
             .catch(err => { if (cmsg) { cmsg.classList.remove("ok"); cmsg.textContent = err.message; } });
     }
 
@@ -1339,6 +1581,7 @@ main.container { max-width: 1280px; }
                 STATE = state;
                 renderStatus(); renderJokers(); renderBoards(); renderBoardHints(); renderHintRows();
                 renderControls(); renderKeyboard(); renderStats(); renderOpponents(); renderChoose();
+                maybeOpenChooseModal();
                 // Safari resets scroll when large innerHTML sections are replaced.
                 if (window.scrollY !== savedScroll) window.scrollTo(0, savedScroll);
             })
@@ -1356,6 +1599,7 @@ main.container { max-width: 1280px; }
         renderStats();
         renderOpponents();
         renderChoose();
+        maybeOpenChooseModal();
     }
 
     // ── Go ─────────────────────────────────────────────────────────────────
