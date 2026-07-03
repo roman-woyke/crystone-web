@@ -1,26 +1,13 @@
 version: '3.8'
 
-services:
-  web:
-    build:
-      context: ./docker
-    container_name: site_web
-    ports:
-      - "8080:80"
-    volumes:
-      - ./:/var/www/html
-      - ./docker/config.local.php:/var/www/config.php:ro
-    depends_on:
-      - db
-    environment:
-      - DB_HOST=db
-      - DB_NAME=local_site_db
-      - DB_USER=root
-      - DB_PASS=rootpass
+# Local MySQL for Prisma dev/migrations against the shared schema (see
+# README.md). Point DATABASE_URL in .env at this instance, e.g.
+# mysql://root:rootpass@localhost:3306/local_site_db
 
+services:
   db:
     image: mysql:8.0
-    container_name: site_db
+    container_name: leaderboard_db
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
@@ -32,7 +19,7 @@ services:
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
-    container_name: site_pma
+    container_name: leaderboard_pma
     restart: always
     ports:
       - "8081:80"

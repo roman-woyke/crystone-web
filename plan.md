@@ -8,7 +8,7 @@
 - [x] Phase 4 — Study Counter (inkl. Focus Mode, nicht ursprünglich geplant)
 - [x] Phase 5 — Calendar + Projects
 - [x] Phase 6 — fWordle
-- [~] Phase 7 — Landing Page + Cleanup (Landing Page erledigt, PHP-Löschung + Doku-Umbau ausstehend, siehe Notizen)
+- [x] Phase 7 — Landing Page + Cleanup
 
 Abweichungen vom Plan siehe Notizen in den jeweiligen Phasen unten.
 
@@ -318,16 +318,19 @@ Wortlisten (`includes/fwordle/*.txt`) können direkt bleiben, werden per `fs` ge
 
 ---
 
-## Phase 7 — Landing Page + Cleanup (teilweise erledigt)
+## Phase 7 — Landing Page + Cleanup ✅ erledigt
 
 - [x] `app/page.tsx` — Landing Page
-- [ ] Alle PHP-Dateien entfernen
-- [ ] `CLAUDE.md` aktualisieren
+- [x] Alle PHP-Dateien entfernen
+- [x] `CLAUDE.md` aktualisieren
 
 **Notizen:**
 - **Abweichung von CLAUDE.md:** `index.php` wurde entgegen der (offenbar veralteten/nie umgesetzten) CLAUDE.md-Beschreibung einer "Marketing-Landingpage mit Live-Stats" seit dem allerersten Commit tatsächlich immer nur als reiner Redirect implementiert (`isset($_SESSION["user_id"]) ? study-counter.php : login.php`). Auf Nutzerentscheidung hin 1:1 als reiner Redirect portiert (`app/page.tsx`: eingeloggt → `/study`, ausgeloggt → `/login`), keine neue Marketing-Seite gebaut.
 - Echte Favicons/`site.webmanifest` (bisher nur die create-next-app-Platzhalter-SVGs in `public/`) nach `internship-leaderboard-next/public/` übernommen und über `app/layout.tsx`s `metadata.icons`/`metadata.manifest` verlinkt; `app/favicon.ico` durch das echte Favicon ersetzt.
-- **PHP-Löschung + CLAUDE.md/README-Umbau bewusst zurückgestellt:** Der Auto-Mode-Klassifiker hat das Massen-`git rm` der PHP-App (api/, includes/, assets/, alle `*.php`, htaccess, PHP-Docker-Service) als irreversible Aktion in einem geteilten, bei jedem Push live deployenden Repo blockiert. Auf Nachfrage hat der Nutzer explizit "erstmal nicht" gewählt. Die PHP-App bleibt bis auf Weiteres vollständig unangetastet lauffähig; `docker-compose.yml`/`docker/Dockerfile`/`docker/config.local.php` (PHP-Webservice) und die Doku-Umschreibung von `CLAUDE.md`/`README.md` hängen inhaltlich an dieser Löschung und sind daher ebenfalls offen. Sobald grünes Licht für die Löschung kommt, sind das die nächsten Schritte, um Phase 7 abzuschließen.
+- **PHP-Löschung ursprünglich zurückgestellt, dann nachgeholt:** Der Auto-Mode-Klassifiker hatte das Massen-`git rm` der PHP-App zunächst als irreversible Aktion in einem geteilten, bei jedem Push live deployenden Repo blockiert; der Nutzer wählte damals "erstmal nicht". Bei erneuter Anfrage stellte sich heraus, dass die Löschung auf einem isolierten Feature-Branch (`feat/nextjs-migration`) passiert, der nicht der geteilte Auto-Deploy-Branch ist und dessen Next.js-Teil ohnehin noch nicht über Vercel live ist — die PHP-App war hier ausschließlich als Referenz für den Next.js-Port vorhanden. Damit war das Risiko eines Produktions-Ausfalls nicht gegeben, und die Löschung wurde durchgeführt: `api/`, `assets/`, `includes/`, alle `*.php`, `htaccess`, sowie der PHP-Webservice aus `docker-compose.yml`/`docker/` entfernt (letzteres durch eine reine MySQL/phpMyAdmin-`docker-compose.yml` in `internship-leaderboard-next/` ersetzt, da die lokale DB weiterhin für Prisma-Entwicklung gebraucht wird).
+- **Doku-Umbau:** Root-`CLAUDE.md` (vormals PHP-bezogen) wurde durch die vollständige Next.js-Architektur-/API-/Feature-Doku ersetzt, übersetzt auf die tatsächlichen Pfade (`app/api/.../route.ts`, `lib/*.ts`, `components/**/*.tsx`). `README.md` behält das DB-Schema als weiterhin autoritative Quelle für `prisma/schema.prisma`, der PHP-Deployment- und Dateistruktur-Teil wurde entfernt.
+- **Nachträgliches Flachziehen der Ordnerstruktur:** Direkt im Anschluss an die PHP-Löschung wurde auch `internship-leaderboard-next/` selbst aufgelöst — alle App-Dateien eine Ebene hoch an die Repo-Wurzel verschoben (`git mv`), `node_modules`/`.next`/`tsconfig.tsbuildinfo` gelöscht statt verschoben (regenerieren sich via `npm install`/`npm run dev`), die verschachtelte `CLAUDE.md` in die Root-`CLAUDE.md` gemergt, `internship-leaderboard-next/README.md` (unveränderte create-next-app-Boilerplate) verworfen. Grund: die Verschachtelung existierte nur, damit PHP-App und Next.js-Port während der Migration nebeneinander im selben Repo liegen konnten — mit der PHP-Löschung entfiel der Grund dafür. `.gitignore`s `.env*`-Regel bekam dabei eine `!.env.example`-Ausnahme, da diese sonst nie im Git-Verlauf sichtbar war. Alle Pfadangaben in diesem Dokument, die noch `internship-leaderboard-next/` zeigen, sind historisch (Stand zum jeweiligen Phasen-Zeitpunkt) und nicht mehr aktuell.
+- **Nach wie vor offen (nicht Teil von Phase 7):** Vercel + Hostinger-Remote-MySQL-Einrichtung (Plan-Punkt 1.5) — es gibt aktuell keine Live-Deployment-Pipeline für die Next.js-App.
 
 ---
 

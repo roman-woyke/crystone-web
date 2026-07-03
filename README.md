@@ -1,34 +1,8 @@
 # Internship Leaderboard
 
-A shared leaderboard for tracking internship applications with friends.
+A shared leaderboard for tracking internship applications with friends, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (fWordle).
 
----
-
-## Deployment
-
-The repo is deployed to Hostinger at the **web root** (`public_html/`) via a Git webhook — pushing the deployed branch updates the live site. All application code is in the repo; the only file that isn't is `config.php`, which holds the database credentials and is kept **one level above the web root** so it can never be served over HTTP.
-
-### `config.php` (one level above the web root, managed manually on the server)
-
-Defines `INVITE_CODE` (required to register an account — keep this secret since the repo is public), sets `BASE_PATH` (the URL prefix every page uses for links and redirects — empty when served from the web root), and opens the PDO connection into `$pdo`.
-
-```php
-<?php
-
-define("INVITE_CODE", "your-secret-code-here");
-
-// Served from the web root — no subfolder prefix.
-define("BASE_PATH", "");
-
-$pdo = new PDO(
-    "mysql:host=localhost;dbname=YOUR_DB;charset=utf8mb4",
-    "YOUR_USER",
-    "YOUR_PASS"
-);
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-```
-
-Every page reaches it with `require_once __DIR__ . "/../config.php"` (repo-root files) or `"/../../config.php"` (files in `api/` and `includes/`). The repo's own `index.php` redirects visitors landing at the root to the dashboard or login.
+The app is a TypeScript/Next.js app — see [`CLAUDE.md`](CLAUDE.md) for architecture, local setup, and deployment. This file is the **authoritative MySQL schema reference**: `prisma/schema.prisma` is introspected from it and must be kept in sync manually when either changes.
 
 ---
 
@@ -317,56 +291,6 @@ Interview/Offer points shown above are the net gain (the +2 from the initial PEN
 
 ---
 
-## File structure
+## App structure
 
-```
-/                          ← one level above web root (not in repo)
-└── config.php             ← DB config + BASE_PATH (above web root, not served over HTTP)
-
-public_html/               ← web root = this repo
-├── api/                   ← JSON endpoints (called by JS fetch)
-│   ├── delete-application.php
-│   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
-│   ├── delete-study-session.php ← study counter: delete one of my logged sessions
-│   ├── delete-time-entry.php   ← project tracker: remove a single logged session
-│   ├── fwordle-choose.php      ← fWordle: set one of tomorrow's words (solver-only)
-│   ├── fwordle-guess.php       ← fWordle: submit a guess (validated + scored server-side)
-│   ├── fwordle-state.php       ← fWordle: full game state (mine + opponents' colors)
-│   ├── get-leaderboard.php
-│   ├── get-my-study-sessions.php ← study counter: my logged sessions (manage window)
-│   ├── get-raw-events.php
-│   ├── get-score-history.php
-│   ├── get-study-data.php      ← study counter: modules + aggregated sessions
-│   ├── get-study-status.php    ← study counter: my timer + who's studying now
-│   ├── log-study-session.php   ← study counter: log a session (timer/manual)
-│   ├── log-time.php            ← project tracker: log time against a project
-│   ├── study-timer.php         ← study counter: persistent timer/presence state machine
-│   ├── patch-application.php
-│   ├── patch-project.php       ← project tracker: edit name/description/colour
-│   ├── toggle-user-exam.php    ← exam calendar checkbox toggle
-│   └── upload-avatar.php       ← set/clear the logged-in user's profile picture
-├── assets/
-│   ├── css/style.css      ← design tokens + shared glass components
-│   └── js/app.js          ← mobile nav toggle + countUp helper
-├── includes/
-│   ├── fwordle/           ← fWordle word data: dict-<5..10>.txt (validation) + answers-<5..10>.txt (answer pool)
-│   ├── fwordle.php        ← fWordle: length roll, day lifecycle, scoring, state payload
-│   ├── footer.php
-│   ├── header.php         ← brand, conditional nav, fonts, background orbs
-│   ├── scoring.php        ← shared scoring logic + SQL helpers
-│   ├── session.php        ← auth guard (redirects to login if not logged in)
-│   ├── start-session.php  ← session config (30-day cookie)
-│   └── study-status.php   ← shared "currently studying" payload helper
-├── calendar.php           ← shared exam calendar (July 2026)
-├── dashboard.php          ← main app page (add/edit/delete applications)
-├── fwordle.php            ← daily multi-board multiplayer Wordle
-├── index.php              ← redirects root visitors to the dashboard / login
-├── leaderboard.php        ← public leaderboard page
-├── login.php
-├── logout.php
-├── projects.php           ← project time tracker (timer + manual, per-project totals)
-├── register.php
-├── score-chart.php        ← chart partial (included by leaderboard.php)
-├── score-table.php        ← table partial (included by leaderboard.php)
-└── study-counter.php      ← study session tracker (timer + manual, weekly chart)
-```
+See [`CLAUDE.md`](CLAUDE.md) for the current file structure, API route map, and per-feature architecture (Next.js App Router + Prisma). This app previously existed as a PHP/MySQL implementation living at the repo root, and the Next.js rewrite previously lived nested under `internship-leaderboard-next/` during the migration; both have since been folded into the repo root — see [`plan.md`](plan.md) for the migration history.
