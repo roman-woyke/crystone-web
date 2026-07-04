@@ -101,7 +101,10 @@
         if (!container) return;
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-        var dpr = window.devicePixelRatio || 1;
+        var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        var TARGET_FPS = 30;
+        var FRAME_MIN_MS = 1000 / TARGET_FPS;
+        var paused = document.hidden;
 
         // Colors: very dark violet -> dark blue cycle, matches site accent palette
         var GRADIENT_COLORS = ["#05040d", "#110830", "#060f30", "#05040d"];
@@ -352,8 +355,14 @@
             ty = (window.innerHeight - e.clientY) * dpr;
         });
 
+        var lastFrameTs = 0;
+
         function loop(ts) {
             requestAnimationFrame(loop);
+            if (paused) return;
+            if (lastFrameTs && ts - lastFrameTs < FRAME_MIN_MS) return;
+            lastFrameTs = ts;
+
             if (t0 === null) t0 = ts;
             var t  = (ts - t0) * 0.001;
             var dt = lastTs ? (ts - lastTs) / 1000 : 0;
@@ -370,6 +379,15 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
+
+        document.addEventListener("visibilitychange", function () {
+            paused = document.hidden;
+            if (!paused) {
+                // Reset timing refs so we don't jump/burst-catch-up after being hidden
+                lastTs = 0;
+                lastFrameTs = 0;
+            }
+        });
 
         requestAnimationFrame(loop);
     });

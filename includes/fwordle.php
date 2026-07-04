@@ -213,38 +213,58 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
     }
 }
 
-// If the day is finalized but nobody has guessed yet, sync any fwordle_choices
-// that differ from fwordle_words (covers late picks made before this fix, and
-// any future race between the API write and the finalization).
+// If the day is finalized, sync any fwordle_choices that differ from
+// fwordle_words (covers late picks made before this fix, and any future race
+// between the API write and the finalization). Any player who chose a word
+// for today gets patched in — reusing a slot they already own, otherwise
+// claiming the lowest-numbered still-random (unclaimed) slot — regardless of
+// whether they solved yesterday.
 function fwordleSyncLateChoices(PDO $pdo, string $date): void
 {
     $dayStmt = $pdo->prepare("SELECT words_finalized FROM fwordle_days WHERE game_date = ?");
     $dayStmt->execute([$date]);
     if ((int) $dayStmt->fetchColumn() !== 1) return;
 
-    $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
+    $slotsStmt = $pdo->prepare("SELECT position, word, source, chooser_id FROM fwordle_words WHERE game_date = ? ORDER BY position");
+    $slotsStmt->execute([$date]);
+    $slots = [];
+    foreach ($slotsStmt->fetchAll(PDO::FETCH_ASSOC) as $s) {
+        $slots[(int) $s['position']] = $s;
+    }
 
-    $solverStmt = $pdo->prepare("
-        SELECT r.user_id, u.username FROM fwordle_results r
-        JOIN users u ON u.id = r.user_id
-        WHERE r.game_date = ? AND r.solved = 1
-        ORDER BY r.solved_at ASC
-        LIMIT " . FWORDLE_MAX_WORDS
-    );
-    $solverStmt->execute([$yesterday]);
-    $solverRows = $solverStmt->fetchAll(PDO::FETCH_ASSOC);
-    usort($solverRows, fn($a, $b) => fwordlePlayerRank($a['username']) <=> fwordlePlayerRank($b['username']));
+    $choicesStmt = $pdo->prepare("SELECT user_id, word, hint FROM fwordle_choices WHERE game_date = ?");
+    $choicesStmt->execute([$date]);
+    $choices = $choicesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $choiceStmt = $pdo->prepare("SELECT word, hint FROM fwordle_choices WHERE game_date = ? AND user_id = ?");
     $updateStmt = $pdo->prepare("UPDATE fwordle_words SET word = ?, hint = ?, source = 'chosen', chooser_id = ? WHERE game_date = ? AND position = ?");
 
-    foreach ($solverRows as $idx => $row) {
-        $uid = (int) $row['user_id'];
-        $choiceStmt->execute([$date, $uid]);
-        $choice = $choiceStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$choice) continue;
+    foreach ($choices as $choice) {
+        $uid  = (int) $choice['user_id'];
+        $word = strtolower($choice['word']);
+        $hint = $choice['hint'] ?? null;
 
-        $updateStmt->execute([$choice['word'], $choice['hint'] ?? null, $uid, $date, $idx]);
+        $ownPos = null;
+        foreach ($slots as $pos => $s) {
+            if ($s['chooser_id'] !== null && (int) $s['chooser_id'] === $uid) { $ownPos = $pos; break; }
+        }
+
+        if ($ownPos !== null) {
+            if (strtolower($slots[$ownPos]['word']) !== $word) {
+                $updateStmt->execute([$word, $hint, $uid, $date, $ownPos]);
+                $slots[$ownPos]['word'] = $word;
+            }
+            continue;
+        }
+
+        foreach ($slots as $pos => $s) {
+            if ($s['source'] === 'random') {
+                $updateStmt->execute([$word, $hint, $uid, $date, $pos]);
+                $slots[$pos]['source']     = 'chosen';
+                $slots[$pos]['chooser_id'] = $uid;
+                $slots[$pos]['word']       = $word;
+                break;
+            }
+        }
     }
 }
 
@@ -660,7 +680,6 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
 
     // Tomorrow's word pick (only once I've solved and earned a slot).
     $tomorrow  = date('Y-m-d', strtotime($date . ' +1 day'));
-    $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
     $choose = ['eligible' => false, 'already' => null, 'already_hint' => null, 'tomorrow_length' => null, 'suggestions' => [], 'for_today' => false];
     if (fwordleChoiceEligible($pdo, $date, $userId)) {
         // Normal: solved today -> pick for tomorrow.
@@ -675,8 +694,11 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $alreadyRow = $c->fetch(PDO::FETCH_ASSOC);
         $choose['already']      = $alreadyRow ? ($alreadyRow['word'] ?? null) : null;
         $choose['already_hint'] = $alreadyRow ? ($alreadyRow['hint'] ?? null) : null;
-    } elseif (fwordleChoiceEligible($pdo, $yesterday, $userId)) {
-        // Late pick: solved yesterday, today has no guesses yet -> still allow setting today's word.
+    } else {
+        // Late pick: today has no guesses yet -> allow setting today's word,
+        // whether or not this player solved yesterday. Any board slot that
+        // wasn't already claimed by a real pick (a random backfill) is still
+        // up for grabs — see the slot-claiming logic in fwordle-choose.php.
         $gStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_guesses WHERE game_date = ?");
         $gStmt->execute([$date]);
         if ((int) $gStmt->fetchColumn() === 0) {

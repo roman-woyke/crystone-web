@@ -1325,6 +1325,7 @@ main.container { max-width: 1280px; }
     let lastChooseSig = null;
     let choosePrompted = false; // popped the "you solved it!" modal already this pageview?
     let chooseModalDismissedOnce = false; // has the win popup been shown & closed yet this pageview?
+    let todayPickPrompted = false; // popped the "pick today's word" modal already this pageview?
 
     // Persist "already shown" across reloads (per browser, per today's date) so
     // the popup only ever fires once for a given solve — not again on every
@@ -1446,8 +1447,8 @@ main.container { max-width: 1280px; }
     // Pop up once ever per solve (persisted in localStorage, not just this
     // pageview) the moment the picker becomes available after a win — lets the
     // player choose without scrolling. Doesn't reopen on a refresh, and never
-    // fires for the "already picked" / for-today late-pick states (those just
-    // show inline at the bottom).
+    // fires for the "already picked" state or the for-today late-pick (that
+    // one gets its own immediate popup — see maybeOpenTodayPickModal below).
     const CHOOSE_MODAL_DELAY_MS = 1800; // let the win sink in before popping the picker up
     function maybeOpenChooseModal() {
         if (choosePrompted) return;
@@ -1464,6 +1465,21 @@ main.container { max-width: 1280px; }
                 // next poll fills it in.
                 renderChoose();
             }, CHOOSE_MODAL_DELAY_MS);
+        }
+    }
+    // Pop up immediately on page load (no delay, no "you solved it" fanfare)
+    // when the previous day wasn't solved by this player but a board slot is
+    // still up for grabs — as long as nobody (including this player) has made
+    // a guess yet today. Fires once per pageview; a fresh page load (e.g. next
+    // visit) can fire it again since it's tied to live state, not a one-time
+    // event like a solve.
+    function maybeOpenTodayPickModal() {
+        if (todayPickPrompted || choosePrompted) return;
+        const c = STATE.choose;
+        if (c && c.eligible && c.for_today && !c.already) {
+            todayPickPrompted = true;
+            openChooseModal();
+            renderChoose();
         }
     }
     chooseModalCloseEl.addEventListener("click", closeChooseModal);
@@ -1600,13 +1616,14 @@ main.container { max-width: 1280px; }
         renderOpponents();
         renderChoose();
         maybeOpenChooseModal();
+        maybeOpenTodayPickModal();
     }
 
     // ── Go ─────────────────────────────────────────────────────────────────
     buildKeyboard();
     renderAll();
 
-    setInterval(loadState, 6000);
+    setInterval(() => { if (!document.hidden) loadState(); }, 6000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) loadState(); });
     window.addEventListener("pageshow", e => { if (e.persisted) loadState(); });
 }());

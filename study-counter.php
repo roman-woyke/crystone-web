@@ -3973,8 +3973,11 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
     // Tick the studying chips locally every second; re-sync from the server
     // every 15s (covers other tabs and other users).
-    setInterval(() => { tickStudying(); tickTimeline(); renderFocusClock(); tickTitle(); }, 1000);
-    setInterval(loadStatus, 15000);
+    setInterval(() => {
+        if (document.hidden) return;
+        tickStudying(); tickTimeline(); renderFocusClock(); tickTitle();
+    }, 1000);
+    setInterval(() => { if (!document.hidden) loadStatus(); }, 15000);
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) loadStatus();
     });

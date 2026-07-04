@@ -12,11 +12,11 @@ if (!isset($_SESSION["user_id"])) {
 $userId    = (int) $_SESSION["user_id"];
 $date      = date("Y-m-d");
 $tomorrow  = date("Y-m-d", strtotime($date . " +1 day"));
-$yesterday = date("Y-m-d", strtotime($date . " -1 day"));
 
-// Late-pick: solved yesterday, today has no guesses yet -> allow setting today's word.
+// Late-pick: today has no guesses yet -> allow setting today's word, whether
+// or not this player solved yesterday.
 $pickingForToday = false;
-if (!fwordleChoiceEligible($pdo, $date, $userId) && fwordleChoiceEligible($pdo, $yesterday, $userId)) {
+if (!fwordleChoiceEligible($pdo, $date, $userId)) {
     $gStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_guesses WHERE game_date = ?");
     $gStmt->execute([$date]);
     if ((int) $gStmt->fetchColumn() === 0) {
@@ -55,28 +55,28 @@ $pdo->prepare("REPLACE INTO fwordle_choices (game_date, user_id, word, hint) VAL
     ->execute([$targetDate, $userId, $word, $hint]);
 
 // If today's words are already finalized, patch fwordle_words directly so the
-// live game sees the updated word before anyone guesses.
-// We look up the board position by player rank (not chooser_id) because the
-// slot may have been filled with a random backfill (chooser_id = NULL) if the
-// user hadn't picked a word before the day started.
+// live game sees the updated word before anyone guesses. Reuse a slot this
+// user already owns (changing an earlier late pick), otherwise claim the
+// lowest-numbered still-random (unclaimed) slot — this works whether or not
+// the player solved yesterday, since a random slot exists precisely when
+// nobody has claimed it yet.
 if ($pickingForToday && (int) $tday["words_finalized"] === 1) {
-    $solverStmt = $pdo->prepare("
-        SELECT r.user_id, u.username FROM fwordle_results r
-        JOIN users u ON u.id = r.user_id
-        WHERE r.game_date = ? AND r.solved = 1
-        ORDER BY r.solved_at ASC
-        LIMIT " . FWORDLE_MAX_WORDS
-    );
-    $solverStmt->execute([$yesterday]);
-    $solverRows = $solverStmt->fetchAll(PDO::FETCH_ASSOC);
-    usort($solverRows, fn($a, $b) => fwordlePlayerRank($a['username']) <=> fwordlePlayerRank($b['username']));
-    $userPos = null;
-    foreach ($solverRows as $idx => $row) {
-        if ((int) $row['user_id'] === $userId) { $userPos = $idx; break; }
+    $slotsStmt = $pdo->prepare("SELECT position, source, chooser_id FROM fwordle_words WHERE game_date = ? ORDER BY position");
+    $slotsStmt->execute([$date]);
+    $slots = $slotsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $targetPos = null;
+    foreach ($slots as $s) {
+        if ($s['chooser_id'] !== null && (int) $s['chooser_id'] === $userId) { $targetPos = (int) $s['position']; break; }
     }
-    if ($userPos !== null) {
+    if ($targetPos === null) {
+        foreach ($slots as $s) {
+            if ($s['source'] === 'random') { $targetPos = (int) $s['position']; break; }
+        }
+    }
+    if ($targetPos !== null) {
         $pdo->prepare("UPDATE fwordle_words SET word = ?, hint = ?, source = 'chosen', chooser_id = ? WHERE game_date = ? AND position = ?")
-            ->execute([$word, $hint, $userId, $date, $userPos]);
+            ->execute([$word, $hint, $userId, $date, $targetPos]);
     }
 }
 

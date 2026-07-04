@@ -12,12 +12,11 @@ if (!isset($_SESSION["user_id"])) {
 $userId    = (int) $_SESSION["user_id"];
 $date      = date("Y-m-d");
 $tomorrow  = date("Y-m-d", strtotime($date . " +1 day"));
-$yesterday = date("Y-m-d", strtotime($date . " -1 day"));
 
 // Mirror fwordle-choose.php's eligibility so the length matches the day the
 // picker is actually setting a word for.
 $pickingForToday = false;
-if (!fwordleChoiceEligible($pdo, $date, $userId) && fwordleChoiceEligible($pdo, $yesterday, $userId)) {
+if (!fwordleChoiceEligible($pdo, $date, $userId)) {
     $gStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_guesses WHERE game_date = ?");
     $gStmt->execute([$date]);
     if ((int) $gStmt->fetchColumn() === 0) {
