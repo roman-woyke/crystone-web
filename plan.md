@@ -35,7 +35,7 @@
 │   │   ├── study/page.tsx
 │   │   ├── calendar/page.tsx
 │   │   ├── projects/page.tsx
-│   │   └── fwordle/page.tsx
+│   │   └── boardle/page.tsx
 │   ├── api/
 │   │   ├── auth/[...nextauth]/route.ts
 │   │   ├── applications/route.ts        (GET, POST)
@@ -52,10 +52,10 @@
 │   │   ├── time-entries/[id]/route.ts
 │   │   ├── exams/toggle/route.ts
 │   │   ├── avatar/route.ts
-│   │   ├── fwordle/state/route.ts
-│   │   ├── fwordle/guess/route.ts
-│   │   ├── fwordle/choose/route.ts
-│   │   └── fwordle/hint/route.ts
+│   │   ├── boardle/state/route.ts
+│   │   ├── boardle/guess/route.ts
+│   │   ├── boardle/choose/route.ts
+│   │   └── boardle/hint/route.ts
 │   └── page.tsx                ← Landing Page (index.php)
 ├── components/
 │   ├── ui/                     ← shadcn/ui Komponenten (auto-generiert)
@@ -66,17 +66,17 @@
 │   ├── leaderboard/
 │   ├── study/
 │   ├── projects/
-│   └── fwordle/
+│   └── boardle/
 ├── lib/
 │   ├── prisma.ts               ← Prisma Client Singleton
 │   ├── auth.ts                 ← Auth.js Konfiguration
 │   ├── scoring.ts              ← scorePoints() in TypeScript
-│   └── fwordle.ts              ← fWordle Logik portiert
+│   └── boardle.ts              ← Boardle Logik portiert
 ├── prisma/
 │   └── schema.prisma           ← Alle Tabellen aus README.md
 ├── public/
 │   └── (Favicons, Icons)
-└── includes/fwordle/           ← Wortlisten bleiben als .txt Dateien
+└── includes/boardle/           ← Wortlisten bleiben als .txt Dateien
 ```
 
 ---
@@ -246,33 +246,33 @@ Next.js Server Components + `async/await` in der Page-Komponente ersetzt — kei
 
 ---
 
-## Phase 6 — fWordle
+## Phase 6 — Boardle
 
-**Ziel:** fWordle vollständig portiert. (Komplexeste Phase — zuletzt.)
+**Ziel:** Boardle vollständig portiert. (Komplexeste Phase — zuletzt.)
 
 ### 6.1 Logik portieren
 
-`lib/fwordle.ts`:
-- `fwordleScore()` — Guess-Scoring
-- `fwordleRollLength()` — Tages-Länge bestimmen
-- `fwordleFinalizeWords()` — Antworten festlegen
-- `fwordleStreakInfo()` — Streak + Freezes berechnen
-- `fwordleState()` — vollständiger State für einen User
-- `fwordleIsValidWord()` — Wortlisten lazy laden (fs.readFileSync in Route Handler)
+`lib/boardle.ts`:
+- `boardleScore()` — Guess-Scoring
+- `boardleRollLength()` — Tages-Länge bestimmen
+- `boardleFinalizeWords()` — Antworten festlegen
+- `boardleStreakInfo()` — Streak + Freezes berechnen
+- `boardleState()` — vollständiger State für einen User
+- `boardleIsValidWord()` — Wortlisten lazy laden (fs.readFileSync in Route Handler)
 
-Wortlisten (`includes/fwordle/*.txt`) können direkt bleiben, werden per `fs` gelesen.
+Wortlisten (`includes/boardle/*.txt`) können direkt bleiben, werden per `fs` gelesen.
 
 ### 6.2 API Routes
 
-- `GET /api/fwordle/state`
-- `POST /api/fwordle/guess`
-- `POST /api/fwordle/choose`
-- `POST /api/fwordle/hint`
+- `GET /api/boardle/state`
+- `POST /api/boardle/guess`
+- `POST /api/boardle/choose`
+- `POST /api/boardle/hint`
 
 ### 6.3 UI
 
-- `FwordleBoard.tsx` — Board-Grid mit Zellen-Animationen
-- `FwordleKeyboard.tsx` — On-Screen Keyboard mit Board-Switcher
+- `BoardleBoard.tsx` — Board-Grid mit Zellen-Animationen
+- `BoardleKeyboard.tsx` — On-Screen Keyboard mit Board-Switcher
 - `JokerBar.tsx` — Joker-Buttons + Streak/Freeze Wallets
 - Polling alle 6s via SWR
 
@@ -293,7 +293,7 @@ Wortlisten (`includes/fwordle/*.txt`) können direkt bleiben, werden per `fs` ge
 | PHP bcrypt-Hashes | `bcryptjs.compare()` ist kompatibel — kein Passwort-Reset nötig |
 | BASE_PATH | Entfällt komplett — Next.js Routing übernimmt das |
 | `config.php` außerhalb Web-Root | Wird zu Vercel Environment Variables |
-| fWordle Wortlisten (.txt) | Per `fs.readFileSync` in Route Handlers lesen |
+| Boardle Wortlisten (.txt) | Per `fs.readFileSync` in Route Handlers lesen |
 | Avatar als base64 MEDIUMTEXT | Prisma `@db.MediumText` — bleibt identisch |
 | Scoring `peakStatusSql()` | In TypeScript als JS-Funktion über History-Array statt Raw SQL |
 | `session_start` Fallback (created_at - seconds) | In TypeScript-Helper kapseln |
@@ -308,7 +308,7 @@ Phase 2 → Login / Dashboard (MVP, nutzbar)
 Phase 3 → Leaderboard + Avatare
 Phase 4 → Study Counter
 Phase 5 → Calendar + Projects
-Phase 6 → fWordle
+Phase 6 → Boardle
 Phase 7 → Landing Page + PHP löschen
 ```
 

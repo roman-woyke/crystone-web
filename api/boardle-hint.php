@@ -2,7 +2,7 @@
 
 require_once __DIR__ . "/../includes/start-session.php";
 require_once __DIR__ . "/../../config.php";
-require_once __DIR__ . "/../includes/fwordle.php";
+require_once __DIR__ . "/../includes/boardle.php";
 
 if (!isset($_SESSION["user_id"])) {
     http_response_code(401);
@@ -20,11 +20,11 @@ if (!in_array($type, ["armor", "orange", "green"], true)) {
     exit("Bad joker type.");
 }
 
-fwordleEnsureDay($pdo, $date);
-fwordleFinalizeWords($pdo, $date);
+boardleEnsureDay($pdo, $date);
+boardleFinalizeWords($pdo, $date);
 
 // Done for the day? No more jokers.
-$rStmt = $pdo->prepare("SELECT finished FROM fwordle_results WHERE game_date = ? AND user_id = ?");
+$rStmt = $pdo->prepare("SELECT finished FROM boardle_results WHERE game_date = ? AND user_id = ?");
 $rStmt->execute([$date, $userId]);
 if ((int) $rStmt->fetchColumn() === 1) {
     http_response_code(409);
@@ -32,7 +32,7 @@ if ((int) $rStmt->fetchColumn() === 1) {
 }
 
 // Each joker is once per day.
-$hStmt = $pdo->prepare("SELECT type FROM fwordle_hints WHERE game_date = ? AND user_id = ? AND type = ?");
+$hStmt = $pdo->prepare("SELECT type FROM boardle_hints WHERE game_date = ? AND user_id = ? AND type = ?");
 $hStmt->execute([$date, $userId, $type]);
 if ($hStmt->fetchColumn() !== false) {
     http_response_code(409);
@@ -43,8 +43,8 @@ if ($hStmt->fetchColumn() !== false) {
 // day (their first), and a freeze can be exchanged for a joker (no daily limit).
 // The client may request `pay=freeze`; we also fall back to a freeze when there's
 // no streak left to spend. `$viaFreeze` records which.
-$info = fwordleStreakInfo($pdo, $date, $userId);
-$usedStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_hints WHERE game_date = ? AND user_id = ?");
+$info = boardleStreakInfo($pdo, $date, $userId);
+$usedStmt = $pdo->prepare("SELECT COUNT(*) FROM boardle_hints WHERE game_date = ? AND user_id = ?");
 $usedStmt->execute([$date, $userId]);
 $usedToday = (int) $usedStmt->fetchColumn();
 
@@ -73,7 +73,7 @@ if ($wantFreeze) {
 if ($type === "armor") {
     try {
         $pdo->prepare("
-            INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload, via_freeze)
+            INSERT INTO boardle_hints (game_date, user_id, board_pos, type, payload, via_freeze)
             VALUES (?, ?, NULL, 'armor', '1', ?)
         ")->execute([$date, $userId, $viaFreeze]);
     } catch (Throwable $e) {
@@ -81,12 +81,12 @@ if ($type === "armor") {
         exit("Joker conflict — reload and try again.");
     }
     header("Content-Type: application/json");
-    echo json_encode(fwordleState($pdo, $date, $userId));
+    echo json_encode(boardleState($pdo, $date, $userId));
     exit;
 }
 
 // ── Board jokers (orange / green) ──
-$aStmt = $pdo->prepare("SELECT position, word, chooser_id FROM fwordle_words WHERE game_date = ? ORDER BY position");
+$aStmt = $pdo->prepare("SELECT position, word, chooser_id FROM boardle_words WHERE game_date = ? ORDER BY position");
 $aStmt->execute([$date]);
 $answers = [];
 $chooser = [];
@@ -107,11 +107,11 @@ if ($chooser[$board] === $userId) {
 }
 
 // My guesses so far (to avoid revealing anything I already know).
-$gStmt = $pdo->prepare("SELECT guess FROM fwordle_guesses WHERE game_date = ? AND user_id = ? ORDER BY guess_index");
+$gStmt = $pdo->prepare("SELECT guess FROM boardle_guesses WHERE game_date = ? AND user_id = ? ORDER BY guess_index");
 $gStmt->execute([$date, $userId]);
 $myGuesses = $gStmt->fetchAll(PDO::FETCH_COLUMN);
 
-$payload = fwordleComputeHint($answers[$board], $myGuesses, $type);
+$payload = boardleComputeHint($answers[$board], $myGuesses, $type);
 if ($payload === null) {
     http_response_code(422);
     exit("Nothing new to reveal there.");
@@ -119,7 +119,7 @@ if ($payload === null) {
 
 try {
     $pdo->prepare("
-        INSERT INTO fwordle_hints (game_date, user_id, board_pos, type, payload, via_freeze)
+        INSERT INTO boardle_hints (game_date, user_id, board_pos, type, payload, via_freeze)
         VALUES (?, ?, ?, ?, ?, ?)
     ")->execute([$date, $userId, $board, $type, $payload, $viaFreeze]);
 } catch (Throwable $e) {
@@ -128,4 +128,4 @@ try {
 }
 
 header("Content-Type: application/json");
-echo json_encode(fwordleState($pdo, $date, $userId));
+echo json_encode(boardleState($pdo, $date, $userId));

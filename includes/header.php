@@ -52,7 +52,7 @@
         "leaderboard.php" => "Leaderboard",
         "calendar.php"    => "Calendar",
         "study-counter.php" => "Study Counter",
-        "fwordle.php"     => "Boardle",
+        "boardle.php"     => "Boardle",
         "projects.php"    => "Projects",
     ];
 ?>

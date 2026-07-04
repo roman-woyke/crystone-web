@@ -1,6 +1,6 @@
-# Internship Leaderboard
+# crystone-web
 
-A shared leaderboard for tracking internship applications with friends.
+A shared study/friend-group site: study time tracking, a daily multiplayer word game (Boardle), a project time tracker, an exam calendar, and the original internship-application leaderboard.
 
 ---
 
@@ -166,13 +166,13 @@ CREATE TABLE project_time_entries (
     logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- fWordle (fwordle.php): a daily multi-board, multiplayer Wordle. One puzzle a
+-- Boardle (boardle.php): a daily multi-board, multiplayer Wordle. One puzzle a
 -- day; N boards (1–4) all of the same length L. The word lists live as bundled
--- text files in includes/fwordle/, NOT in the DB.
+-- text files in includes/boardle/, NOT in the DB.
 
 -- One row per calendar day: the day's word length + whether its answer words
 -- have been finalized. Length is rolled when the row is first created.
-CREATE TABLE fwordle_days (
+CREATE TABLE boardle_days (
     game_date       DATE NOT NULL PRIMARY KEY,
     word_length     TINYINT UNSIGNED NOT NULL,
     words_finalized TINYINT NOT NULL DEFAULT 0,
@@ -181,7 +181,7 @@ CREATE TABLE fwordle_days (
 
 -- The answer words for each day (1–4), one row per board position.
 -- source = 'chosen' (a prior-day solver picked it) or 'random' (backfilled).
-CREATE TABLE fwordle_words (
+CREATE TABLE boardle_words (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     game_date  DATE NOT NULL,
     position   TINYINT UNSIGNED NOT NULL,
@@ -192,8 +192,8 @@ CREATE TABLE fwordle_words (
 );
 
 -- A solver's chosen word for the NEXT day. game_date is the date the word is
--- FOR; user_id is the chooser. Folded into fwordle_words when that day arrives.
-CREATE TABLE fwordle_choices (
+-- FOR; user_id is the chooser. Folded into boardle_words when that day arrives.
+CREATE TABLE boardle_choices (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     word       VARCHAR(10) NOT NULL,
@@ -203,7 +203,7 @@ CREATE TABLE fwordle_choices (
 
 -- Per user, per day outcome. solved_at orders who earns choice rights
 -- (first 4 solvers). finished locks the board (win or out of guesses).
-CREATE TABLE fwordle_results (
+CREATE TABLE boardle_results (
     game_date    DATE NOT NULL,
     user_id      INT NOT NULL REFERENCES users(id),
     finished     TINYINT NOT NULL DEFAULT 0,
@@ -217,7 +217,7 @@ CREATE TABLE fwordle_results (
 -- Each guess a user has made today (shared across all boards), in order. The
 -- guess is stored as an L-wide string with '_' for unused cells (e.g.
 -- '__HELLO___'), encoding both the word and where it was positioned.
-CREATE TABLE fwordle_guesses (
+CREATE TABLE boardle_guesses (
     game_date   DATE NOT NULL,
     user_id     INT NOT NULL REFERENCES users(id),
     guess_index TINYINT UNSIGNED NOT NULL,
@@ -234,7 +234,7 @@ CREATE TABLE fwordle_guesses (
 -- PK enforces one-of-each-type per day; armor/orange/green may share a board.
 -- via_freeze = 1 when the joker was bought by exchanging a streak freeze
 -- (once/day) instead of paying a streak.
-CREATE TABLE fwordle_hints (
+CREATE TABLE boardle_hints (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     type       ENUM('armor','orange','green') NOT NULL,
@@ -249,24 +249,37 @@ CREATE TABLE fwordle_hints (
 > **Streak freezes** are not a table — everyone starts with 3, earns +3 per 7
 > days of streak, and a freeze auto-bridges a missed day (or is exchanged for a
 > joker once/day). The balance is **derived** by replaying solved days +
-> `fwordle_hints.via_freeze`, so the only persisted state is that column.
+> `boardle_hints.via_freeze`, so the only persisted state is that column.
 
 > **Deploy note:** run the corresponding `CREATE TABLE` on the database
 > **before** pushing code that uses a new table, otherwise pages hitting it
 > will 500.
 >
-> **fwordle_hints migration:** the joker rework changed this table (new `type`
+> **fwordle → boardle rename migration:** the game was renamed from fWordle to
+> Boardle; the code now queries `boardle_*` tables, so the existing
+> `fwordle_*` tables on the shared DB must be renamed **before** this code is
+> deployed, otherwise every Boardle page/API call will 500:
+> ```sql
+> RENAME TABLE fwordle_days     TO boardle_days,
+>              fwordle_words    TO boardle_words,
+>              fwordle_choices  TO boardle_choices,
+>              fwordle_results  TO boardle_results,
+>              fwordle_guesses  TO boardle_guesses,
+>              fwordle_hints    TO boardle_hints;
+> ```
+>
+> **boardle_hints migration:** the joker rework changed this table (new `type`
 > enum, nullable `board_pos`, new PK). Jokers are throwaway daily state, so the
 > simplest migration is to recreate it:
 > ```sql
-> DROP TABLE IF EXISTS fwordle_hints;
+> DROP TABLE IF EXISTS boardle_hints;
 > -- then run the CREATE TABLE above
 > ```
 >
-> **fwordle_hints.via_freeze migration:** streak freezes can be exchanged for
+> **boardle_hints.via_freeze migration:** streak freezes can be exchanged for
 > jokers, recorded on the hint row:
 > ```sql
-> ALTER TABLE fwordle_hints ADD COLUMN via_freeze TINYINT NOT NULL DEFAULT 0;
+> ALTER TABLE boardle_hints ADD COLUMN via_freeze TINYINT NOT NULL DEFAULT 0;
 > ```
 >
 > **study_segments migration:** the "I'm studying" session can now be split
@@ -320,9 +333,9 @@ public_html/               ← web root = this repo
 │   ├── delete-project.php      ← project tracker: delete a project (cascades entries)
 │   ├── delete-study-session.php ← study counter: delete one of my logged sessions
 │   ├── delete-time-entry.php   ← project tracker: remove a single logged session
-│   ├── fwordle-choose.php      ← fWordle: set one of tomorrow's words (solver-only)
-│   ├── fwordle-guess.php       ← fWordle: submit a guess (validated + scored server-side)
-│   ├── fwordle-state.php       ← fWordle: full game state (mine + opponents' colors)
+│   ├── boardle-choose.php      ← Boardle: set one of tomorrow's words (solver-only)
+│   ├── boardle-guess.php       ← Boardle: submit a guess (validated + scored server-side)
+│   ├── boardle-state.php       ← Boardle: full game state (mine + opponents' colors)
 │   ├── get-leaderboard.php
 │   ├── get-my-study-sessions.php ← study counter: my logged sessions (manage window)
 │   ├── get-raw-events.php
@@ -340,8 +353,8 @@ public_html/               ← web root = this repo
 │   ├── css/style.css      ← design tokens + shared glass components
 │   └── js/app.js          ← mobile nav toggle + countUp helper
 ├── includes/
-│   ├── fwordle/           ← fWordle word data: dict-<5..10>.txt (validation) + answers-<5..10>.txt (answer pool)
-│   ├── fwordle.php        ← fWordle: length roll, day lifecycle, scoring, state payload
+│   ├── boardle/           ← Boardle word data: dict-<5..10>.txt (validation) + answers-<5..10>.txt (answer pool)
+│   ├── boardle.php        ← Boardle: length roll, day lifecycle, scoring, state payload
 │   ├── footer.php
 │   ├── header.php         ← brand, conditional nav, fonts, background orbs
 │   ├── scoring.php        ← shared scoring logic + SQL helpers
@@ -350,7 +363,7 @@ public_html/               ← web root = this repo
 │   └── study-status.php   ← shared "currently studying" payload helper
 ├── calendar.php           ← shared exam calendar (July 2026)
 ├── dashboard.php          ← main app page (add/edit/delete applications)
-├── fwordle.php            ← daily multi-board multiplayer Wordle
+├── boardle.php            ← daily multi-board multiplayer Wordle
 ├── index.php              ← redirects root visitors to the dashboard / login
 ├── leaderboard.php        ← public leaderboard page
 ├── login.php

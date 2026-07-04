@@ -1,6 +1,6 @@
 <?php
 
-// Shared helpers for fWordle — a daily, multi-board, multiplayer Wordle.
+// Shared helpers for Boardle — a daily, multi-board, multiplayer Wordle.
 //
 // Each calendar day has ONE puzzle: N boards (1–4), all the SAME length L
 // (rolled per day, weighted toward shorter words). One guess is scored against
@@ -13,44 +13,44 @@
 // the right to pick one of the next day's words (suggested or custom); unfilled
 // slots are backfilled at random.
 //
-// Word data lives in includes/fwordle/ as plain text (bundled, not in the DB):
+// Word data lives in includes/boardle/ as plain text (bundled, not in the DB):
 //   dict-<len>.txt    — SOWPODS Scrabble words, the *guess validation* list
 //   answers-<len>.txt — common words ∩ SOWPODS, the *answer / suggestion* pool
 
-const FWORDLE_MAX_WORDS = 4;
-const FWORDLE_MIN_LEN   = 5;
-const FWORDLE_MAX_LEN   = 10;
+const BOARDLE_MAX_WORDS = 4;
+const BOARDLE_MIN_LEN   = 5;
+const BOARDLE_MAX_LEN   = 10;
 
 // Streak freezes: everyone starts with 3; a missed day is auto-bridged by a
-// freeze (so the streak survives) when one is available; FWORDLE_FREEZE_PER_WEEK
+// freeze (so the streak survives) when one is available; BOARDLE_FREEZE_PER_WEEK
 // are earned for every 7 days of streak. A freeze can also be exchanged for a
 // joker once per day.
-const FWORDLE_FREEZE_START    = 3;
-const FWORDLE_FREEZE_PER_WEEK = 3;
+const BOARDLE_FREEZE_START    = 3;
+const BOARDLE_FREEZE_PER_WEEK = 3;
 
 // Shared guesses for a day: 6 for 1 board, +1 per extra board → 6/7/8/9 for
 // 1–4 boards. The 4-board default is 9, like a cat's nine lives: each globally
 // lost board (a failed player) costs a life the next day. Length-independent.
-function fwordleMaxGuesses(int $numBoards, int $length): int
+function boardleMaxGuesses(int $numBoards, int $length): int
 {
     return 5 + $numBoards;
 }
 
 // ── Word lists ─────────────────────────────────────────────────────────────
 
-function fwordleDictPath(int $len): string    { return __DIR__ . "/fwordle/dict-$len.txt"; }
-function fwordleAnswersPath(int $len): string { return __DIR__ . "/fwordle/answers-$len.txt"; }
+function boardleDictPath(int $len): string    { return __DIR__ . "/boardle/dict-$len.txt"; }
+function boardleAnswersPath(int $len): string { return __DIR__ . "/boardle/answers-$len.txt"; }
 
 // Validate a guess word against the Scrabble dictionary for its length.
-function fwordleIsValidWord(string $word, int $len): bool
+function boardleIsValidWord(string $word, int $len): bool
 {
     $word = strtolower($word);
-    if ($len < FWORDLE_MIN_LEN || $len > FWORDLE_MAX_LEN) return false;
+    if ($len < BOARDLE_MIN_LEN || $len > BOARDLE_MAX_LEN) return false;
     if (strlen($word) !== $len || !preg_match('/^[a-z]+$/', $word)) return false;
 
     static $cache = [];
     if (!isset($cache[$len])) {
-        $path = fwordleDictPath($len);
+        $path = boardleDictPath($len);
         $cache[$len] = is_file($path)
             ? array_flip(array_map('trim', file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)))
             : [];
@@ -58,11 +58,11 @@ function fwordleIsValidWord(string $word, int $len): bool
     return isset($cache[$len][$word]);
 }
 
-function fwordleAnswerPool(int $len): array
+function boardleAnswerPool(int $len): array
 {
     static $cache = [];
     if (!isset($cache[$len])) {
-        $path = fwordleAnswersPath($len);
+        $path = boardleAnswersPath($len);
         $cache[$len] = is_file($path)
             ? array_values(array_filter(array_map('trim', file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))))
             : [];
@@ -71,9 +71,9 @@ function fwordleAnswerPool(int $len): array
 }
 
 // A random answer of the given length, avoiding the supplied words.
-function fwordleRandomAnswer(int $len, array $exclude = []): ?string
+function boardleRandomAnswer(int $len, array $exclude = []): ?string
 {
-    $pool = fwordleAnswerPool($len);
+    $pool = boardleAnswerPool($len);
     if (!$pool) return null;
     $exclude = array_map('strtolower', $exclude);
     $shuffled = $pool;
@@ -86,9 +86,9 @@ function fwordleRandomAnswer(int $len, array $exclude = []): ?string
 
 // Three stable per-user suggestions of the given length (don't reshuffle on
 // every poll — ordered deterministically by a per-user/day hash).
-function fwordleSuggestions(int $len, int $userId, string $forDate, int $count = 3): array
+function boardleSuggestions(int $len, int $userId, string $forDate, int $count = 3): array
 {
-    $pool = array_values(array_unique(fwordleAnswerPool($len)));
+    $pool = array_values(array_unique(boardleAnswerPool($len)));
     if (!$pool) return [];
     $seed = $userId . '|' . $forDate;
     usort($pool, fn($a, $b) => strcmp(md5($a . $seed), md5($b . $seed)));
@@ -96,11 +96,11 @@ function fwordleSuggestions(int $len, int $userId, string $forDate, int $count =
 }
 
 // A fresh, non-deterministic set of suggestions of the given length — backs the
-// "randomize" button in the word picker (unlike fwordleSuggestions, which stays
+// "randomize" button in the word picker (unlike boardleSuggestions, which stays
 // stable across polls).
-function fwordleRandomSuggestions(int $len, int $count = 3): array
+function boardleRandomSuggestions(int $len, int $count = 3): array
 {
-    $pool = array_values(array_unique(fwordleAnswerPool($len)));
+    $pool = array_values(array_unique(boardleAnswerPool($len)));
     if (!$pool) return [];
     shuffle($pool);
     return array_slice($pool, 0, min($count, count($pool)));
@@ -109,7 +109,7 @@ function fwordleRandomSuggestions(int $len, int $count = 3): array
 // ── Day length + lifecycle ───────────────────────────────────────────────────
 
 // Weighted random length: 5→30%, 6→30%, 7→20%, 8→10%, 9→5%, 10→5%.
-function fwordleRollLength(): int
+function boardleRollLength(): int
 {
     $weights = [5 => 30, 6 => 30, 7 => 20, 8 => 10, 9 => 5, 10 => 5];
     $r = mt_rand(1, 100);
@@ -118,19 +118,19 @@ function fwordleRollLength(): int
         $cum += $w;
         if ($r <= $cum) return $len;
     }
-    return FWORDLE_MIN_LEN;
+    return BOARDLE_MIN_LEN;
 }
 
 // Fetch the day row, creating it (with a freshly rolled length) if absent.
-function fwordleEnsureDay(PDO $pdo, string $date): array
+function boardleEnsureDay(PDO $pdo, string $date): array
 {
-    $stmt = $pdo->prepare("SELECT game_date, word_length, words_finalized FROM fwordle_days WHERE game_date = ?");
+    $stmt = $pdo->prepare("SELECT game_date, word_length, words_finalized FROM boardle_days WHERE game_date = ?");
     $stmt->execute([$date]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($row) return $row;
 
-    $pdo->prepare("INSERT IGNORE INTO fwordle_days (game_date, word_length, words_finalized) VALUES (?, ?, 0)")
-        ->execute([$date, fwordleRollLength()]);
+    $pdo->prepare("INSERT IGNORE INTO boardle_days (game_date, word_length, words_finalized) VALUES (?, ?, 0)")
+        ->execute([$date, boardleRollLength()]);
 
     $stmt->execute([$date]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
@@ -141,36 +141,36 @@ function fwordleEnsureDay(PDO $pdo, string $date): array
 // previous day (floored at 1); players who didn't play don't count. Each
 // previous-day solver fills a slot with their chosen word (else random
 // backfill) and owns it; any remaining slots are random. Idempotent + race-safe.
-function fwordleFinalizeWords(PDO $pdo, string $date): void
+function boardleFinalizeWords(PDO $pdo, string $date): void
 {
-    $day = fwordleEnsureDay($pdo, $date);
+    $day = boardleEnsureDay($pdo, $date);
     if ((int) $day['words_finalized'] === 1) return;
     if ($date > date('Y-m-d')) return; // future days keep collecting choices
 
     $len  = (int) $day['word_length'];
     $prev = date('Y-m-d', strtotime($date . ' -1 day'));
 
-    // Always a fixed FWORDLE_MAX_WORDS boards — failing to solve carries enough
+    // Always a fixed BOARDLE_MAX_WORDS boards — failing to solve carries enough
     // intrinsic penalty (no word pick, lost streak) without also shrinking the grid.
-    $numBoards = FWORDLE_MAX_WORDS;
+    $numBoards = BOARDLE_MAX_WORDS;
 
     // Solvers each get a slot to fill + own. Boards are ordered by a FIXED player
     // rank (roman/ben/basti/lorenz), not solve time, so the numbering is stable.
     $solverStmt = $pdo->prepare("
-        SELECT r.user_id, u.username FROM fwordle_results r
+        SELECT r.user_id, u.username FROM boardle_results r
         JOIN users u ON u.id = r.user_id
         WHERE r.game_date = ? AND r.solved = 1
         ORDER BY r.solved_at ASC
-        LIMIT " . FWORDLE_MAX_WORDS
+        LIMIT " . BOARDLE_MAX_WORDS
     );
     $solverStmt->execute([$prev]);
     $solverRows = $solverStmt->fetchAll(PDO::FETCH_ASSOC);
-    usort($solverRows, fn($a, $b) => fwordlePlayerRank($a['username']) <=> fwordlePlayerRank($b['username']));
+    usort($solverRows, fn($a, $b) => boardlePlayerRank($a['username']) <=> boardlePlayerRank($b['username']));
     $slotUsers = array_map(fn($r) => (int) $r['user_id'], $solverRows);
 
     $words = []; // [word, source, chooser_id, hint]
     $used  = [];
-    $choiceStmt = $pdo->prepare("SELECT word, hint FROM fwordle_choices WHERE game_date = ? AND user_id = ?");
+    $choiceStmt = $pdo->prepare("SELECT word, hint FROM boardle_choices WHERE game_date = ? AND user_id = ?");
 
     for ($pos = 0; $pos < $numBoards; $pos++) {
         $uid = $slotUsers[$pos] ?? null;
@@ -181,13 +181,13 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
             $chosenHint = $choiceRow ? ($choiceRow['hint'] ?? null) : null;
             // Keep a valid chosen word as-is — duplicates between players are
             // allowed (two boards may share a word); only random backfill dedupes.
-            if ($chosen !== null && fwordleIsValidWord($chosen, $len)) {
+            if ($chosen !== null && boardleIsValidWord($chosen, $len)) {
                 $used[] = $chosen;
                 $words[] = [$chosen, 'chosen', $uid, $chosenHint];
                 continue;
             }
         }
-        $w = fwordleRandomAnswer($len, $used);
+        $w = boardleRandomAnswer($len, $used);
         if ($w === null) continue;
         $used[] = $w;
         $words[] = [$w, 'random', null, null];
@@ -195,48 +195,48 @@ function fwordleFinalizeWords(PDO $pdo, string $date): void
 
     $pdo->beginTransaction();
     try {
-        $chk = $pdo->prepare("SELECT words_finalized FROM fwordle_days WHERE game_date = ? FOR UPDATE");
+        $chk = $pdo->prepare("SELECT words_finalized FROM boardle_days WHERE game_date = ? FOR UPDATE");
         $chk->execute([$date]);
         if ((int) $chk->fetchColumn() === 1) { $pdo->commit(); return; }
 
         $ins = $pdo->prepare("
-            INSERT INTO fwordle_words (game_date, position, word, source, chooser_id, hint)
+            INSERT INTO boardle_words (game_date, position, word, source, chooser_id, hint)
             VALUES (?, ?, ?, ?, ?, ?)
         ");
         foreach ($words as $pos => [$w, $src, $cid, $hint]) {
             $ins->execute([$date, $pos, $w, $src, $cid, $hint]);
         }
-        $pdo->prepare("UPDATE fwordle_days SET words_finalized = 1 WHERE game_date = ?")->execute([$date]);
+        $pdo->prepare("UPDATE boardle_days SET words_finalized = 1 WHERE game_date = ?")->execute([$date]);
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
     }
 }
 
-// If the day is finalized, sync any fwordle_choices that differ from
-// fwordle_words (covers late picks made before this fix, and any future race
+// If the day is finalized, sync any boardle_choices that differ from
+// boardle_words (covers late picks made before this fix, and any future race
 // between the API write and the finalization). Any player who chose a word
 // for today gets patched in — reusing a slot they already own, otherwise
 // claiming the lowest-numbered still-random (unclaimed) slot — regardless of
 // whether they solved yesterday.
-function fwordleSyncLateChoices(PDO $pdo, string $date): void
+function boardleSyncLateChoices(PDO $pdo, string $date): void
 {
-    $dayStmt = $pdo->prepare("SELECT words_finalized FROM fwordle_days WHERE game_date = ?");
+    $dayStmt = $pdo->prepare("SELECT words_finalized FROM boardle_days WHERE game_date = ?");
     $dayStmt->execute([$date]);
     if ((int) $dayStmt->fetchColumn() !== 1) return;
 
-    $slotsStmt = $pdo->prepare("SELECT position, word, source, chooser_id FROM fwordle_words WHERE game_date = ? ORDER BY position");
+    $slotsStmt = $pdo->prepare("SELECT position, word, source, chooser_id FROM boardle_words WHERE game_date = ? ORDER BY position");
     $slotsStmt->execute([$date]);
     $slots = [];
     foreach ($slotsStmt->fetchAll(PDO::FETCH_ASSOC) as $s) {
         $slots[(int) $s['position']] = $s;
     }
 
-    $choicesStmt = $pdo->prepare("SELECT user_id, word, hint FROM fwordle_choices WHERE game_date = ?");
+    $choicesStmt = $pdo->prepare("SELECT user_id, word, hint FROM boardle_choices WHERE game_date = ?");
     $choicesStmt->execute([$date]);
     $choices = $choicesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $updateStmt = $pdo->prepare("UPDATE fwordle_words SET word = ?, hint = ?, source = 'chosen', chooser_id = ? WHERE game_date = ? AND position = ?");
+    $updateStmt = $pdo->prepare("UPDATE boardle_words SET word = ?, hint = ?, source = 'chosen', chooser_id = ? WHERE game_date = ? AND position = ?");
 
     foreach ($choices as $choice) {
         $uid  = (int) $choice['user_id'];
@@ -273,7 +273,7 @@ function fwordleSyncLateChoices(PDO $pdo, string $date): void
 // Score a guess string (L chars, '_' = blank/unused cell) against an answer.
 // Returns L entries of 'green' | 'orange' | 'grey' | 'empty', with standard
 // Wordle letter-multiplicity handling (greens claimed first).
-function fwordleScore(string $answer, string $guess): array
+function boardleScore(string $answer, string $guess): array
 {
     $answer = strtolower($answer);
     $guess  = strtolower($guess);
@@ -305,7 +305,7 @@ function fwordleScore(string $answer, string $guess): array
 // Replay a user's guesses across all boards. `$owned` are board positions the
 // user picked the word for — those count as solved without guessing (they
 // already know the word), so they don't block the win.
-function fwordleUserBoards(array $guesses, array $answers, array $owned = []): array
+function boardleUserBoards(array $guesses, array $answers, array $owned = []): array
 {
     $num = count($answers);
     $solvedBoards = array_fill(0, $num, false);
@@ -316,7 +316,7 @@ function fwordleUserBoards(array $guesses, array $answers, array $owned = []): a
     foreach ($guesses as $g) {
         $boards = [];
         foreach ($answers as $pos => $ans) {
-            $boards[$pos] = fwordleScore($ans, $g);
+            $boards[$pos] = boardleScore($ans, $g);
             if ($g === strtolower($ans)) $solvedBoards[$pos] = true;
         }
         $rows[] = ['text' => $g, 'boards' => $boards];
@@ -327,7 +327,7 @@ function fwordleUserBoards(array $guesses, array $answers, array $owned = []): a
 
 // Fixed board order so the numbering is stable per player (independent of who
 // solved first): roman → ben → basti → lorenz, others last.
-function fwordlePlayerRank(string $username): int
+function boardlePlayerRank(string $username): int
 {
     static $order = ['roman' => 0, 'ben' => 1, 'basti' => 2, 'lorenz' => 3];
     return $order[strtolower($username)] ?? 99;
@@ -341,13 +341,13 @@ function fwordlePlayerRank(string $username): int
 // ever reveal NEW info beyond what the player's own guesses already show.
 
 // What a player already knows about one board, derived from their guesses.
-function fwordleBoardKnowledge(array $guesses, string $answer): array
+function boardleBoardKnowledge(array $guesses, string $answer): array
 {
     $answer = strtolower($answer);
     $len = strlen($answer);
     $present = []; $absent = []; $greenPos = [];
     foreach ($guesses as $g) {
-        $colors = fwordleScore($answer, $g);
+        $colors = boardleScore($answer, $g);
         for ($i = 0; $i < $len; $i++) {
             $ch = $g[$i] ?? '_';
             if ($ch === '_') continue;
@@ -365,11 +365,11 @@ function fwordleBoardKnowledge(array $guesses, string $answer): array
 //   orange → up to 2 cells, each a present letter shown on a spot it ISN'T (so
 //            it reads as a true orange cell), e.g. "r:2,t:5"
 //   green  → 1 cell, the correct letter at its spot (0-indexed), e.g. "r:3"
-function fwordleComputeHint(string $answer, array $guesses, string $type): ?string
+function boardleComputeHint(string $answer, array $guesses, string $type): ?string
 {
     $answer = strtolower($answer);
     $len = strlen($answer);
-    $k = fwordleBoardKnowledge($guesses, $answer);
+    $k = boardleBoardKnowledge($guesses, $answer);
 
     if ($type === 'orange') {
         // Present letters the player doesn't yet know are present.
@@ -412,7 +412,7 @@ function fwordleComputeHint(string $answer, array $guesses, string $type): ?stri
 
 // Parse a stored hint row into the client shape. Armor is board-less; orange and
 // green carry a `cells` array of {letter, pos} (orange up to 2, green 1).
-function fwordleParseHint(array $h): array
+function boardleParseHint(array $h): array
 {
     $type = $h['type'];
     if ($type === 'armor') {
@@ -432,25 +432,25 @@ function fwordleParseHint(array $h): array
 }
 
 // Did this user buy the armor joker today? (it grants +1 guess overall.)
-function fwordleHasArmor(PDO $pdo, string $date, int $userId): bool
+function boardleHasArmor(PDO $pdo, string $date, int $userId): bool
 {
-    $s = $pdo->prepare("SELECT 1 FROM fwordle_hints WHERE game_date = ? AND user_id = ? AND type = 'armor'");
+    $s = $pdo->prepare("SELECT 1 FROM boardle_hints WHERE game_date = ? AND user_id = ? AND type = 'armor'");
     $s->execute([$date, $userId]);
     return (bool) $s->fetchColumn();
 }
 
 // Current solve streak AND freeze balance for a user, computed by replaying every
 // day in order from the first relevant day up to today:
-//   - each solved day: streak + 1, and FWORDLE_FREEZE_PER_WEEK freezes whenever
+//   - each solved day: streak + 1, and BOARDLE_FREEZE_PER_WEEK freezes whenever
 //     the streak hits a multiple of 7.
 //   - each PAST unsolved day (today excluded — it isn't over): a freeze bridges
 //     it (streak preserved) when the balance allows, otherwise the streak resets.
 //   - jokers settle on their day: a freeze-paid joker (`via_freeze`) spends a
 //     freeze; every other joker costs 1 streak.
 // `effective` is the freeze-aware streak, net of the joker streak-cost.
-function fwordleStreakInfo(PDO $pdo, string $date, int $userId): array
+function boardleStreakInfo(PDO $pdo, string $date, int $userId): array
 {
-    $s = $pdo->prepare("SELECT game_date FROM fwordle_results WHERE user_id = ? AND solved = 1 ORDER BY game_date");
+    $s = $pdo->prepare("SELECT game_date FROM boardle_results WHERE user_id = ? AND solved = 1 ORDER BY game_date");
     $s->execute([$userId]);
     $solvedList = $s->fetchAll(PDO::FETCH_COLUMN);
     $solved = array_fill_keys($solvedList, true);
@@ -460,7 +460,7 @@ function fwordleStreakInfo(PDO $pdo, string $date, int $userId): array
         SELECT game_date,
                SUM(via_freeze = 0) AS streak_jokers,
                SUM(via_freeze = 1) AS freeze_jokers
-        FROM fwordle_hints WHERE user_id = ? GROUP BY game_date
+        FROM boardle_hints WHERE user_id = ? GROUP BY game_date
     ");
     $h->execute([$userId]);
     $streakJokers = []; $freezeJokers = []; $jokerDates = [];
@@ -474,12 +474,12 @@ function fwordleStreakInfo(PDO $pdo, string $date, int $userId): array
     $candidates = array_filter([$solvedList[0] ?? null, $jokerDates ? min($jokerDates) : null]);
     $cursor = $candidates ? min($candidates) : $date;
 
-    $balance = FWORDLE_FREEZE_START;
+    $balance = BOARDLE_FREEZE_START;
     $streak  = 0;
     while ($cursor <= $date) {
         if (isset($solved[$cursor])) {
             $streak++;
-            if ($streak % 7 === 0) $balance += FWORDLE_FREEZE_PER_WEEK;
+            if ($streak % 7 === 0) $balance += BOARDLE_FREEZE_PER_WEEK;
         } elseif ($cursor !== $date) {
             // A past day that ended unsolved → bridge with a freeze, else break.
             if ($streak > 0) {
@@ -504,9 +504,9 @@ function fwordleStreakInfo(PDO $pdo, string $date, int $userId): array
 }
 
 // Board positions whose word this user chose (auto-solved for them).
-function fwordleOwnedPositions(PDO $pdo, string $date, int $userId): array
+function boardleOwnedPositions(PDO $pdo, string $date, int $userId): array
 {
-    $stmt = $pdo->prepare("SELECT position FROM fwordle_words WHERE game_date = ? AND chooser_id = ?");
+    $stmt = $pdo->prepare("SELECT position FROM boardle_words WHERE game_date = ? AND chooser_id = ?");
     $stmt->execute([$date, $userId]);
     return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 }
@@ -514,13 +514,13 @@ function fwordleOwnedPositions(PDO $pdo, string $date, int $userId): array
 // ── Eligibility + full state payload ─────────────────────────────────────────
 
 // Is this user among the first MAX_WORDS solvers of the day (→ may pick a word)?
-function fwordleChoiceEligible(PDO $pdo, string $date, int $userId): bool
+function boardleChoiceEligible(PDO $pdo, string $date, int $userId): bool
 {
     $stmt = $pdo->prepare("
-        SELECT user_id FROM fwordle_results
+        SELECT user_id FROM boardle_results
         WHERE game_date = ? AND solved = 1
         ORDER BY solved_at ASC
-        LIMIT " . FWORDLE_MAX_WORDS
+        LIMIT " . BOARDLE_MAX_WORDS
     );
     $stmt->execute([$date]);
     $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
@@ -530,17 +530,17 @@ function fwordleChoiceEligible(PDO $pdo, string $date, int $userId): bool
 // Everything the page/poll needs. My board carries letters; opponents' boards
 // carry colors only (letters are never exposed). Answers are revealed only once
 // *I* have finished (won or out of guesses).
-function fwordleState(PDO $pdo, string $date, int $userId): array
+function boardleState(PDO $pdo, string $date, int $userId): array
 {
-    fwordleEnsureDay($pdo, $date);
-    fwordleFinalizeWords($pdo, $date);
-    fwordleSyncLateChoices($pdo, $date);
+    boardleEnsureDay($pdo, $date);
+    boardleFinalizeWords($pdo, $date);
+    boardleSyncLateChoices($pdo, $date);
 
-    $lenStmt = $pdo->prepare("SELECT word_length FROM fwordle_days WHERE game_date = ?");
+    $lenStmt = $pdo->prepare("SELECT word_length FROM boardle_days WHERE game_date = ?");
     $lenStmt->execute([$date]);
     $len = (int) $lenStmt->fetchColumn();
 
-    $wstmt = $pdo->prepare("SELECT position, word, chooser_id, hint FROM fwordle_words WHERE game_date = ? ORDER BY position");
+    $wstmt = $pdo->prepare("SELECT position, word, chooser_id, hint FROM boardle_words WHERE game_date = ? ORDER BY position");
     $wstmt->execute([$date]);
     $answers    = [];
     $chooser    = []; // position => chooser user_id (or null)
@@ -552,7 +552,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $boardHints[$pos] = ($r['hint'] !== null && $r['hint'] !== '') ? $r['hint'] : null;
     }
     $numBoards = count($answers);
-    $maxGuesses = fwordleMaxGuesses($numBoards, $len);
+    $maxGuesses = boardleMaxGuesses($numBoards, $len);
 
     // Owned (auto-solved) board positions per user.
     $ownedOf = function (int $uid) use ($chooser): array {
@@ -563,7 +563,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
 
     $gstmt = $pdo->prepare("
         SELECT g.user_id, u.username, g.guess
-        FROM fwordle_guesses g JOIN users u ON u.id = g.user_id
+        FROM boardle_guesses g JOIN users u ON u.id = g.user_id
         WHERE g.game_date = ?
         ORDER BY g.user_id, g.guess_index
     ");
@@ -575,7 +575,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         $byUser[$uid]['guesses'][] = $r['guess'];
     }
 
-    $rstmt = $pdo->prepare("SELECT user_id, finished, solved, solved_at FROM fwordle_results WHERE game_date = ?");
+    $rstmt = $pdo->prepare("SELECT user_id, finished, solved, solved_at FROM boardle_results WHERE game_date = ?");
     $rstmt->execute([$date]);
     $results = [];
     foreach ($rstmt->fetchAll(PDO::FETCH_ASSOC) as $r) $results[(int) $r['user_id']] = $r;
@@ -586,7 +586,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
 
     // ── Hints (jokers) used today, grouped by user (needed for per-user max
     //    guesses, since the armor joker grants +1). ──
-    $hintStmt = $pdo->prepare("SELECT user_id, board_pos, type, payload FROM fwordle_hints WHERE game_date = ?");
+    $hintStmt = $pdo->prepare("SELECT user_id, board_pos, type, payload FROM boardle_hints WHERE game_date = ?");
     $hintStmt->execute([$date]);
     $hintsByUser = [];
     foreach ($hintStmt->fetchAll(PDO::FETCH_ASSOC) as $h) {
@@ -601,7 +601,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     // ── Me (computed even with zero guesses, so an owned board still shows) ──
     $myGuesses = $byUser[$userId]['guesses'] ?? [];
     $myOwned   = $ownedOf($userId);
-    $mb        = fwordleUserBoards($myGuesses, $answers, $myOwned);
+    $mb        = boardleUserBoards($myGuesses, $answers, $myOwned);
     $myUsed    = count($myGuesses);
     $myRes     = $results[$userId] ?? null;
     $myMax     = $maxGuessesOf($userId);
@@ -612,7 +612,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     if ($myFinished && (!$myRes || (int) $myRes['finished'] !== 1)) {
         $solvedAt = ($myRes && $myRes['solved_at']) ? $myRes['solved_at'] : ($mb['solved'] ? date('Y-m-d H:i:s') : null);
         $pdo->prepare("
-            INSERT INTO fwordle_results (game_date, user_id, finished, solved, guesses_used, solved_at)
+            INSERT INTO boardle_results (game_date, user_id, finished, solved, guesses_used, solved_at)
             VALUES (?, ?, 1, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 finished = VALUES(finished), solved = VALUES(solved),
@@ -627,7 +627,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     }
 
     $myHints   = $hintsByUser[$userId] ?? [];
-    $myInfo    = fwordleStreakInfo($pdo, $date, $userId);
+    $myInfo    = boardleStreakInfo($pdo, $date, $userId);
     $myStreak  = $myInfo['effective'];
     // Players with no streak to spend still get one joker free per day — it's
     // available only while they have 0 streak AND haven't used a joker yet.
@@ -650,7 +650,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'owned'            => $myOwned,
         'guesses'          => $mb['guesses'],
         'answers'          => $reveal,
-        'hints'            => array_map('fwordleParseHint', $myHints),
+        'hints'            => array_map('boardleParseHint', $myHints),
         'hint_types_used'  => array_values(array_unique(array_map(fn($h) => $h['type'], $myHints))),
         'jokers_used'      => count($myHints),
         'jokers_total'     => 3,
@@ -660,7 +660,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     $opponents = [];
     foreach ($byUser as $uid => $info) {
         if ($uid === $userId) continue;
-        $b = fwordleUserBoards($info['guesses'], $answers, $ownedOf($uid));
+        $b = boardleUserBoards($info['guesses'], $answers, $ownedOf($uid));
         $used = count($info['guesses']);
         $res = $results[$uid] ?? null;
         $oppMax = $maxGuessesOf($uid);
@@ -681,15 +681,15 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
     // Tomorrow's word pick (only once I've solved and earned a slot).
     $tomorrow  = date('Y-m-d', strtotime($date . ' +1 day'));
     $choose = ['eligible' => false, 'already' => null, 'already_hint' => null, 'tomorrow_length' => null, 'suggestions' => [], 'for_today' => false];
-    if (fwordleChoiceEligible($pdo, $date, $userId)) {
+    if (boardleChoiceEligible($pdo, $date, $userId)) {
         // Normal: solved today -> pick for tomorrow.
-        $tday = fwordleEnsureDay($pdo, $tomorrow);
+        $tday = boardleEnsureDay($pdo, $tomorrow);
         $tlen = (int) $tday['word_length'];
         $choose['eligible']        = true;
         $choose['tomorrow_length'] = $tlen;
-        $choose['suggestions']     = fwordleSuggestions($tlen, $userId, $tomorrow);
+        $choose['suggestions']     = boardleSuggestions($tlen, $userId, $tomorrow);
 
-        $c = $pdo->prepare("SELECT word, hint FROM fwordle_choices WHERE game_date = ? AND user_id = ?");
+        $c = $pdo->prepare("SELECT word, hint FROM boardle_choices WHERE game_date = ? AND user_id = ?");
         $c->execute([$tomorrow, $userId]);
         $alreadyRow = $c->fetch(PDO::FETCH_ASSOC);
         $choose['already']      = $alreadyRow ? ($alreadyRow['word'] ?? null) : null;
@@ -698,18 +698,18 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         // Late pick: today has no guesses yet -> allow setting today's word,
         // whether or not this player solved yesterday. Any board slot that
         // wasn't already claimed by a real pick (a random backfill) is still
-        // up for grabs — see the slot-claiming logic in fwordle-choose.php.
-        $gStmt = $pdo->prepare("SELECT COUNT(*) FROM fwordle_guesses WHERE game_date = ?");
+        // up for grabs — see the slot-claiming logic in boardle-choose.php.
+        $gStmt = $pdo->prepare("SELECT COUNT(*) FROM boardle_guesses WHERE game_date = ?");
         $gStmt->execute([$date]);
         if ((int) $gStmt->fetchColumn() === 0) {
-            $tday = fwordleEnsureDay($pdo, $date);
+            $tday = boardleEnsureDay($pdo, $date);
             $tlen = (int) $tday['word_length'];
             $choose['eligible']        = true;
             $choose['for_today']       = true;
             $choose['tomorrow_length'] = $tlen;
-            $choose['suggestions']     = fwordleSuggestions($tlen, $userId, $date);
+            $choose['suggestions']     = boardleSuggestions($tlen, $userId, $date);
 
-            $c = $pdo->prepare("SELECT word, hint FROM fwordle_choices WHERE game_date = ? AND user_id = ?");
+            $c = $pdo->prepare("SELECT word, hint FROM boardle_choices WHERE game_date = ? AND user_id = ?");
             $c->execute([$date, $userId]);
             $alreadyRow = $c->fetch(PDO::FETCH_ASSOC);
             $choose['already']      = $alreadyRow ? ($alreadyRow['word'] ?? null) : null;
@@ -732,7 +732,7 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
         'opponents'   => $opponents,
         'choose'      => $choose,
         'board_hints' => $boardHintsArr,
-        'stats'       => fwordleStats($pdo, $date),
+        'stats'       => boardleStats($pdo, $date),
     ];
 }
 
@@ -740,13 +740,13 @@ function fwordleState(PDO $pdo, string $date, int $userId): array
 // today or — if today isn't solved yet — yesterday, so it stays alive) NET of the
 // joker streak-cost, and the average guesses used on solved days. One entry per
 // user (empty if never won).
-function fwordleStats(PDO $pdo, string $date): array
+function boardleStats(PDO $pdo, string $date): array
 {
     $users = $pdo->query("SELECT id, username FROM users ORDER BY username")->fetchAll(PDO::FETCH_ASSOC);
 
     $aggStmt = $pdo->query("
         SELECT user_id, COUNT(*) AS solves, AVG(guesses_used) AS avg_g
-        FROM fwordle_results WHERE solved = 1 GROUP BY user_id
+        FROM boardle_results WHERE solved = 1 GROUP BY user_id
     ");
     $agg = [];
     foreach ($aggStmt->fetchAll(PDO::FETCH_ASSOC) as $r) $agg[(int) $r['user_id']] = $r;
@@ -756,7 +756,7 @@ function fwordleStats(PDO $pdo, string $date): array
         $uid = (int) $u['id'];
 
         // Effective (freeze-aware) streak + current freeze balance.
-        $info   = fwordleStreakInfo($pdo, $date, $uid);
+        $info   = boardleStreakInfo($pdo, $date, $uid);
         $streak = $info['effective'];
 
         $a = $agg[$uid] ?? null;

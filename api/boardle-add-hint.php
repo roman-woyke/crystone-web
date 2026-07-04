@@ -2,7 +2,7 @@
 
 require_once __DIR__ . "/../includes/start-session.php";
 require_once __DIR__ . "/../../config.php";
-require_once __DIR__ . "/../includes/fwordle.php";
+require_once __DIR__ . "/../includes/boardle.php";
 
 if (!isset($_SESSION["user_id"])) {
     http_response_code(401);
@@ -24,11 +24,11 @@ if ($hint === "") {
     exit("Hint can't be empty.");
 }
 
-fwordleEnsureDay($pdo, $date);
-fwordleFinalizeWords($pdo, $date);
+boardleEnsureDay($pdo, $date);
+boardleFinalizeWords($pdo, $date);
 
 // Load the day's boards (answers + current hint + chooser).
-$wStmt = $pdo->prepare("SELECT position, word, chooser_id, hint FROM fwordle_words WHERE game_date = ? ORDER BY position");
+$wStmt = $pdo->prepare("SELECT position, word, chooser_id, hint FROM boardle_words WHERE game_date = ? ORDER BY position");
 $wStmt->execute([$date]);
 $answers = [];
 $hints   = [];
@@ -52,11 +52,11 @@ if ($hints[$board] !== null) {
 
 // The author must have SOLVED this board (their own pick counts as solved) —
 // they know the word, so they can write a fair clue for the next players.
-$owned = fwordleOwnedPositions($pdo, $date, $userId);
-$gStmt = $pdo->prepare("SELECT guess FROM fwordle_guesses WHERE game_date = ? AND user_id = ? ORDER BY guess_index");
+$owned = boardleOwnedPositions($pdo, $date, $userId);
+$gStmt = $pdo->prepare("SELECT guess FROM boardle_guesses WHERE game_date = ? AND user_id = ? ORDER BY guess_index");
 $gStmt->execute([$date, $userId]);
 $myGuesses = $gStmt->fetchAll(PDO::FETCH_COLUMN);
-$mb = fwordleUserBoards($myGuesses, $answers, $owned);
+$mb = boardleUserBoards($myGuesses, $answers, $owned);
 if (empty($mb["solved_boards"][$board])) {
     http_response_code(403);
     exit("Solve this board before adding a hint.");
@@ -64,8 +64,8 @@ if (empty($mb["solved_boards"][$board])) {
 
 // Write it onto the shared board — visible to everyone from now on. The WHERE
 // guard keeps a concurrent add from clobbering an already-written hint.
-$pdo->prepare("UPDATE fwordle_words SET hint = ? WHERE game_date = ? AND position = ? AND (hint IS NULL OR hint = '')")
+$pdo->prepare("UPDATE boardle_words SET hint = ? WHERE game_date = ? AND position = ? AND (hint IS NULL OR hint = '')")
     ->execute([$hint, $date, $board]);
 
 header("Content-Type: application/json");
-echo json_encode(fwordleState($pdo, $date, $userId));
+echo json_encode(boardleState($pdo, $date, $userId));

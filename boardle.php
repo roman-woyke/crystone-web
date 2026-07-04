@@ -1,10 +1,10 @@
 <?php
 
 require_once __DIR__ . "/includes/session.php";
-require_once __DIR__ . "/includes/fwordle.php";
+require_once __DIR__ . "/includes/boardle.php";
 
 // Server-render the full state so the grid paints complete on first byte.
-$initialState = fwordleState($pdo, date("Y-m-d"), (int) $_SESSION["user_id"]);
+$initialState = boardleState($pdo, date("Y-m-d"), (int) $_SESSION["user_id"]);
 
 $pageTitle = "Boardle";
 require_once __DIR__ . "/includes/header.php";
@@ -1119,7 +1119,7 @@ main.container { max-width: 1280px; }
         body.append("type", type);
         if (board !== null && board !== undefined) body.append("board", board);
         if (payFreeze) body.append("pay", "freeze");
-        fetch(BASE_PATH + "/api/fwordle-hint.php", { method: "POST", body })
+        fetch(BASE_PATH + "/api/boardle-hint.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Joker failed."); }))
             .then(state => { STATE = state; renderAll(); })
             .catch(err => setMsg(err.message))
@@ -1153,7 +1153,7 @@ main.container { max-width: 1280px; }
         const body = new FormData();
         body.append("board", hintModalBoard);
         body.append("hint", hint);
-        fetch(BASE_PATH + "/api/fwordle-add-hint.php", { method: "POST", body })
+        fetch(BASE_PATH + "/api/boardle-add-hint.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Could not save hint."); }))
             .then(state => { STATE = state; closeHintModal(); renderAll(); })
             .catch(err => { hintModalMsgEl.classList.remove("ok"); hintModalMsgEl.textContent = err.message; })
@@ -1331,7 +1331,7 @@ main.container { max-width: 1280px; }
     // the popup only ever fires once for a given solve — not again on every
     // refresh. If it was already shown, treat it as pre-dismissed: skip the
     // schedule and don't suppress the resting sidebar slot either.
-    const CHOOSE_SEEN_KEY = `fwordle_choose_seen_${BASE_PATH}_${STATE.date}`;
+    const CHOOSE_SEEN_KEY = `boardle_choose_seen_${BASE_PATH}_${STATE.date}`;
     if (localStorage.getItem(CHOOSE_SEEN_KEY)) {
         choosePrompted = true;
         chooseModalDismissedOnce = true;
@@ -1497,7 +1497,7 @@ main.container { max-width: 1280px; }
         const body = new FormData();
         body.append("word", word);
         if (hint) body.append("hint", hint);
-        fetch(BASE_PATH + "/api/fwordle-choose.php", { method: "POST", body })
+        fetch(BASE_PATH + "/api/boardle-choose.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Could not save."); }))
             .then(res => {
                 STATE.choose.already = res.word;
@@ -1513,7 +1513,7 @@ main.container { max-width: 1280px; }
     // length). Kept in suggestOverride so polls don't reset them.
     function randomizeSuggestions() {
         const cmsg = document.getElementById("fw-choose-msg");
-        fetch(BASE_PATH + "/api/fwordle-suggest.php")
+        fetch(BASE_PATH + "/api/boardle-suggest.php")
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Could not shuffle."); }))
             .then(res => { suggestOverride = res.suggestions || []; renderChoose(); })
             .catch(err => { if (cmsg) { cmsg.classList.remove("ok"); cmsg.textContent = err.message; } });
@@ -1566,7 +1566,7 @@ main.container { max-width: 1280px; }
         const body = new FormData();
         body.append("word", word);
         body.append("offset", first);
-        fetch(BASE_PATH + "/api/fwordle-guess.php", { method: "POST", body })
+        fetch(BASE_PATH + "/api/boardle-guess.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Guess failed."); }))
             .then(state => {
                 STATE = state;
@@ -1589,7 +1589,7 @@ main.container { max-width: 1280px; }
     // ── Polling for opponents (and cross-tab self updates) ─────────────────
     function loadState() {
         if (busy) return;
-        fetch(BASE_PATH + "/api/fwordle-state.php")
+        fetch(BASE_PATH + "/api/boardle-state.php")
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
             .then(state => {
                 // Don't clobber an in-progress guess: the local buffer is kept.
