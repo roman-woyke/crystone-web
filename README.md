@@ -2,7 +2,7 @@
 
 A shared leaderboard for tracking internship applications with friends, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (fWordle).
 
-The app is a TypeScript/Next.js app — see [`CLAUDE.md`](CLAUDE.md) for architecture, local setup, and deployment. This file is the **authoritative MySQL schema reference**: `prisma/schema.prisma` is introspected from it and must be kept in sync manually when either changes.
+The app is a TypeScript/Next.js app — see [`CLAUDE.md`](CLAUDE.md) for architecture and deployment. For a full step-by-step local setup walkthrough (Docker, `.env`, schema, troubleshooting), see [`SETUP.md`](SETUP.md). This file is the **authoritative MySQL schema reference**: `prisma/schema.prisma` is introspected from it and must be kept in sync manually when either changes.
 
 ---
 
