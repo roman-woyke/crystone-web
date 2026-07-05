@@ -1,5 +1,5 @@
-// Word lists for fWordle — bundled plain text (not in the DB), ported 1:1
-// from includes/fwordle.php. dict-<len>.txt is the full SOWPODS Scrabble
+// Word lists for Boardle — bundled plain text (not in the DB), ported 1:1
+// from includes/boardle.php. dict-<len>.txt is the full SOWPODS Scrabble
 // list (guess validation); answers-<len>.txt is common words intersected
 // with SOWPODS (answer pool + suggestions).
 
@@ -7,12 +7,12 @@ import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import path from "path";
 
-export const FWORDLE_MAX_WORDS = 4;
-export const FWORDLE_MIN_LEN = 5;
-export const FWORDLE_MAX_LEN = 10;
+export const BOARDLE_MAX_WORDS = 4;
+export const BOARDLE_MIN_LEN = 5;
+export const BOARDLE_MAX_LEN = 10;
 
 function wordsDir(): string {
-  return path.join(process.cwd(), "includes", "fwordle");
+  return path.join(process.cwd(), "includes", "boardle");
 }
 
 function readWordList(file: string): string[] {
@@ -46,15 +46,15 @@ function answerPool(len: number): string[] {
   return pool;
 }
 
-export function fwordleIsValidWord(word: string, len: number): boolean {
+export function boardleIsValidWord(word: string, len: number): boolean {
   const w = word.toLowerCase();
-  if (len < FWORDLE_MIN_LEN || len > FWORDLE_MAX_LEN) return false;
+  if (len < BOARDLE_MIN_LEN || len > BOARDLE_MAX_LEN) return false;
   if (w.length !== len || !/^[a-z]+$/.test(w)) return false;
   return dictSet(len).has(w);
 }
 
 // A random answer of the given length, avoiding the supplied words.
-export function fwordleRandomAnswer(len: number, exclude: string[] = []): string | null {
+export function boardleRandomAnswer(len: number, exclude: string[] = []): string | null {
   const pool = answerPool(len);
   if (pool.length === 0) return null;
   const excludeSet = new Set(exclude.map((w) => w.toLowerCase()));
@@ -71,7 +71,7 @@ export function fwordleRandomAnswer(len: number, exclude: string[] = []): string
 
 // Three stable per-user suggestions of the given length (don't reshuffle on
 // every poll — ordered deterministically by a per-user/day hash).
-export function fwordleSuggestions(len: number, userId: number, forDate: string, count = 3): string[] {
+export function boardleSuggestions(len: number, userId: number, forDate: string, count = 3): string[] {
   const pool = [...new Set(answerPool(len))];
   if (pool.length === 0) return [];
   const seed = `${userId}|${forDate}`;
@@ -81,7 +81,7 @@ export function fwordleSuggestions(len: number, userId: number, forDate: string,
 }
 
 // Weighted random length: 5->30%, 6->30%, 7->20%, 8->10%, 9->5%, 10->5%.
-export function fwordleRollLength(): number {
+export function boardleRollLength(): number {
   const weights: [number, number][] = [
     [5, 30],
     [6, 30],
@@ -96,11 +96,11 @@ export function fwordleRollLength(): number {
     cum += w;
     if (r <= cum) return len;
   }
-  return FWORDLE_MIN_LEN;
+  return BOARDLE_MIN_LEN;
 }
 
 // Shared guesses for a day: 5 + numBoards -> 9 for the fixed 4 boards.
 // Length-independent.
-export function fwordleMaxGuesses(numBoards: number): number {
+export function boardleMaxGuesses(numBoards: number): number {
   return 5 + numBoards;
 }

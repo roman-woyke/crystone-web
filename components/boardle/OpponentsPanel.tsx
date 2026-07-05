@@ -1,4 +1,4 @@
-import type { OpponentState } from "@/lib/fwordle";
+import type { OpponentState } from "@/lib/boardle";
 
 export function OpponentsPanel({
   opponents,

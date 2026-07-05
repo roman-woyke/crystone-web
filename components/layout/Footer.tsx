@@ -7,7 +7,7 @@ const FOOTER_LINKS = [
   { href: "/study", label: "Study Counter" },
   { href: "/calendar", label: "Calendar" },
   { href: "/projects", label: "Projects" },
-  { href: "/fwordle", label: "fWordle" },
+  { href: "/boardle", label: "Boardle" },
 ];
 
 export function Footer() {

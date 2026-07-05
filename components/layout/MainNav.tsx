@@ -20,7 +20,7 @@ const NAV_LINKS = [
   { href: "/study", label: "Study Counter", icon: Timer },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/fwordle", label: "fWordle", icon: Gamepad2 },
+  { href: "/boardle", label: "Boardle", icon: Gamepad2 },
 ];
 
 export function MainNav() {

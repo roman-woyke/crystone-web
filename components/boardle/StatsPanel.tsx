@@ -1,4 +1,4 @@
-import type { PlayerStats } from "@/lib/fwordle-streak";
+import type { PlayerStats } from "@/lib/boardle-streak";
 
 export function StatsPanel({ stats }: { stats: PlayerStats[] }) {
   return (

@@ -19,7 +19,7 @@ const FEATURES = [
   },
   {
     icon: Gamepad2,
-    title: "Daily fWordle",
+    title: "Daily Boardle",
     text: "Four boards a day. Winners pick tomorrow's words.",
   },
 ];

@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { dbNow } from "@/lib/dates";
-import { fwordleDateOnly } from "@/lib/fwordle-dates";
-import { fwordleHasArmor, fwordleMaxGuesses, fwordleOwnedPositions, fwordleState, fwordleToday } from "@/lib/fwordle";
-import { FWORDLE_MIN_LEN, fwordleIsValidWord } from "@/lib/fwordle-words";
-import { fwordleUserBoards } from "@/lib/fwordle-score";
+import { boardleDateOnly } from "@/lib/boardle-dates";
+import { boardleHasArmor, boardleMaxGuesses, boardleOwnedPositions, boardleState, boardleToday } from "@/lib/boardle";
+import { BOARDLE_MIN_LEN, boardleIsValidWord } from "@/lib/boardle-words";
+import { boardleUserBoards } from "@/lib/boardle-score";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -14,22 +14,22 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Not logged in.", { status: 401 });
   }
   const userId = Number(session.user.id);
-  const date = fwordleToday();
-  const gameDate = fwordleDateOnly(date);
+  const date = boardleToday();
+  const gameDate = boardleDateOnly(date);
 
-  const day = await prisma.fwordleDay.findUnique({ where: { gameDate } });
+  const day = await prisma.boardleDay.findUnique({ where: { gameDate } });
   const len = day?.wordLength ?? 0;
 
-  const numBoards = await prisma.fwordleWord.count({ where: { gameDate } });
-  const maxGuesses = fwordleMaxGuesses(numBoards) + ((await fwordleHasArmor(date, userId)) ? 1 : 0);
+  const numBoards = await prisma.boardleWord.count({ where: { gameDate } });
+  const maxGuesses = boardleMaxGuesses(numBoards) + ((await boardleHasArmor(date, userId)) ? 1 : 0);
 
   // Already finished today? No more guesses.
-  const result = await prisma.fwordleResult.findUnique({ where: { gameDate_userId: { gameDate, userId } } });
+  const result = await prisma.boardleResult.findUnique({ where: { gameDate_userId: { gameDate, userId } } });
   if (result && result.finished === 1) {
     return new NextResponse("You're already done for today.", { status: 409 });
   }
 
-  const used = await prisma.fwordleGuess.count({ where: { gameDate, userId } });
+  const used = await prisma.boardleGuess.count({ where: { gameDate, userId } });
   if (used >= maxGuesses) {
     return new NextResponse("No guesses left.", { status: 409 });
   }
@@ -40,13 +40,13 @@ export async function POST(request: NextRequest) {
   const offset = Number(body.offset);
   const wl = word.length;
 
-  if (!/^[a-z]+$/.test(word) || wl < FWORDLE_MIN_LEN || wl > len) {
-    return new NextResponse(`A guess must be a word of ${FWORDLE_MIN_LEN}–${len} letters.`, { status: 400 });
+  if (!/^[a-z]+$/.test(word) || wl < BOARDLE_MIN_LEN || wl > len) {
+    return new NextResponse(`A guess must be a word of ${BOARDLE_MIN_LEN}–${len} letters.`, { status: 400 });
   }
   if (!Number.isInteger(offset) || offset < 0 || offset + wl > len) {
     return new NextResponse("Invalid word position.", { status: 400 });
   }
-  if (!fwordleIsValidWord(word, wl)) {
+  if (!boardleIsValidWord(word, wl)) {
     return new NextResponse("Not in word list.", { status: 422 });
   }
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
   // Append the guess (race-safe via the unique (date,user,index) key).
   try {
-    await prisma.fwordleGuess.create({
+    await prisma.boardleGuess.create({
       data: { gameDate, userId, guessIndex: used, guess, createdAt: dbNow() },
     });
   } catch {
@@ -63,22 +63,22 @@ export async function POST(request: NextRequest) {
   }
 
   // Recompute my standing across every board.
-  const answerRows = await prisma.fwordleWord.findMany({
+  const answerRows = await prisma.boardleWord.findMany({
     where: { gameDate },
     orderBy: { position: "asc" },
     select: { word: true },
   });
   const answers = answerRows.map((r) => r.word);
 
-  const myGuessRows = await prisma.fwordleGuess.findMany({
+  const myGuessRows = await prisma.boardleGuess.findMany({
     where: { gameDate, userId },
     orderBy: { guessIndex: "asc" },
     select: { guess: true },
   });
   const myGuesses = myGuessRows.map((r) => r.guess);
 
-  const owned = await fwordleOwnedPositions(date, userId);
-  const boards = fwordleUserBoards(myGuesses, answers, owned);
+  const owned = await boardleOwnedPositions(date, userId);
+  const boards = boardleUserBoards(myGuesses, answers, owned);
   const usedNow = myGuesses.length;
   const solved = boards.solved;
   const finished = solved || usedNow >= maxGuesses;
@@ -86,11 +86,11 @@ export async function POST(request: NextRequest) {
   // Preserve an existing solve time; stamp it the moment all boards fall.
   const solvedAt = result?.solvedAt ?? (solved ? dbNow() : null);
 
-  await prisma.fwordleResult.upsert({
+  await prisma.boardleResult.upsert({
     where: { gameDate_userId: { gameDate, userId } },
     create: { gameDate, userId, finished: finished ? 1 : 0, solved: solved ? 1 : 0, guessesUsed: usedNow, solvedAt },
     update: { finished: finished ? 1 : 0, solved: solved ? 1 : 0, guessesUsed: usedNow, solvedAt },
   });
 
-  return NextResponse.json(await fwordleState(date, userId));
+  return NextResponse.json(await boardleState(date, userId));
 }

@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A shared leaderboard for tracking internship applications, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (fWordle). Originally a PHP/MySQL app; fully rewritten as this TypeScript/Next.js app. See [`plan.md`](plan.md) for the phase-by-phase migration plan, stack choice, and per-phase deviation notes — useful if you need to understand *why* something works the way it does, or what the original PHP behavior was for a feature.
+A shared leaderboard for tracking internship applications, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (Boardle). Originally a PHP/MySQL app; fully rewritten as this TypeScript/Next.js app. See [`plan.md`](plan.md) for the phase-by-phase migration plan, stack choice, and per-phase deviation notes — useful if you need to understand *why* something works the way it does, or what the original PHP behavior was for a feature.
 
 **Deployment status:** not yet deployed. Vercel + Hostinger-remote-MySQL wiring is still pending (see `plan.md` Phase 1.5) — there is currently no live production instance.
 
@@ -72,10 +72,10 @@ All return JSON. Auth failures return 401; ownership failures return 404 (Prisma
 | `api/projects/[id]` | PATCH, DELETE | Edit (name/description/color) / delete an owned project |
 | `api/time-entries` | POST | Log time against an owned project |
 | `api/time-entries/[id]` | DELETE | Delete one owned time entry |
-| `api/fwordle/state` | GET | Full fWordle state for today (my boards, opponents' colors-only boards, stats) |
-| `api/fwordle/guess` | POST | Submit a guess (word + offset), scores all boards |
-| `api/fwordle/choose` | POST | Set one of tomorrow's words (solver-only) |
-| `api/fwordle/hint` | POST | Use a joker (armor/orange/green), optionally paid with a streak freeze |
+| `api/boardle/state` | GET | Full Boardle state for today (my boards, opponents' colors-only boards, stats) |
+| `api/boardle/guess` | POST | Submit a guess (word + offset), scores all boards |
+| `api/boardle/choose` | POST | Set one of tomorrow's words (solver-only) |
+| `api/boardle/hint` | POST | Use a joker (armor/orange/green), optionally paid with a streak freeze |
 
 ### Ownership checks
 
@@ -109,11 +109,11 @@ The timer is server-backed (`study_status` table, one row per user) via the sing
 
 `app/(app)/projects/page.tsx` — projects owned per-user, viewable across users via a calendar-style tab switcher (`?user=<username>`). `$canEdit` gating happens server-side (controls aren't rendered at all when viewing someone else, not just hidden). The timer is client-only (`localStorage`, key includes project id), unlike the study counter's server-backed one. `Standings.tsx` shows a top-3 podium when 2+ users have projects. `lib/project-colors.ts` holds the single accent-color palette used by both creation and validation.
 
-### fWordle
+### Boardle
 
-`app/(app)/fwordle/page.tsx` server-renders initial state, then `FwordleApp.tsx` polls `api/fwordle/state` every 6s + `visibilitychange` + `pageshow`. Logic lives in `lib/fwordle.ts` (orchestrator) split across `lib/fwordle-words.ts`, `lib/fwordle-score.ts`, `lib/fwordle-streak.ts`, `lib/fwordle-dates.ts`. Word lists are bundled text files in `includes/fwordle/` (`dict-<5..10>.txt` for validation, `answers-<5..10>.txt` for the answer pool), read via `fs.readFileSync` relative to `process.cwd()`.
+`app/(app)/boardle/page.tsx` server-renders initial state, then `BoardleApp.tsx` polls `api/boardle/state` every 6s + `visibilitychange` + `pageshow`. Logic lives in `lib/boardle.ts` (orchestrator) split across `lib/boardle-words.ts`, `lib/boardle-score.ts`, `lib/boardle-streak.ts`, `lib/boardle-dates.ts`. Word lists are bundled text files in `includes/boardle/` (`dict-<5..10>.txt` for validation, `answers-<5..10>.txt` for the answer pool), read via `fs.readFileSync` relative to `process.cwd()`.
 
-One puzzle per day, N boards (fixed at 4) all of the same length L, solved Quordle-style. `Board.tsx` renders the grid, `Keyboard.tsx` the on-screen keyboard with a per-board color switcher (`kbStatesFor` in `FwordleApp.tsx`), `JokerBar.tsx` the joker buttons + streak/freeze wallets, `OpponentsPanel.tsx`/`StatsPanel.tsx` the sidebar. `ChooseWord.tsx` is the tomorrow's-word picker for solvers. Behavioral details (guess encoding as an L-char string with `_` blanks, joker types/costs, streak-freeze bridging, board ownership/auto-solve for your own pick, opponents only ever seeing colors) are unchanged from the PHP original — see `plan.md` Phase 6 notes for anything intentionally simplified (word-picker hint cards and joker-reveal rows render in natural order rather than pixel-pinned under their board column).
+One puzzle per day, N boards (fixed at 4) all of the same length L, solved Quordle-style. `Board.tsx` renders the grid, `Keyboard.tsx` the on-screen keyboard with a per-board color switcher (`kbStatesFor` in `BoardleApp.tsx`), `JokerBar.tsx` the joker buttons + streak/freeze wallets, `OpponentsPanel.tsx`/`StatsPanel.tsx` the sidebar. `ChooseWord.tsx` is the tomorrow's-word picker for solvers. Behavioral details (guess encoding as an L-char string with `_` blanks, joker types/costs, streak-freeze bridging, board ownership/auto-solve for your own pick, opponents only ever seeing colors) are unchanged from the PHP original — see `plan.md` Phase 6 notes for anything intentionally simplified (word-picker hint cards and joker-reveal rows render in natural order rather than pixel-pinned under their board column).
 
 ## Database schema
 

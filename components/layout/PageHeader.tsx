@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 // Shared page hero: eyebrow label, display-size title, optional description
 // and an actions slot on the right. Plain presentational component so it
-// works from both Server Components and client apps (study, fwordle).
+// works from both Server Components and client apps (study, boardle).
 export function PageHeader({
   eyebrow,
   title,

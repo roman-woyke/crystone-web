@@ -1,69 +1,69 @@
-// Day lifecycle + full state aggregation for fWordle, ported 1:1 from
-// includes/fwordle.php (fwordleEnsureDay / fwordleFinalizeWords /
-// fwordleSyncLateChoices / fwordleState). See lib/fwordle-words.ts (word
-// lists), lib/fwordle-score.ts (scoring/hints) and lib/fwordle-streak.ts
+// Day lifecycle + full state aggregation for Boardle, ported 1:1 from
+// includes/boardle.php (boardleEnsureDay / boardleFinalizeWords /
+// boardleSyncLateChoices / boardleState). See lib/boardle-words.ts (word
+// lists), lib/boardle-score.ts (scoring/hints) and lib/boardle-streak.ts
 // (streaks/stats) for the pieces this orchestrates.
 
 import { prisma } from "@/lib/prisma";
 import { dbNow } from "@/lib/dates";
-import { fwordleAddDays, fwordleDateOnly, fwordleToday } from "@/lib/fwordle-dates";
+import { boardleAddDays, boardleDateOnly, boardleToday } from "@/lib/boardle-dates";
 import {
-  FWORDLE_MAX_WORDS,
-  fwordleIsValidWord,
-  fwordleMaxGuesses,
-  fwordleRandomAnswer,
-  fwordleRollLength,
-  fwordleSuggestions,
-} from "@/lib/fwordle-words";
+  BOARDLE_MAX_WORDS,
+  boardleIsValidWord,
+  boardleMaxGuesses,
+  boardleRandomAnswer,
+  boardleRollLength,
+  boardleSuggestions,
+} from "@/lib/boardle-words";
 import {
-  fwordleParseHint,
-  fwordlePlayerRank,
-  fwordleUserBoards,
+  boardleParseHint,
+  boardlePlayerRank,
+  boardleUserBoards,
   type BoardGuessRow,
   type ParsedHint,
-} from "@/lib/fwordle-score";
-import { fwordleStats, fwordleStreakInfo, type PlayerStats } from "@/lib/fwordle-streak";
-import type { FwordleDay } from "@/app/generated/prisma/client";
+} from "@/lib/boardle-score";
+import { boardleStats, boardleStreakInfo, type PlayerStats } from "@/lib/boardle-streak";
+import type { BoardleDay } from "@/app/generated/prisma/client";
 
-export { FWORDLE_MAX_WORDS, FWORDLE_MIN_LEN, FWORDLE_MAX_LEN, fwordleIsValidWord, fwordleMaxGuesses } from "@/lib/fwordle-words";
-export { fwordleScore } from "@/lib/fwordle-score";
-export { fwordleToday } from "@/lib/fwordle-dates";
+export { BOARDLE_MAX_WORDS, BOARDLE_MIN_LEN, BOARDLE_MAX_LEN, boardleIsValidWord, boardleMaxGuesses } from "@/lib/boardle-words";
+export { boardleScore } from "@/lib/boardle-score";
+export { boardleToday } from "@/lib/boardle-dates";
 
 // Fetch the day row, creating it (with a freshly rolled length) if absent.
-export async function fwordleEnsureDay(date: string): Promise<FwordleDay> {
-  const gameDate = fwordleDateOnly(date);
-  const existing = await prisma.fwordleDay.findUnique({ where: { gameDate } });
+export async function boardleEnsureDay(date: string): Promise<BoardleDay> {
+  const gameDate = boardleDateOnly(date);
+  const existing = await prisma.boardleDay.findUnique({ where: { gameDate } });
   if (existing) return existing;
   try {
-    return await prisma.fwordleDay.create({
-      data: { gameDate, wordLength: fwordleRollLength(), wordsFinalized: 0 },
+    return await prisma.boardleDay.create({
+      data: { gameDate, wordLength: boardleRollLength(), wordsFinalized: 0 },
     });
   } catch {
     // Lost the create race — the row exists now.
-    return await prisma.fwordleDay.findUniqueOrThrow({ where: { gameDate } });
+    return await prisma.boardleDay.findUniqueOrThrow({ where: { gameDate } });
   }
 }
 
 // Build (once) the answer words for a date that has arrived. The board count
-// is always fixed at FWORDLE_MAX_WORDS. Each prior-day solver fills + owns a
+// is always fixed at BOARDLE_MAX_WORDS. Each prior-day solver fills + owns a
 // slot with their chosen word (else random backfill); remaining slots are
 // random. Idempotent + race-safe (re-checks words_finalized under a row lock).
-export async function fwordleFinalizeWords(date: string): Promise<void> {
-  const day = await fwordleEnsureDay(date);
+export async function boardleFinalizeWords(date: string): Promise<void> {
+  const day = await boardleEnsureDay(date);
   if (day.wordsFinalized === 1) return;
-  if (date > fwordleToday()) return; // future days keep collecting choices
+  if (date > boardleToday()) return; // future days keep collecting choices
 
   const len = day.wordLength;
-  const prevDate = fwordleAddDays(date, -1);
-  const numBoards = FWORDLE_MAX_WORDS;
+  const prevDate = boardleAddDays(date, -1);
+  const numBoards = BOARDLE_MAX_WORDS;
 
-  const solverRows = await prisma.fwordleResult.findMany({
-    where: { gameDate: fwordleDateOnly(prevDate), solved: 1 },
+  const solverRows = await prisma.boardleResult.findMany({
+    where: { gameDate: boardleDateOnly(prevDate), solved: 1 },
     orderBy: { solvedAt: "asc" },
-    take: FWORDLE_MAX_WORDS,
+    take: BOARDLE_MAX_WORDS,
     include: { user: { select: { username: true } } },
   });
-  solverRows.sort((a, b) => fwordlePlayerRank(a.user.username) - fwordlePlayerRank(b.user.username));
+  solverRows.sort((a, b) => boardlePlayerRank(a.user.username) - boardlePlayerRank(b.user.username));
   const slotUsers = solverRows.map((r) => r.userId);
 
   type WordEntry = { word: string; source: "chosen" | "random"; chooserId: number | null; hint: string | null };
@@ -73,19 +73,19 @@ export async function fwordleFinalizeWords(date: string): Promise<void> {
   for (let pos = 0; pos < numBoards; pos++) {
     const uid = slotUsers[pos];
     if (uid !== undefined) {
-      const choice = await prisma.fwordleChoice.findUnique({
-        where: { gameDate_userId: { gameDate: fwordleDateOnly(date), userId: uid } },
+      const choice = await prisma.boardleChoice.findUnique({
+        where: { gameDate_userId: { gameDate: boardleDateOnly(date), userId: uid } },
       });
       const chosen = choice ? choice.word.toLowerCase() : null;
       // Keep a valid chosen word as-is — duplicates between players are
       // allowed; only random backfill dedupes.
-      if (chosen !== null && fwordleIsValidWord(chosen, len)) {
+      if (chosen !== null && boardleIsValidWord(chosen, len)) {
         used.push(chosen);
         words.push({ word: chosen, source: "chosen", chooserId: uid, hint: choice?.hint ?? null });
         continue;
       }
     }
-    const w = fwordleRandomAnswer(len, used);
+    const w = boardleRandomAnswer(len, used);
     if (w === null) continue;
     used.push(w);
     words.push({ word: w, source: "random", chooserId: null, hint: null });
@@ -94,14 +94,14 @@ export async function fwordleFinalizeWords(date: string): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<
       { words_finalized: number }[]
-    >`SELECT words_finalized FROM fwordle_days WHERE game_date = ${date} FOR UPDATE`;
+    >`SELECT words_finalized FROM boardle_days WHERE game_date = ${date} FOR UPDATE`;
     if (rows[0] && Number(rows[0].words_finalized) === 1) return;
 
     for (let pos = 0; pos < words.length; pos++) {
       const w = words[pos];
-      await tx.fwordleWord.create({
+      await tx.boardleWord.create({
         data: {
-          gameDate: fwordleDateOnly(date),
+          gameDate: boardleDateOnly(date),
           position: pos,
           word: w.word,
           source: w.source,
@@ -110,63 +110,63 @@ export async function fwordleFinalizeWords(date: string): Promise<void> {
         },
       });
     }
-    await tx.fwordleDay.update({ where: { gameDate: fwordleDateOnly(date) }, data: { wordsFinalized: 1 } });
+    await tx.boardleDay.update({ where: { gameDate: boardleDateOnly(date) }, data: { wordsFinalized: 1 } });
   });
 }
 
-// If the day is finalized, sync any fwordle_choices that differ from
-// fwordle_words (covers late picks + any race between the choose API write
+// If the day is finalized, sync any boardle_choices that differ from
+// boardle_words (covers late picks + any race between the choose API write
 // and finalization). Board position is looked up by player rank, not
 // chooser_id, since the slot may have been filled by a random backfill.
-export async function fwordleSyncLateChoices(date: string): Promise<void> {
-  const day = await prisma.fwordleDay.findUnique({ where: { gameDate: fwordleDateOnly(date) } });
+export async function boardleSyncLateChoices(date: string): Promise<void> {
+  const day = await prisma.boardleDay.findUnique({ where: { gameDate: boardleDateOnly(date) } });
   if (!day || day.wordsFinalized !== 1) return;
 
-  const yesterday = fwordleAddDays(date, -1);
-  const solverRows = await prisma.fwordleResult.findMany({
-    where: { gameDate: fwordleDateOnly(yesterday), solved: 1 },
+  const yesterday = boardleAddDays(date, -1);
+  const solverRows = await prisma.boardleResult.findMany({
+    where: { gameDate: boardleDateOnly(yesterday), solved: 1 },
     orderBy: { solvedAt: "asc" },
-    take: FWORDLE_MAX_WORDS,
+    take: BOARDLE_MAX_WORDS,
     include: { user: { select: { username: true } } },
   });
-  solverRows.sort((a, b) => fwordlePlayerRank(a.user.username) - fwordlePlayerRank(b.user.username));
+  solverRows.sort((a, b) => boardlePlayerRank(a.user.username) - boardlePlayerRank(b.user.username));
 
   for (let idx = 0; idx < solverRows.length; idx++) {
     const uid = solverRows[idx].userId;
-    const choice = await prisma.fwordleChoice.findUnique({
-      where: { gameDate_userId: { gameDate: fwordleDateOnly(date), userId: uid } },
+    const choice = await prisma.boardleChoice.findUnique({
+      where: { gameDate_userId: { gameDate: boardleDateOnly(date), userId: uid } },
     });
     if (!choice) continue;
-    await prisma.fwordleWord.updateMany({
-      where: { gameDate: fwordleDateOnly(date), position: idx },
+    await prisma.boardleWord.updateMany({
+      where: { gameDate: boardleDateOnly(date), position: idx },
       data: { word: choice.word, hint: choice.hint ?? null, source: "chosen", chooserId: uid },
     });
   }
 }
 
 // Did this user buy the armor joker today? (it grants +1 guess overall.)
-export async function fwordleHasArmor(date: string, userId: number): Promise<boolean> {
-  const hint = await prisma.fwordleHint.findUnique({
-    where: { gameDate_userId_type: { gameDate: fwordleDateOnly(date), userId, type: "armor" } },
+export async function boardleHasArmor(date: string, userId: number): Promise<boolean> {
+  const hint = await prisma.boardleHint.findUnique({
+    where: { gameDate_userId_type: { gameDate: boardleDateOnly(date), userId, type: "armor" } },
   });
   return !!hint;
 }
 
 // Board positions whose word this user chose (auto-solved for them).
-export async function fwordleOwnedPositions(date: string, userId: number): Promise<number[]> {
-  const rows = await prisma.fwordleWord.findMany({
-    where: { gameDate: fwordleDateOnly(date), chooserId: userId },
+export async function boardleOwnedPositions(date: string, userId: number): Promise<number[]> {
+  const rows = await prisma.boardleWord.findMany({
+    where: { gameDate: boardleDateOnly(date), chooserId: userId },
     select: { position: true },
   });
   return rows.map((r) => r.position);
 }
 
 // Is this user among the first MAX_WORDS solvers of the day (-> may pick a word)?
-export async function fwordleChoiceEligible(date: string, userId: number): Promise<boolean> {
-  const rows = await prisma.fwordleResult.findMany({
-    where: { gameDate: fwordleDateOnly(date), solved: 1 },
+export async function boardleChoiceEligible(date: string, userId: number): Promise<boolean> {
+  const rows = await prisma.boardleResult.findMany({
+    where: { gameDate: boardleDateOnly(date), solved: 1 },
     orderBy: { solvedAt: "asc" },
-    take: FWORDLE_MAX_WORDS,
+    take: BOARDLE_MAX_WORDS,
     select: { userId: true },
   });
   return rows.some((r) => r.userId === userId);
@@ -215,7 +215,7 @@ export type ChooseInfo = {
   for_today: boolean;
 };
 
-export type FwordleState = {
+export type BoardleState = {
   date: string;
   length: number;
   num_boards: number;
@@ -230,15 +230,15 @@ export type FwordleState = {
 // Everything the page/poll needs. My board carries letters; opponents' boards
 // carry colors only (letters are never exposed). Answers are revealed only
 // once *I* have finished (won or out of guesses).
-export async function fwordleState(date: string, userId: number): Promise<FwordleState> {
-  const day = await fwordleEnsureDay(date);
-  await fwordleFinalizeWords(date);
-  await fwordleSyncLateChoices(date);
+export async function boardleState(date: string, userId: number): Promise<BoardleState> {
+  const day = await boardleEnsureDay(date);
+  await boardleFinalizeWords(date);
+  await boardleSyncLateChoices(date);
 
   const len = day.wordLength;
 
-  const wordRows = await prisma.fwordleWord.findMany({
-    where: { gameDate: fwordleDateOnly(date) },
+  const wordRows = await prisma.boardleWord.findMany({
+    where: { gameDate: boardleDateOnly(date) },
     orderBy: { position: "asc" },
   });
   const answers: string[] = [];
@@ -250,7 +250,7 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
     boardHints[r.position] = r.hint && r.hint !== "" ? r.hint : null;
   }
   const numBoards = answers.length;
-  const maxGuesses = fwordleMaxGuesses(numBoards);
+  const maxGuesses = boardleMaxGuesses(numBoards);
 
   const ownedOf = (uid: number): number[] => {
     const own: number[] = [];
@@ -260,8 +260,8 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
     return own;
   };
 
-  const guessRows = await prisma.fwordleGuess.findMany({
-    where: { gameDate: fwordleDateOnly(date) },
+  const guessRows = await prisma.boardleGuess.findMany({
+    where: { gameDate: boardleDateOnly(date) },
     orderBy: [{ userId: "asc" }, { guessIndex: "asc" }],
     include: { user: { select: { username: true } } },
   });
@@ -275,13 +275,13 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
     entry.guesses.push(r.guess);
   }
 
-  const resultRows = await prisma.fwordleResult.findMany({ where: { gameDate: fwordleDateOnly(date) } });
+  const resultRows = await prisma.boardleResult.findMany({ where: { gameDate: boardleDateOnly(date) } });
   const results = new Map(resultRows.map((r) => [r.userId, r]));
 
   const myUser = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
   const myName = myUser?.username ?? "";
 
-  const hintRows = await prisma.fwordleHint.findMany({ where: { gameDate: fwordleDateOnly(date) } });
+  const hintRows = await prisma.boardleHint.findMany({ where: { gameDate: boardleDateOnly(date) } });
   const hintsByUser = new Map<number, typeof hintRows>();
   for (const h of hintRows) {
     const arr = hintsByUser.get(h.userId) ?? [];
@@ -294,7 +294,7 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
   // ── Me (computed even with zero guesses, so an owned board still shows) ──
   const myGuesses = byUser.get(userId)?.guesses ?? [];
   const myOwned = ownedOf(userId);
-  const mb = fwordleUserBoards(myGuesses, answers, myOwned);
+  const mb = boardleUserBoards(myGuesses, answers, myOwned);
   const myUsed = myGuesses.length;
   const myRes = results.get(userId);
   const myMax = maxGuessesOf(userId);
@@ -304,10 +304,10 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
   // auto-win on a board you chose (no guess ever submitted).
   if (myFinished && (!myRes || myRes.finished !== 1)) {
     const solvedAt = myRes?.solvedAt ?? (mb.solved ? dbNow() : null);
-    await prisma.fwordleResult.upsert({
-      where: { gameDate_userId: { gameDate: fwordleDateOnly(date), userId } },
+    await prisma.boardleResult.upsert({
+      where: { gameDate_userId: { gameDate: boardleDateOnly(date), userId } },
       create: {
-        gameDate: fwordleDateOnly(date),
+        gameDate: boardleDateOnly(date),
         userId,
         finished: 1,
         solved: mb.solved ? 1 : 0,
@@ -325,7 +325,7 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
   }
 
   const myHints = hintsByUser.get(userId) ?? [];
-  const myInfo = await fwordleStreakInfo(date, userId);
+  const myInfo = await boardleStreakInfo(date, userId);
   const myStreak = myInfo.effective;
   // Players with no streak to spend still get one joker free per day.
   const freeJoker = myStreak < 1 && myHints.length === 0;
@@ -347,7 +347,7 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
     owned: myOwned,
     guesses: mb.guesses,
     answers: reveal,
-    hints: myHints.map(fwordleParseHint),
+    hints: myHints.map(boardleParseHint),
     hint_types_used: [...new Set(myHints.map((h) => h.type))],
     jokers_used: myHints.length,
     jokers_total: 3,
@@ -357,7 +357,7 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
   const opponents: OpponentState[] = [];
   for (const [uid, info] of byUser) {
     if (uid === userId) continue;
-    const b = fwordleUserBoards(info.guesses, answers, ownedOf(uid));
+    const b = boardleUserBoards(info.guesses, answers, ownedOf(uid));
     const used = info.guesses.length;
     const res = results.get(uid);
     const oppMax = maxGuessesOf(uid);
@@ -376,8 +376,8 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
   }
 
   // Tomorrow's word pick (only once I've solved and earned a slot).
-  const tomorrow = fwordleAddDays(date, 1);
-  const yesterday = fwordleAddDays(date, -1);
+  const tomorrow = boardleAddDays(date, 1);
+  const yesterday = boardleAddDays(date, -1);
   const choose: ChooseInfo = {
     eligible: false,
     already: null,
@@ -387,33 +387,33 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
     for_today: false,
   };
 
-  if (await fwordleChoiceEligible(date, userId)) {
+  if (await boardleChoiceEligible(date, userId)) {
     // Normal: solved today -> pick for tomorrow.
-    const tday = await fwordleEnsureDay(tomorrow);
+    const tday = await boardleEnsureDay(tomorrow);
     const tlen = tday.wordLength;
     choose.eligible = true;
     choose.tomorrow_length = tlen;
-    choose.suggestions = fwordleSuggestions(tlen, userId, tomorrow);
+    choose.suggestions = boardleSuggestions(tlen, userId, tomorrow);
 
-    const c = await prisma.fwordleChoice.findUnique({
-      where: { gameDate_userId: { gameDate: fwordleDateOnly(tomorrow), userId } },
+    const c = await prisma.boardleChoice.findUnique({
+      where: { gameDate_userId: { gameDate: boardleDateOnly(tomorrow), userId } },
     });
     choose.already = c?.word ?? null;
     choose.already_hint = c?.hint ?? null;
-  } else if (await fwordleChoiceEligible(yesterday, userId)) {
+  } else if (await boardleChoiceEligible(yesterday, userId)) {
     // Late pick: solved yesterday, today has no guesses yet -> still allow
     // setting today's word.
-    const guessCountToday = await prisma.fwordleGuess.count({ where: { gameDate: fwordleDateOnly(date) } });
+    const guessCountToday = await prisma.boardleGuess.count({ where: { gameDate: boardleDateOnly(date) } });
     if (guessCountToday === 0) {
-      const tday = await fwordleEnsureDay(date);
+      const tday = await boardleEnsureDay(date);
       const tlen = tday.wordLength;
       choose.eligible = true;
       choose.for_today = true;
       choose.tomorrow_length = tlen;
-      choose.suggestions = fwordleSuggestions(tlen, userId, date);
+      choose.suggestions = boardleSuggestions(tlen, userId, date);
 
-      const c = await prisma.fwordleChoice.findUnique({
-        where: { gameDate_userId: { gameDate: fwordleDateOnly(date), userId } },
+      const c = await prisma.boardleChoice.findUnique({
+        where: { gameDate_userId: { gameDate: boardleDateOnly(date), userId } },
       });
       choose.already = c?.word ?? null;
       choose.already_hint = c?.hint ?? null;
@@ -432,6 +432,6 @@ export async function fwordleState(date: string, userId: number): Promise<Fwordl
     opponents,
     choose,
     board_hints: boardHintsArr,
-    stats: await fwordleStats(date),
+    stats: await boardleStats(date),
   };
 }

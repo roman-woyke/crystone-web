@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { MeState } from "@/lib/fwordle";
+import type { MeState } from "@/lib/boardle";
 
 const HINT_TYPES = [
   { type: "armor" as const, board: false, icon: "🛡️", label: "Armor (+1 guess)" },

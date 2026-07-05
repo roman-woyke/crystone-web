@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { fwordleDateOnly } from "@/lib/fwordle-dates";
-import { fwordleEnsureDay, fwordleFinalizeWords, fwordleState, fwordleToday } from "@/lib/fwordle";
-import { fwordleStreakInfo } from "@/lib/fwordle-streak";
-import { fwordleComputeHint } from "@/lib/fwordle-score";
+import { boardleDateOnly } from "@/lib/boardle-dates";
+import { boardleEnsureDay, boardleFinalizeWords, boardleState, boardleToday } from "@/lib/boardle";
+import { boardleStreakInfo } from "@/lib/boardle-streak";
+import { boardleComputeHint } from "@/lib/boardle-score";
 
 const HINT_TYPES = ["armor", "orange", "green"] as const;
 type HintType = (typeof HINT_TYPES)[number];
@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Not logged in.", { status: 401 });
   }
   const userId = Number(session.user.id);
-  const date = fwordleToday();
-  const gameDate = fwordleDateOnly(date);
+  const date = boardleToday();
+  const gameDate = boardleDateOnly(date);
 
   const body = await request.json().catch(() => ({}));
   const type = String(body.type ?? "");
@@ -28,17 +28,17 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Bad joker type.", { status: 400 });
   }
 
-  await fwordleEnsureDay(date);
-  await fwordleFinalizeWords(date);
+  await boardleEnsureDay(date);
+  await boardleFinalizeWords(date);
 
   // Done for the day? No more jokers.
-  const result = await prisma.fwordleResult.findUnique({ where: { gameDate_userId: { gameDate, userId } } });
+  const result = await prisma.boardleResult.findUnique({ where: { gameDate_userId: { gameDate, userId } } });
   if (result?.finished === 1) {
     return new NextResponse("You're already done for today.", { status: 409 });
   }
 
   // Each joker is once per day.
-  const existing = await prisma.fwordleHint.findUnique({
+  const existing = await prisma.boardleHint.findUnique({
     where: { gameDate_userId_type: { gameDate, userId, type: type as HintType } },
   });
   if (existing) {
@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
   // free per day (their first), and a freeze can be exchanged for a joker.
   // The client may request pay=freeze; we also fall back to a freeze when
   // there's no streak left to spend.
-  const info = await fwordleStreakInfo(date, userId);
-  const usedToday = await prisma.fwordleHint.count({ where: { gameDate, userId } });
+  const info = await boardleStreakInfo(date, userId);
+  const usedToday = await prisma.boardleHint.count({ where: { gameDate, userId } });
 
   const wantFreeze = body.pay === "freeze";
   const freeJoker = info.effective < 1 && usedToday === 0;
@@ -74,17 +74,17 @@ export async function POST(request: NextRequest) {
   // ── Armor: +1 guess overall, no board, no reveal. ──
   if (type === "armor") {
     try {
-      await prisma.fwordleHint.create({
+      await prisma.boardleHint.create({
         data: { gameDate, userId, boardPos: null, type: "armor", payload: "1", viaFreeze },
       });
     } catch {
       return new NextResponse("Joker conflict — reload and try again.", { status: 409 });
     }
-    return NextResponse.json(await fwordleState(date, userId));
+    return NextResponse.json(await boardleState(date, userId));
   }
 
   // ── Board jokers (orange / green) ──
-  const wordRows = await prisma.fwordleWord.findMany({ where: { gameDate }, orderBy: { position: "asc" } });
+  const wordRows = await prisma.boardleWord.findMany({ where: { gameDate }, orderBy: { position: "asc" } });
   const answers: string[] = [];
   const chooser: (number | null)[] = [];
   for (const r of wordRows) {
@@ -102,25 +102,25 @@ export async function POST(request: NextRequest) {
   }
 
   // My guesses so far (to avoid revealing anything I already know).
-  const myGuessRows = await prisma.fwordleGuess.findMany({
+  const myGuessRows = await prisma.boardleGuess.findMany({
     where: { gameDate, userId },
     orderBy: { guessIndex: "asc" },
     select: { guess: true },
   });
   const myGuesses = myGuessRows.map((r) => r.guess);
 
-  const payload = fwordleComputeHint(answers[board], myGuesses, type as "orange" | "green");
+  const payload = boardleComputeHint(answers[board], myGuesses, type as "orange" | "green");
   if (payload === null) {
     return new NextResponse("Nothing new to reveal there.", { status: 422 });
   }
 
   try {
-    await prisma.fwordleHint.create({
+    await prisma.boardleHint.create({
       data: { gameDate, userId, boardPos: board, type: type as "orange" | "green", payload, viaFreeze },
     });
   } catch {
     return new NextResponse("Joker conflict — reload and try again.", { status: 409 });
   }
 
-  return NextResponse.json(await fwordleState(date, userId));
+  return NextResponse.json(await boardleState(date, userId));
 }

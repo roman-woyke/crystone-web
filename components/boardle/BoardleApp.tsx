@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { FwordleState } from "@/lib/fwordle";
-import type { ParsedHint } from "@/lib/fwordle-score";
+import type { BoardleState } from "@/lib/boardle";
+import type { ParsedHint } from "@/lib/boardle-score";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Board } from "@/components/fwordle/Board";
-import { Keyboard } from "@/components/fwordle/Keyboard";
-import { JokerBar } from "@/components/fwordle/JokerBar";
-import { ChooseWord } from "@/components/fwordle/ChooseWord";
-import { StatsPanel } from "@/components/fwordle/StatsPanel";
-import { OpponentsPanel } from "@/components/fwordle/OpponentsPanel";
+import { Board } from "@/components/boardle/Board";
+import { Keyboard } from "@/components/boardle/Keyboard";
+import { JokerBar } from "@/components/boardle/JokerBar";
+import { ChooseWord } from "@/components/boardle/ChooseWord";
+import { StatsPanel } from "@/components/boardle/StatsPanel";
+import { OpponentsPanel } from "@/components/boardle/OpponentsPanel";
 
 const HINT_TYPES: { type: "armor" | "orange" | "green"; board: boolean }[] = [
   { type: "armor", board: false },
@@ -26,7 +26,7 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function FwordleApp({ initialState }: { initialState: FwordleState }) {
+export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   const [state, setState] = useState(initialState);
   const [buffer, setBuffer] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,7 +44,7 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
   const bonusRow = state.me.armor ? myMax - 1 : -1;
   const activeRowIndex = state.me.finished ? -1 : state.me.guesses_used;
 
-  function eligibleBoards(s: FwordleState): number[] {
+  function eligibleBoards(s: BoardleState): number[] {
     if (s.me.finished) return [];
     const owned = s.me.owned;
     const out: number[] = [];
@@ -73,9 +73,9 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
   async function loadState() {
     if (busyRef.current) return;
     try {
-      const res = await fetch("/api/fwordle/state");
+      const res = await fetch("/api/boardle/state");
       if (!res.ok) return;
-      const next: FwordleState = await res.json();
+      const next: BoardleState = await res.json();
       setState(next);
     } catch {
       // ignore transient poll failures
@@ -175,13 +175,13 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
 
     setBusy(true);
     try {
-      const res = await fetch("/api/fwordle/guess", {
+      const res = await fetch("/api/boardle/guess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ word, offset: first }),
       });
       if (!res.ok) throw new Error((await res.text()) || "Guess failed.");
-      const next: FwordleState = await res.json();
+      const next: BoardleState = await res.json();
       setState(next);
       setBuffer("");
       setMsg(null);
@@ -223,13 +223,13 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
     setPayMode("streak");
     setMsg(null);
     try {
-      const res = await fetch("/api/fwordle/hint", {
+      const res = await fetch("/api/boardle/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, board: board ?? undefined, pay: payFreeze ? "freeze" : undefined }),
       });
       if (!res.ok) throw new Error((await res.text()) || "Joker failed.");
-      const next: FwordleState = await res.json();
+      const next: BoardleState = await res.json();
       setState(next);
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "Joker failed.", ok: false });
@@ -239,7 +239,7 @@ export function FwordleApp({ initialState }: { initialState: FwordleState }) {
   }
 
   async function submitChoice(word: string, hint: string) {
-    const res = await fetch("/api/fwordle/choose", {
+    const res = await fetch("/api/boardle/choose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ word, hint }),

@@ -1,15 +1,15 @@
-// Streak + streak-freeze accounting for fWordle, ported 1:1 from
-// includes/fwordle.php (fwordleStreakInfo / fwordleStats).
+// Streak + streak-freeze accounting for Boardle, ported 1:1 from
+// includes/boardle.php (boardleStreakInfo / boardleStats).
 
 import { prisma } from "@/lib/prisma";
 import { toDbDateStr } from "@/lib/dates";
-import { fwordleAddDays } from "@/lib/fwordle-dates";
+import { boardleAddDays } from "@/lib/boardle-dates";
 
 // Everyone starts with 3 freezes, earns 3 more per 7 days of streak, and a
 // freeze auto-bridges a missed day (so the streak survives) when one is
 // available; a freeze can also be exchanged for a joker once per day.
-export const FWORDLE_FREEZE_START = 3;
-export const FWORDLE_FREEZE_PER_WEEK = 3;
+export const BOARDLE_FREEZE_START = 3;
+export const BOARDLE_FREEZE_PER_WEEK = 3;
 
 export type StreakInfo = {
   effective: number;
@@ -27,8 +27,8 @@ export type StreakInfo = {
 //   - jokers settle on their day: a freeze-paid joker spends a freeze; every
 //     other joker costs 1 streak.
 // `effective` is the freeze-aware streak, net of the joker streak-cost.
-export async function fwordleStreakInfo(date: string, userId: number): Promise<StreakInfo> {
-  const solvedRows = await prisma.fwordleResult.findMany({
+export async function boardleStreakInfo(date: string, userId: number): Promise<StreakInfo> {
+  const solvedRows = await prisma.boardleResult.findMany({
     where: { userId, solved: 1 },
     orderBy: { gameDate: "asc" },
     select: { gameDate: true },
@@ -36,7 +36,7 @@ export async function fwordleStreakInfo(date: string, userId: number): Promise<S
   const solvedList = solvedRows.map((r) => toDbDateStr(r.gameDate));
   const solved = new Set(solvedList);
 
-  const hintRows = await prisma.fwordleHint.findMany({
+  const hintRows = await prisma.boardleHint.findMany({
     where: { userId },
     select: { gameDate: true, viaFreeze: true },
   });
@@ -58,13 +58,13 @@ export async function fwordleStreakInfo(date: string, userId: number): Promise<S
   );
   let cursor = candidates.length ? candidates.reduce((a, b) => (a < b ? a : b)) : date;
 
-  let balance = FWORDLE_FREEZE_START;
+  let balance = BOARDLE_FREEZE_START;
   let streak = 0;
 
   while (cursor <= date) {
     if (solved.has(cursor)) {
       streak++;
-      if (streak % 7 === 0) balance += FWORDLE_FREEZE_PER_WEEK;
+      if (streak % 7 === 0) balance += BOARDLE_FREEZE_PER_WEEK;
     } else if (cursor !== date) {
       if (streak > 0) {
         if (balance >= 1) balance--;
@@ -79,7 +79,7 @@ export async function fwordleStreakInfo(date: string, userId: number): Promise<S
     if (balance < 0) balance = 0;
 
     if (cursor === date) break;
-    cursor = fwordleAddDays(cursor, 1);
+    cursor = boardleAddDays(cursor, 1);
   }
 
   return {
@@ -101,13 +101,13 @@ export type PlayerStats = {
 
 // Per-user season stats: effective (freeze-aware) streak and average guesses
 // on solved days. One entry per user (empty if never won).
-export async function fwordleStats(date: string): Promise<PlayerStats[]> {
+export async function boardleStats(date: string): Promise<PlayerStats[]> {
   const users = await prisma.user.findMany({
     select: { id: true, username: true },
     orderBy: { username: "asc" },
   });
 
-  const agg = await prisma.fwordleResult.groupBy({
+  const agg = await prisma.boardleResult.groupBy({
     by: ["userId"],
     where: { solved: 1 },
     _count: { _all: true },
@@ -117,7 +117,7 @@ export async function fwordleStats(date: string): Promise<PlayerStats[]> {
 
   const stats: PlayerStats[] = [];
   for (const u of users) {
-    const info = await fwordleStreakInfo(date, u.id);
+    const info = await boardleStreakInfo(date, u.id);
     const a = aggByUser.get(u.id);
     stats.push({
       username: u.username,

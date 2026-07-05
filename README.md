@@ -1,6 +1,6 @@
 # Internship Leaderboard
 
-A shared leaderboard for tracking internship applications with friends, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (fWordle).
+A shared leaderboard for tracking internship applications with friends, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (Boardle).
 
 The app is a TypeScript/Next.js app — see [`CLAUDE.md`](CLAUDE.md) for architecture and deployment. For a full step-by-step local setup walkthrough (Docker, `.env`, schema, troubleshooting), see [`SETUP.md`](SETUP.md). This file is the **authoritative MySQL schema reference**: `prisma/schema.prisma` is introspected from it and must be kept in sync manually when either changes.
 
@@ -140,13 +140,13 @@ CREATE TABLE project_time_entries (
     logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- fWordle (fwordle.php): a daily multi-board, multiplayer Wordle. One puzzle a
+-- Boardle (app/(app)/boardle): a daily multi-board, multiplayer Wordle. One puzzle a
 -- day; N boards (1–4) all of the same length L. The word lists live as bundled
--- text files in includes/fwordle/, NOT in the DB.
+-- text files in includes/boardle/, NOT in the DB.
 
 -- One row per calendar day: the day's word length + whether its answer words
 -- have been finalized. Length is rolled when the row is first created.
-CREATE TABLE fwordle_days (
+CREATE TABLE boardle_days (
     game_date       DATE NOT NULL PRIMARY KEY,
     word_length     TINYINT UNSIGNED NOT NULL,
     words_finalized TINYINT NOT NULL DEFAULT 0,
@@ -155,7 +155,7 @@ CREATE TABLE fwordle_days (
 
 -- The answer words for each day (1–4), one row per board position.
 -- source = 'chosen' (a prior-day solver picked it) or 'random' (backfilled).
-CREATE TABLE fwordle_words (
+CREATE TABLE boardle_words (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     game_date  DATE NOT NULL,
     position   TINYINT UNSIGNED NOT NULL,
@@ -167,8 +167,8 @@ CREATE TABLE fwordle_words (
 );
 
 -- A solver's chosen word for the NEXT day. game_date is the date the word is
--- FOR; user_id is the chooser. Folded into fwordle_words when that day arrives.
-CREATE TABLE fwordle_choices (
+-- FOR; user_id is the chooser. Folded into boardle_words when that day arrives.
+CREATE TABLE boardle_choices (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     word       VARCHAR(10) NOT NULL,
@@ -179,7 +179,7 @@ CREATE TABLE fwordle_choices (
 
 -- Per user, per day outcome. solved_at orders who earns choice rights
 -- (first 4 solvers). finished locks the board (win or out of guesses).
-CREATE TABLE fwordle_results (
+CREATE TABLE boardle_results (
     game_date    DATE NOT NULL,
     user_id      INT NOT NULL REFERENCES users(id),
     finished     TINYINT NOT NULL DEFAULT 0,
@@ -193,7 +193,7 @@ CREATE TABLE fwordle_results (
 -- Each guess a user has made today (shared across all boards), in order. The
 -- guess is stored as an L-wide string with '_' for unused cells (e.g.
 -- '__HELLO___'), encoding both the word and where it was positioned.
-CREATE TABLE fwordle_guesses (
+CREATE TABLE boardle_guesses (
     game_date   DATE NOT NULL,
     user_id     INT NOT NULL REFERENCES users(id),
     guess_index TINYINT UNSIGNED NOT NULL,
@@ -210,7 +210,7 @@ CREATE TABLE fwordle_guesses (
 -- PK enforces one-of-each-type per day; armor/orange/green may share a board.
 -- via_freeze = 1 when the joker was bought by exchanging a streak freeze
 -- (once/day) instead of paying a streak.
-CREATE TABLE fwordle_hints (
+CREATE TABLE boardle_hints (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     type       ENUM('armor','orange','green') NOT NULL,
@@ -225,31 +225,43 @@ CREATE TABLE fwordle_hints (
 > **Streak freezes** are not a table — everyone starts with 3, earns +3 per 7
 > days of streak, and a freeze auto-bridges a missed day (or is exchanged for a
 > joker once/day). The balance is **derived** by replaying solved days +
-> `fwordle_hints.via_freeze`, so the only persisted state is that column.
+> `boardle_hints.via_freeze`, so the only persisted state is that column.
 
 > **Deploy note:** run the corresponding `CREATE TABLE` on the database
 > **before** pushing code that uses a new table, otherwise pages hitting it
 > will 500.
 >
-> **fwordle_hints migration:** the joker rework changed this table (new `type`
+> **fwordle → boardle rename migration:** the game was renamed from fWordle to
+> Boardle; the code now queries `boardle_*` tables, so the existing
+> `fwordle_*` tables must be renamed in place (data is kept):
+> ```sql
+> RENAME TABLE fwordle_days     TO boardle_days,
+>              fwordle_words    TO boardle_words,
+>              fwordle_choices  TO boardle_choices,
+>              fwordle_results  TO boardle_results,
+>              fwordle_guesses  TO boardle_guesses,
+>              fwordle_hints    TO boardle_hints;
+> ```
+>
+> **boardle_hints migration:** the joker rework changed this table (new `type`
 > enum, nullable `board_pos`, new PK). Jokers are throwaway daily state, so the
 > simplest migration is to recreate it:
 > ```sql
-> DROP TABLE IF EXISTS fwordle_hints;
+> DROP TABLE IF EXISTS boardle_hints;
 > -- then run the CREATE TABLE above
 > ```
 >
-> **fwordle_hints.via_freeze migration:** streak freezes can be exchanged for
+> **boardle_hints.via_freeze migration:** streak freezes can be exchanged for
 > jokers, recorded on the hint row:
 > ```sql
-> ALTER TABLE fwordle_hints ADD COLUMN via_freeze TINYINT NOT NULL DEFAULT 0;
+> ALTER TABLE boardle_hints ADD COLUMN via_freeze TINYINT NOT NULL DEFAULT 0;
 > ```
 >
-> **fwordle_words.hint / fwordle_choices.hint migration:** the word picker can
+> **boardle_words.hint / boardle_choices.hint migration:** the word picker can
 > attach an optional clue shown under a board from the start:
 > ```sql
-> ALTER TABLE fwordle_words ADD COLUMN hint VARCHAR(500) NULL;
-> ALTER TABLE fwordle_choices ADD COLUMN hint VARCHAR(500) NULL;
+> ALTER TABLE boardle_words ADD COLUMN hint VARCHAR(500) NULL;
+> ALTER TABLE boardle_choices ADD COLUMN hint VARCHAR(500) NULL;
 > ```
 >
 > **study_segments migration:** the "I'm studying" session can now be split

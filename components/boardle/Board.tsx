@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { BoardGuessRow, CellColor } from "@/lib/fwordle-score";
+import type { BoardGuessRow, CellColor } from "@/lib/boardle-score";
 
 type CellClass = CellColor | "active" | "blank";
 

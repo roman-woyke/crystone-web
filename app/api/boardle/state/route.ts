@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
-import { fwordleState, fwordleToday } from "@/lib/fwordle";
+import { boardleState, boardleToday } from "@/lib/boardle";
 
 export async function GET() {
   const session = await auth();
@@ -9,6 +9,6 @@ export async function GET() {
     return new NextResponse("Not logged in.", { status: 401 });
   }
 
-  const state = await fwordleState(fwordleToday(), Number(session.user.id));
+  const state = await boardleState(boardleToday(), Number(session.user.id));
   return NextResponse.json(state);
 }

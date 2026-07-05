@@ -25,11 +25,11 @@ model User {
   createdAt          DateTime?                  @default(now()) @map("created_at") @db.Timestamp(0)
   applicationHistory ApplicationStatusHistory[]
   applications       Application[]
-  fwordleChoices     FwordleChoice[]
-  fwordleGuesses     FwordleGuess[]
-  fwordleHints       FwordleHint[]
-  fwordleResults     FwordleResult[]
-  fwordleChosenWords FwordleWord[]              @relation("FwordleWordChooser")
+  boardleChoices     BoardleChoice[]
+  boardleGuesses     BoardleGuess[]
+  boardleHints       BoardleHint[]
+  boardleResults     BoardleResult[]
+  boardleChosenWords BoardleWord[]              @relation("BoardleWordChooser")
   projectTimeEntries ProjectTimeEntry[]
   projects           Project[]
   studySegments      StudySegment[]
@@ -189,48 +189,48 @@ model ProjectTimeEntry {
   @@map("project_time_entries")
 }
 
-model FwordleDay {
+model BoardleDay {
   gameDate       DateTime  @id @map("game_date") @db.Date
   wordLength     Int       @map("word_length") @db.UnsignedTinyInt
   wordsFinalized Int       @default(0) @map("words_finalized") @db.TinyInt
   createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
 
-  @@map("fwordle_days")
+  @@map("boardle_days")
 }
 
 // `hint` isn't in the README's documented CREATE TABLE (same docs-lag pattern
 // as ApplicationStatusHistory.userId) — the live PHP app reads/writes it on
-// both fwordle_words and fwordle_choices (the word-picker's optional clue
+// both boardle_words and boardle_choices (the word-picker's optional clue
 // text for players), so the deployed schema has it.
-model FwordleWord {
+model BoardleWord {
   id        Int               @id @default(autoincrement())
   gameDate  DateTime          @map("game_date") @db.Date
   position  Int               @db.UnsignedTinyInt
   word      String            @db.VarChar(10)
-  source    FwordleWordSource @default(random)
+  source    BoardleWordSource @default(random)
   chooserId Int?              @map("chooser_id")
   hint      String?           @db.VarChar(500)
-  chooser   User?             @relation("FwordleWordChooser", fields: [chooserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_words_ibfk_1")
+  chooser   User?             @relation("BoardleWordChooser", fields: [chooserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "boardle_words_ibfk_1")
 
   @@unique([gameDate, position], map: "uniq_day_pos")
   @@index([chooserId], map: "chooser_id")
-  @@map("fwordle_words")
+  @@map("boardle_words")
 }
 
-model FwordleChoice {
+model BoardleChoice {
   gameDate  DateTime  @map("game_date") @db.Date
   userId    Int       @map("user_id")
   word      String    @db.VarChar(10)
   hint      String?   @db.VarChar(500)
   createdAt DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
-  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_choices_ibfk_1")
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "boardle_choices_ibfk_1")
 
   @@id([gameDate, userId])
   @@index([userId], map: "user_id")
-  @@map("fwordle_choices")
+  @@map("boardle_choices")
 }
 
-model FwordleResult {
+model BoardleResult {
   gameDate    DateTime  @map("game_date") @db.Date
   userId      Int       @map("user_id")
   finished    Int       @default(0) @db.TinyInt
@@ -238,39 +238,39 @@ model FwordleResult {
   guessesUsed Int       @default(0) @map("guesses_used") @db.UnsignedTinyInt
   solvedAt    DateTime? @map("solved_at") @db.DateTime(0)
   updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
-  user        User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_results_ibfk_1")
+  user        User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "boardle_results_ibfk_1")
 
   @@id([gameDate, userId])
   @@index([userId], map: "user_id")
-  @@map("fwordle_results")
+  @@map("boardle_results")
 }
 
-model FwordleGuess {
+model BoardleGuess {
   gameDate   DateTime  @map("game_date") @db.Date
   userId     Int       @map("user_id")
   guessIndex Int       @map("guess_index") @db.UnsignedTinyInt
   guess      String    @db.VarChar(10)
   createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
-  user       User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_guesses_ibfk_1")
+  user       User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "boardle_guesses_ibfk_1")
 
   @@id([gameDate, userId, guessIndex])
   @@index([userId], map: "user_id")
-  @@map("fwordle_guesses")
+  @@map("boardle_guesses")
 }
 
-model FwordleHint {
+model BoardleHint {
   gameDate  DateTime        @map("game_date") @db.Date
   userId    Int             @map("user_id")
-  type      FwordleHintType
+  type      BoardleHintType
   boardPos  Int?            @map("board_pos") @db.UnsignedTinyInt
   payload   String          @db.VarChar(64)
   viaFreeze Int             @default(0) @map("via_freeze") @db.TinyInt
   createdAt DateTime?       @default(now()) @map("created_at") @db.Timestamp(0)
-  user      User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fwordle_hints_ibfk_1")
+  user      User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "boardle_hints_ibfk_1")
 
   @@id([gameDate, userId, type])
   @@index([userId], map: "user_id")
-  @@map("fwordle_hints")
+  @@map("boardle_hints")
 }
 
 enum ApplicationStatus {
@@ -286,12 +286,12 @@ enum StudyMode {
   presence
 }
 
-enum FwordleWordSource {
+enum BoardleWordSource {
   chosen
   random
 }
 
-enum FwordleHintType {
+enum BoardleHintType {
   armor
   orange
   green

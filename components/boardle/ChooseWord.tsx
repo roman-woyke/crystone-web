@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { ChooseInfo } from "@/lib/fwordle";
+import type { ChooseInfo } from "@/lib/boardle";
 
 // Tomorrow's (or, in the "late pick" case, today's) word picker — shown once
 // the viewer has earned a slot. Holds its own local edit buffer so a

@@ -1,10 +1,10 @@
-// Scoring + board-replay logic for fWordle, ported 1:1 from includes/fwordle.php.
+// Scoring + board-replay logic for Boardle, ported 1:1 from includes/boardle.php.
 
 export type CellColor = "green" | "orange" | "grey" | "empty";
 
 // Score a guess string (L chars, '_' = blank/unused cell) against an answer.
 // Standard Wordle letter-multiplicity handling (greens claimed first).
-export function fwordleScore(answer: string, guess: string): CellColor[] {
+export function boardleScore(answer: string, guess: string): CellColor[] {
   const a = answer.toLowerCase();
   const g = guess.toLowerCase();
   const L = a.length;
@@ -43,7 +43,7 @@ export type UserBoardsResult = {
 // Replay a user's guesses across all boards. `owned` are board positions the
 // user picked the word for — those count as solved without guessing (they
 // already know the word), so they don't block the win.
-export function fwordleUserBoards(guesses: string[], answers: string[], owned: number[] = []): UserBoardsResult {
+export function boardleUserBoards(guesses: string[], answers: string[], owned: number[] = []): UserBoardsResult {
   const num = answers.length;
   const solvedBoards = new Array(num).fill(false);
   for (const p of owned) {
@@ -53,7 +53,7 @@ export function fwordleUserBoards(guesses: string[], answers: string[], owned: n
   for (const g of guesses) {
     const boards: CellColor[][] = [];
     for (let pos = 0; pos < num; pos++) {
-      boards[pos] = fwordleScore(answers[pos], g);
+      boards[pos] = boardleScore(answers[pos], g);
       if (g.toLowerCase() === answers[pos].toLowerCase()) solvedBoards[pos] = true;
     }
     rows.push({ text: g, boards });
@@ -64,7 +64,7 @@ export function fwordleUserBoards(guesses: string[], answers: string[], owned: n
 
 // Fixed board order so the numbering is stable per player (independent of who
 // solved first): roman -> ben -> basti -> lorenz, others last.
-export function fwordlePlayerRank(username: string): number {
+export function boardlePlayerRank(username: string): number {
   const order: Record<string, number> = { roman: 0, ben: 1, basti: 2, lorenz: 3 };
   return order[username.toLowerCase()] ?? 99;
 }
@@ -72,14 +72,14 @@ export function fwordlePlayerRank(username: string): number {
 type BoardKnowledge = { present: Set<string>; absent: Set<string>; greenPos: Set<number> };
 
 // What a player already knows about one board, derived from their guesses.
-function fwordleBoardKnowledge(guesses: string[], answer: string): BoardKnowledge {
+function boardleBoardKnowledge(guesses: string[], answer: string): BoardKnowledge {
   const a = answer.toLowerCase();
   const len = a.length;
   const present = new Set<string>();
   const absent = new Set<string>();
   const greenPos = new Set<number>();
   for (const g of guesses) {
-    const colors = fwordleScore(a, g);
+    const colors = boardleScore(a, g);
     for (let i = 0; i < len; i++) {
       const ch = g[i] ?? "_";
       if (ch === "_") continue;
@@ -105,10 +105,10 @@ function randomInt(n: number): number {
 //   orange -> up to 2 cells, each a present letter shown on a spot it ISN'T
 //             (so it reads as a true orange cell), e.g. "r:2,t:5"
 //   green  -> 1 cell, the correct letter at its spot (0-indexed), e.g. "r:3"
-export function fwordleComputeHint(answer: string, guesses: string[], type: "orange" | "green"): string | null {
+export function boardleComputeHint(answer: string, guesses: string[], type: "orange" | "green"): string | null {
   const a = answer.toLowerCase();
   const len = a.length;
-  const k = fwordleBoardKnowledge(guesses, a);
+  const k = boardleBoardKnowledge(guesses, a);
 
   if (type === "orange") {
     const cands = [...new Set(a.split(""))].filter((ch) => !k.present.has(ch));
@@ -153,7 +153,7 @@ type HintRow = { type: "armor" | "orange" | "green"; boardPos: number | null; pa
 
 // Parse a stored hint row into the client shape. Armor is board-less; orange
 // and green carry a `cells` array of {letter, pos} (orange up to 2, green 1).
-export function fwordleParseHint(h: HintRow): ParsedHint {
+export function boardleParseHint(h: HintRow): ParsedHint {
   if (h.type === "armor") {
     return { board: null, type: "armor", cells: [] };
   }
