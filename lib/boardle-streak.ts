@@ -15,6 +15,13 @@ export type StreakInfo = {
   effective: number;
   freezes: number;
   freezeUsedToday: boolean;
+  // The streak is currently living on a freeze bridge: the most recent past
+  // day was missed and auto-bridged, and no solve has landed since. Clears the
+  // moment a day is solved again.
+  frozen: boolean;
+  // Consecutive solved days with no freeze spent in between (neither an
+  // auto-bridge nor a freeze-paid joker) — the "clean" tail of the streak.
+  pureRun: number;
 };
 
 // Current solve streak AND freeze balance for a user, computed by replaying
@@ -60,20 +67,33 @@ export async function boardleStreakInfo(date: string, userId: number): Promise<S
 
   let balance = BOARDLE_FREEZE_START;
   let streak = 0;
+  let bridged = false; // currently on a freeze bridge (no solve since)
+  let pureRun = 0; // consecutive solved days since the last freeze spend/reset
 
   while (cursor <= date) {
     if (solved.has(cursor)) {
       streak++;
+      pureRun++;
+      bridged = false;
       if (streak % 7 === 0) balance += BOARDLE_FREEZE_PER_WEEK;
     } else if (cursor !== date) {
       if (streak > 0) {
-        if (balance >= 1) balance--;
-        else streak = 0;
+        if (balance >= 1) {
+          balance--;
+          bridged = true;
+        } else {
+          streak = 0;
+          bridged = false;
+        }
+        pureRun = 0;
       }
     }
 
     const fj = freezeJokers.get(cursor);
-    if (fj) balance -= fj;
+    if (fj) {
+      balance -= fj;
+      pureRun = 0; // a freeze-paid joker breaks the "clean" run too
+    }
     const sj = streakJokers.get(cursor);
     if (sj) streak = Math.max(0, streak - sj);
     if (balance < 0) balance = 0;
@@ -86,6 +106,8 @@ export async function boardleStreakInfo(date: string, userId: number): Promise<S
     effective: Math.max(0, streak),
     freezes: Math.max(0, balance),
     freezeUsedToday: !!freezeJokers.get(date),
+    frozen: bridged && streak > 0,
+    pureRun,
   };
 }
 
@@ -97,6 +119,11 @@ export type PlayerStats = {
   freezes: number;
   solves: number;
   avg_guesses: number | null;
+  // Standings row effects: frozen = the streak is currently bridged by a
+  // freeze (missed day); on_fire = 7+ consecutive solved days without
+  // spending any freeze.
+  frozen: boolean;
+  on_fire: boolean;
 };
 
 // Per-user season stats: effective (freeze-aware) streak and average guesses
@@ -125,6 +152,8 @@ export async function boardleStats(date: string): Promise<PlayerStats[]> {
       freezes: info.freezes,
       solves: a?._count._all ?? 0,
       avg_guesses: a?._avg.guessesUsed != null ? Math.round(a._avg.guessesUsed * 10) / 10 : null,
+      frozen: info.frozen,
+      on_fire: info.pureRun >= 7,
     });
   }
 

@@ -330,3 +330,69 @@
   pointer-events: none;
   z-index: -1;
 }
+
+/* ── Boardle standings row effects ──────────────────────────────────────────
+   frozen  → the player's streak is currently bridged by a streak freeze (they
+             missed a day): icy tint + a slow frost shimmer sweeping the row.
+   on-fire → 7+ consecutive solved days without spending a freeze: warm ember
+             tint + a flickering flame glow. The two never apply together. */
+.stat-frozen {
+  position: relative;
+  overflow: hidden;
+  border-left: 3px solid #38bdf8;
+  background: linear-gradient(90deg, rgb(56 189 248 / 22%), rgb(125 211 252 / 8%) 65%, transparent);
+  animation: frost-pulse 2.8s ease-in-out infinite;
+}
+.stat-frozen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgb(224 242 254 / 35%) 48%, transparent 62%);
+  background-size: 250% 100%;
+  animation: frost-sheen 3.2s linear infinite;
+}
+
+@keyframes frost-pulse {
+  0%, 100% { box-shadow: inset 0 0 10px rgb(125 211 252 / 20%); }
+  50%      { box-shadow: inset 0 0 20px rgb(125 211 252 / 45%); }
+}
+@keyframes frost-sheen {
+  from { background-position: 130% 0; }
+  to   { background-position: -130% 0; }
+}
+
+.stat-onfire {
+  position: relative;
+  overflow: hidden;
+  border-left: 3px solid #f97316;
+  background: linear-gradient(90deg, rgb(249 115 22 / 26%), rgb(250 204 21 / 10%) 65%, transparent);
+  animation: flame-flicker 1.7s ease-in-out infinite;
+}
+.stat-onfire::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgb(249 115 22 / 30%), transparent 55%);
+  animation: flame-lick 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes flame-flicker {
+  0%, 100% { box-shadow: inset 0 -5px 12px rgb(249 115 22 / 30%); }
+  35%      { box-shadow: inset 0 -8px 18px rgb(234 88 12 / 50%); }
+  65%      { box-shadow: inset 0 -6px 12px rgb(250 204 21 / 35%); }
+}
+@keyframes flame-lick {
+  from { opacity: 0.5; transform: translateY(2px); }
+  to   { opacity: 1;   transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-frozen,
+  .stat-onfire,
+  .stat-frozen::after,
+  .stat-onfire::after {
+    animation: none;
+  }
+}

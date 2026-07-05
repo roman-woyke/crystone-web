@@ -14,12 +14,22 @@ export function StatsPanel({ stats }: { stats: PlayerStats[] }) {
     <div className="glow-card overflow-hidden rounded-md border bg-card">
       {stats.map((s, i) => {
         const played = s.solves > 0 || s.streak > 0;
+        // Frozen/on-fire effects replace the podium tint (both style the same
+        // left border + background); the podium name color stays either way.
+        const rowTint = s.frozen ? "stat-frozen" : s.on_fire ? "stat-onfire" : (RANK_ROW[i] ?? "");
         return (
           <div
             key={s.username}
+            title={
+              s.frozen
+                ? "Streak frozen — a freeze bridged a missed day"
+                : s.on_fire
+                  ? "On fire — 7+ day streak without using a freeze"
+                  : undefined
+            }
             className={`flex items-baseline gap-2 border-t px-3 py-2 text-xs text-muted-foreground tabular-nums first:border-t-0 ${
               played ? "" : "opacity-50"
-            } ${RANK_ROW[i] ?? ""}`}
+            } ${rowTint}`}
           >
             <span className={`min-w-0 flex-1 truncate text-sm font-bold ${RANK_NAME[i] ?? "text-foreground"}`}>
               {s.username}
