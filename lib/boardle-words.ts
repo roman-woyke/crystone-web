@@ -80,6 +80,19 @@ export function boardleSuggestions(len: number, userId: number, forDate: string,
   return keyed.slice(0, count).map((x) => x.w);
 }
 
+// A fresh, non-deterministic set of suggestions of the given length — backs
+// the "randomize" button in the word picker (unlike boardleSuggestions, which
+// stays stable across polls).
+export function boardleRandomSuggestions(len: number, count = 3): string[] {
+  const pool = [...new Set(answerPool(len))];
+  if (pool.length === 0) return [];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(count, pool.length));
+}
+
 // Weighted random length: 5->30%, 6->30%, 7->20%, 8->10%, 9->5%, 10->5%.
 export function boardleRollLength(): number {
   const weights: [number, number][] = [

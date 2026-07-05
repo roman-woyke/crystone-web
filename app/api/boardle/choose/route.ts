@@ -4,8 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { boardleAddDays, boardleDateOnly } from "@/lib/boardle-dates";
 import { boardleChoiceEligible, boardleEnsureDay, boardleToday } from "@/lib/boardle";
-import { BOARDLE_MAX_WORDS, boardleIsValidWord } from "@/lib/boardle-words";
-import { boardlePlayerRank } from "@/lib/boardle-score";
+import { boardleIsValidWord } from "@/lib/boardle-words";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -16,11 +15,11 @@ export async function POST(request: NextRequest) {
 
   const date = boardleToday();
   const tomorrow = boardleAddDays(date, 1);
-  const yesterday = boardleAddDays(date, -1);
 
-  // Late-pick: solved yesterday, today has no guesses yet -> allow setting today's word.
+  // Late-pick: today has no guesses yet -> allow setting today's word,
+  // whether or not this player solved yesterday.
   let pickingForToday = false;
-  if (!(await boardleChoiceEligible(date, userId)) && (await boardleChoiceEligible(yesterday, userId))) {
+  if (!(await boardleChoiceEligible(date, userId))) {
     const guessCountToday = await prisma.boardleGuess.count({ where: { gameDate: boardleDateOnly(date) } });
     if (guessCountToday === 0) pickingForToday = true;
   }
@@ -57,22 +56,21 @@ export async function POST(request: NextRequest) {
   });
 
   // If today's words are already finalized, patch boardle_words directly so
-  // the live game sees the updated word before anyone guesses. The board
-  // position is looked up by player rank (not chooser_id) because the slot
-  // may have been filled with a random backfill if the user hadn't picked a
-  // word before the day started.
+  // the live game sees the updated word before anyone guesses. Reuse a slot
+  // this user already owns (changing an earlier late pick), otherwise claim
+  // the lowest-numbered still-random (unclaimed) slot — this works whether or
+  // not the player solved yesterday, since a random slot exists precisely
+  // when nobody has claimed it yet.
   if (pickingForToday && tday.wordsFinalized === 1) {
-    const solverRows = await prisma.boardleResult.findMany({
-      where: { gameDate: boardleDateOnly(yesterday), solved: 1 },
-      orderBy: { solvedAt: "asc" },
-      take: BOARDLE_MAX_WORDS,
-      include: { user: { select: { username: true } } },
+    const slots = await prisma.boardleWord.findMany({
+      where: { gameDate: boardleDateOnly(date) },
+      orderBy: { position: "asc" },
     });
-    solverRows.sort((a, b) => boardlePlayerRank(a.user.username) - boardlePlayerRank(b.user.username));
-    const userPos = solverRows.findIndex((r) => r.userId === userId);
-    if (userPos !== -1) {
+    const targetPos =
+      slots.find((s) => s.chooserId === userId)?.position ?? slots.find((s) => s.source === "random")?.position;
+    if (targetPos !== undefined) {
       await prisma.boardleWord.updateMany({
-        where: { gameDate: boardleDateOnly(date), position: userPos },
+        where: { gameDate: boardleDateOnly(date), position: targetPos },
         data: { word, hint, source: "chosen", chooserId: userId },
       });
     }

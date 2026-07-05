@@ -115,32 +115,50 @@ export async function boardleFinalizeWords(date: string): Promise<void> {
 }
 
 // If the day is finalized, sync any boardle_choices that differ from
-// boardle_words (covers late picks + any race between the choose API write
-// and finalization). Board position is looked up by player rank, not
-// chooser_id, since the slot may have been filled by a random backfill.
+// boardle_words (covers late picks made before this fix, and any future race
+// between the choose API write and the finalization). Any player who chose a
+// word for today gets patched in — reusing a slot they already own, otherwise
+// claiming the lowest-numbered still-random (unclaimed) slot — regardless of
+// whether they solved yesterday.
 export async function boardleSyncLateChoices(date: string): Promise<void> {
   const day = await prisma.boardleDay.findUnique({ where: { gameDate: boardleDateOnly(date) } });
   if (!day || day.wordsFinalized !== 1) return;
 
-  const yesterday = boardleAddDays(date, -1);
-  const solverRows = await prisma.boardleResult.findMany({
-    where: { gameDate: boardleDateOnly(yesterday), solved: 1 },
-    orderBy: { solvedAt: "asc" },
-    take: BOARDLE_MAX_WORDS,
-    include: { user: { select: { username: true } } },
+  const slots = await prisma.boardleWord.findMany({
+    where: { gameDate: boardleDateOnly(date) },
+    orderBy: { position: "asc" },
   });
-  solverRows.sort((a, b) => boardlePlayerRank(a.user.username) - boardlePlayerRank(b.user.username));
+  const choices = await prisma.boardleChoice.findMany({
+    where: { gameDate: boardleDateOnly(date) },
+  });
 
-  for (let idx = 0; idx < solverRows.length; idx++) {
-    const uid = solverRows[idx].userId;
-    const choice = await prisma.boardleChoice.findUnique({
-      where: { gameDate_userId: { gameDate: boardleDateOnly(date), userId: uid } },
-    });
-    if (!choice) continue;
-    await prisma.boardleWord.updateMany({
-      where: { gameDate: boardleDateOnly(date), position: idx },
-      data: { word: choice.word, hint: choice.hint ?? null, source: "chosen", chooserId: uid },
-    });
+  for (const choice of choices) {
+    const uid = choice.userId;
+    const word = choice.word.toLowerCase();
+    const hint = choice.hint ?? null;
+
+    const ownSlot = slots.find((s) => s.chooserId === uid);
+    if (ownSlot) {
+      if (ownSlot.word.toLowerCase() !== word) {
+        await prisma.boardleWord.updateMany({
+          where: { gameDate: boardleDateOnly(date), position: ownSlot.position },
+          data: { word, hint, source: "chosen", chooserId: uid },
+        });
+        ownSlot.word = word;
+      }
+      continue;
+    }
+
+    const freeSlot = slots.find((s) => s.source === "random");
+    if (freeSlot) {
+      await prisma.boardleWord.updateMany({
+        where: { gameDate: boardleDateOnly(date), position: freeSlot.position },
+        data: { word, hint, source: "chosen", chooserId: uid },
+      });
+      freeSlot.source = "chosen";
+      freeSlot.chooserId = uid;
+      freeSlot.word = word;
+    }
   }
 }
 
@@ -377,7 +395,6 @@ export async function boardleState(date: string, userId: number): Promise<Boardl
 
   // Tomorrow's word pick (only once I've solved and earned a slot).
   const tomorrow = boardleAddDays(date, 1);
-  const yesterday = boardleAddDays(date, -1);
   const choose: ChooseInfo = {
     eligible: false,
     already: null,
@@ -400,9 +417,11 @@ export async function boardleState(date: string, userId: number): Promise<Boardl
     });
     choose.already = c?.word ?? null;
     choose.already_hint = c?.hint ?? null;
-  } else if (await boardleChoiceEligible(yesterday, userId)) {
-    // Late pick: solved yesterday, today has no guesses yet -> still allow
-    // setting today's word.
+  } else {
+    // Late pick: today has no guesses yet -> allow setting today's word,
+    // whether or not this player solved yesterday. Any board slot that wasn't
+    // already claimed by a real pick (a random backfill) is still up for
+    // grabs — see the slot-claiming logic in the choose route.
     const guessCountToday = await prisma.boardleGuess.count({ where: { gameDate: boardleDateOnly(date) } });
     if (guessCountToday === 0) {
       const tday = await boardleEnsureDay(date);
