@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { BoardleState } from "@/lib/boardle";
 import type { ParsedHint } from "@/lib/boardle-score";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Board } from "@/components/boardle/Board";
 import { Keyboard } from "@/components/boardle/Keyboard";
@@ -35,6 +36,16 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   const [payMode, setPayMode] = useState<"streak" | "freeze">("streak");
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
+
+  // "You solved it!" / today's-late-pick popup (ChooseWord in an overlay).
+  const [chooseModalOpen, setChooseModalOpen] = useState(false);
+  const choosePromptedRef = useRef(false);
+  const todayPickPromptedRef = useRef(false);
+
+  // Community-hint modal for a solved/owned board with no clue yet.
+  const [addHintBoard, setAddHintBoard] = useState<number | null>(null);
+  const [addHintText, setAddHintText] = useState("");
+  const [addHintErr, setAddHintErr] = useState<string | null>(null);
 
   const busyRef = useRef(busy);
   busyRef.current = busy;
@@ -83,7 +94,9 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   }
 
   useEffect(() => {
-    const poll = setInterval(loadState, 6000);
+    const poll = setInterval(() => {
+      if (!document.hidden) loadState();
+    }, 6000);
     const onVisible = () => {
       if (!document.hidden) loadState();
     };
@@ -119,6 +132,35 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   });
+
+  // Pop the word picker up the moment it becomes available after a win, so
+  // the player can choose without scrolling. Fires once per solve (persisted
+  // per-day in localStorage, so a refresh doesn't re-fire it), after a short
+  // delay to let the win sink in. The for-today late pick gets its own
+  // immediate popup instead — once per pageview, tied to live state, so a
+  // later visit can fire it again while the slot is still up for grabs.
+  useEffect(() => {
+    const c = state.choose;
+    const seenKey = `boardle_choose_seen_${state.date}`;
+    if (
+      !choosePromptedRef.current &&
+      state.me.finished &&
+      state.me.solved &&
+      c.eligible &&
+      !c.for_today &&
+      !c.already &&
+      !localStorage.getItem(seenKey)
+    ) {
+      choosePromptedRef.current = true;
+      localStorage.setItem(seenKey, "1");
+      const t = setTimeout(() => setChooseModalOpen(true), 1800);
+      return () => clearTimeout(t);
+    }
+    if (!todayPickPromptedRef.current && !choosePromptedRef.current && c.eligible && c.for_today && !c.already) {
+      todayPickPromptedRef.current = true;
+      setChooseModalOpen(true);
+    }
+  }, [state]);
 
   function flashKey(key: string) {
     setPressedKey(key);
@@ -247,6 +289,36 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
     if (!res.ok) throw new Error((await res.text()) || "Could not save.");
     const result: { word: string; hint: string | null } = await res.json();
     setState((s) => ({ ...s, choose: { ...s.choose, already: result.word, already_hint: result.hint ?? null } }));
+    setChooseModalOpen(false); // picked — back to the resting inline card
+  }
+
+  // Write a shared clue for a board you've solved that has none yet — it then
+  // shows to every player under that board.
+  async function saveBoardHint() {
+    const hint = addHintText.trim();
+    if (!hint) {
+      setAddHintErr("Write something first.");
+      return;
+    }
+    if (busyRef.current || addHintBoard === null) return;
+    setBusy(true);
+    setAddHintErr(null);
+    try {
+      const res = await fetch("/api/boardle/add-hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ board: addHintBoard, hint }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "Could not save hint.");
+      const next: BoardleState = await res.json();
+      setState(next);
+      setAddHintBoard(null);
+      setAddHintText("");
+    } catch (err) {
+      setAddHintErr(err instanceof Error ? err.message : "Could not save hint.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Best colour seen for each letter on a given board (green > orange >
@@ -277,7 +349,12 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   const kbBoardClamped = kbBoard >= state.num_boards ? 0 : kbBoard;
   const pickSet = effectivePendingHint ? new Set(eligibleBoards(state)) : null;
   const showChoose = state.choose.eligible && (state.me.solved || state.choose.for_today);
-  const anyBoardHint = state.board_hints.some((h) => h?.trim());
+  // A hintless board still earns a card in the clue row if I can add a
+  // community hint to it (solved it, or own it) — the "+ Add a hint" CTA
+  // takes the clue's place. The two states never coexist for a given board.
+  const canAddHint = (b: number) =>
+    !state.board_hints[b]?.trim() && (state.me.solved_boards[b] || state.me.owned.includes(b));
+  const anyBoardHint = state.board_hints.some((h, b) => h?.trim() || canAddHint(b));
   const boardHints = (state.me.hints || []).filter(
     (h): h is ParsedHint & { type: "orange" | "green"; board: number } => h.type !== "armor",
   );
@@ -372,6 +449,22 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
                   </span>
                   {hint}
                 </div>
+              ) : canAddHint(b) ? (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => {
+                    setAddHintText("");
+                    setAddHintErr(null);
+                    setAddHintBoard(b);
+                  }}
+                  className="glow-card cursor-pointer overflow-hidden rounded-md border bg-card p-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <span className="mb-1.5 block text-[0.68rem] font-bold tracking-wide text-muted-foreground/70 uppercase">
+                    Board {b + 1} clue
+                  </span>
+                  <span className="font-semibold text-muted-foreground">+ Add a hint for others</span>
+                </button>
               ) : null,
             )}
           </div>
@@ -401,12 +494,12 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
           )}
         </div>
 
-        {showChoose && <ChooseWord choose={state.choose} onSubmit={submitChoice} />}
+        {showChoose && !chooseModalOpen && <ChooseWord choose={state.choose} onSubmit={submitChoice} />}
       </div>
 
       <aside className="space-y-8">
         <div>
-          <p className="eyebrow mb-3">Streaks</p>
+          <p className="eyebrow mb-3">Standings</p>
           <StatsPanel stats={state.stats} />
         </div>
         <div>
@@ -414,6 +507,61 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
           <OpponentsPanel opponents={state.opponents} numBoards={state.num_boards} length={L} />
         </div>
       </aside>
+
+      {/* "You solved it!" / today's-late-pick popup — the same ChooseWord
+          card, centered, so the player can pick without scrolling. */}
+      {chooseModalOpen && showChoose && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setChooseModalOpen(false);
+          }}
+        >
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto">
+            <ChooseWord choose={state.choose} onSubmit={submitChoice} />
+          </div>
+          <button
+            type="button"
+            className="fixed top-5 right-5 flex h-9 w-9 items-center justify-center rounded-full border bg-card text-muted-foreground hover:text-foreground"
+            title="Choose later"
+            onClick={() => setChooseModalOpen(false)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Add-a-hint modal (styled like the word picker). */}
+      {addHintBoard !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setAddHintBoard(null);
+          }}
+        >
+          <div className="glow-card w-full max-w-lg overflow-hidden rounded-xl border bg-card p-5">
+            <h2 className="mb-1 text-lg font-semibold">Add a hint for others</h2>
+            <p className="mb-3.5 text-sm text-muted-foreground">Give the next players a clue without spoiling the word.</p>
+            <textarea
+              autoFocus
+              maxLength={500}
+              value={addHintText}
+              onChange={(e) => setAddHintText(e.target.value)}
+              placeholder="e.g. Think kitchen appliances..."
+              className="min-h-24 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm"
+            />
+            {addHintErr && <p className="mt-2 text-sm text-destructive">{addHintErr}</p>}
+            <div className="mt-3.5 flex justify-end gap-2.5">
+              <Button type="button" variant="outline" onClick={() => setAddHintBoard(null)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={saveBoardHint}>
+                Save hint
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

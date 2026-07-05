@@ -20,8 +20,12 @@ export function ChooseWord({
   const [hintText, setHintText] = useState(choose.already_hint ?? "");
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
+  // Rerolled suggestions from the randomize button — kept locally so a
+  // background poll (which refreshes `choose`) doesn't reset them.
+  const [suggestOverride, setSuggestOverride] = useState<string[] | null>(null);
 
   const tlen = choose.tomorrow_length ?? 0;
+  const suggestions = suggestOverride ?? choose.suggestions;
 
   function startChanging() {
     setCustom(choose.already ?? "");
@@ -41,12 +45,23 @@ export function ChooseWord({
     setChanging(false);
   }
 
+  // Reroll the three suggestions (the server picks fresh random words of the
+  // right length).
+  async function randomize() {
+    try {
+      const res = await fetch("/api/boardle/suggest");
+      if (!res.ok) throw new Error((await res.text()) || "Could not shuffle.");
+      const data: { suggestions: string[] } = await res.json();
+      setSuggestOverride(data.suggestions ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not shuffle.");
+    }
+  }
+
   if (choose.already && !changing) {
     return (
       <div className="glow-card overflow-hidden rounded-xl border bg-card p-5">
-        <h2 className="mb-1 text-lg font-semibold">
-          {choose.for_today ? "🗳️ Today's word — locked in" : "🗳️ Tomorrow's word — locked in"}
-        </h2>
+        <h2 className="mb-1 text-lg font-semibold">{choose.for_today ? "🗳️ Today's word" : "🗳️ Tomorrow's word"}</h2>
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
           <span className="inline-flex flex-wrap items-center gap-2.5">
             Your pick:
@@ -78,19 +93,37 @@ export function ChooseWord({
   return (
     <div className="glow-card overflow-hidden rounded-xl border bg-card p-5">
       <h2 className="mb-1 text-lg font-semibold">
-        {choose.for_today ? "The day just started — still time to set your word!" : "🎉 You solved it — set a word for tomorrow"}
+        {choose.for_today ? "The day just started — still time to set your word!" : "🎉 Set a word for tomorrow"}
       </h2>
       <p className="mb-3.5 text-sm text-muted-foreground">
         {choose.for_today
           ? `Today is a ${tlen}-letter day. Pick a suggestion or enter your own (must be a real ${tlen}-letter word). Once someone guesses, the word is final.`
           : `Tomorrow is a ${tlen}-letter day. Pick a suggestion or enter your own (must be a real ${tlen}-letter word).`}
       </p>
-      <div className="mb-3.5 flex flex-wrap gap-2.5">
-        {choose.suggestions.map((w) => (
-          <Button key={w} type="button" variant="outline" className="font-mono tracking-widest uppercase" onClick={() => submit(w)}>
+      {/* Fixed-width suggestion buttons (wide enough for the max 10-letter
+          word) so a reroll never reflows the row. */}
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+        {suggestions.map((w) => (
+          <Button
+            key={w}
+            type="button"
+            variant="outline"
+            className="w-32 flex-none overflow-hidden font-mono tracking-widest text-ellipsis uppercase"
+            onClick={() => submit(w)}
+          >
             {w}
           </Button>
         ))}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-10 flex-none px-0"
+          title="Get three new suggestions"
+          aria-label="Randomize suggestions"
+          onClick={randomize}
+        >
+          🎲
+        </Button>
       </div>
       <div className="flex flex-wrap items-stretch gap-2.5">
         <input
