@@ -658,14 +658,31 @@ body {
         }
         playBoardsEl.innerHTML = html;
 
-        document.getElementById("play-opponents").innerHTML = (STATE.opponents || []).map(o => `
-            <div class="rt-opp">
-                ${o.solved ? '<div class="rt-opp-name">✓</div>' : ""}
-                ${o.boards.map(g => `
-                    <div class="rt-opp-grid" style="--cols:${len}">${g.map(c => `<div class="rt-opp-cell ${c}"></div>`).join("")}</div>
-                `).join("")}
-            </div>
-        `).join("");
+        document.getElementById("play-opponents").innerHTML = (STATE.opponents || []).map(o => {
+            // o.boards is a list of guess ROWS (each with colors per board
+            // position) — build one mini-grid per board, freezing at the
+            // winning row like the main boards do.
+            let minis = "";
+            for (let b = 0; b < n; b++) {
+                let shown = o.boards.length;
+                if (o.solved_boards[b]) {
+                    for (let r = 0; r < o.boards.length; r++) {
+                        if (o.boards[r].boards[b].every(c => c === "green")) { shown = r + 1; break; }
+                    }
+                }
+                let cellsHtml = "";
+                for (let r = 0; r < shown; r++) {
+                    cellsHtml += o.boards[r].boards[b].map(c => `<div class="rt-opp-cell ${c}"></div>`).join("");
+                }
+                minis += `<div class="rt-opp-grid" style="--cols:${len}">${cellsHtml}</div>`;
+            }
+            return `
+                <div class="rt-opp">
+                    ${o.solved ? '<div class="rt-opp-name">✓</div>' : ""}
+                    ${minis}
+                </div>
+            `;
+        }).join("");
 
         playMsgEl.textContent = me.finished
             ? (me.solved ? "You solved every board!" : "No guesses left — waiting for the round to end.")
