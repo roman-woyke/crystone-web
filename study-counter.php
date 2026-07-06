@@ -128,11 +128,12 @@ main.container {
     transition: height 0.5s var(--ease-out);
 }
 
-/* Front = sticky sidebar that follows the scroll. The recap (back) instead
-   takes the full height it needs and drops stickiness, so a tall day's
-   timeline extends down the page and scrolls normally rather than being
-   pinned at the top and clipped. */
-.dock-card.recap {
+/* Front = sticky sidebar that follows the scroll. The recap (back) stays
+   sticky too as long as it's short enough to fit within the main column's
+   height (JS toggles `.recap-overflow` — see updateStickyMode()); once the
+   day's timeline is tall enough that sticking would push it lower than the
+   main content, it drops stickiness and scrolls normally instead. */
+.dock-card.recap.recap-overflow {
     position: relative;
     top: auto;
 }
@@ -604,7 +605,7 @@ main.container {
 
 .library-list {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
 }
 
@@ -631,7 +632,7 @@ main.container {
 
 .break-list {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
 }
 
@@ -642,21 +643,22 @@ main.container {
 
 .studying-list {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
-    align-content: flex-start;
 }
 
 .studying-chip {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
     padding: 7px 12px 7px 10px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-md);
     font-size: 0.86rem;
     font-weight: 600;
+    overflow: hidden;
 }
 
 .studying-chip.me {
@@ -675,6 +677,18 @@ main.container {
     margin-left: 6px;
     color: var(--warning);
     font-weight: 600;
+}
+
+.chip-module-breakdown {
+    display: block;
+    margin-top: 2px;
+    line-height: 1.4;
+    min-width: 0;
+}
+
+.chip-breakdown-line {
+    display: block;
+    white-space: nowrap;
 }
 
 /* Pulsing presence dots */
@@ -3261,6 +3275,13 @@ body.focus-mode #focus-mini-charts { display: flex; }
         ticker = setInterval(() => {
             if (myState.running) {
                 myState.elapsed += 1; // keeps my chip ticking live
+                // The part with the still-open segment ticks too, so a live
+                // per-module breakdown isn't stuck between polls. Not
+                // necessarily the last array entry: switching X -> Y -> X
+                // collapses both X intervals into one part positioned at X's
+                // first occurrence.
+                const live = myState.parts.find(p => p.live);
+                if (live) live.seconds += 1;
             } else {
                 // On break — the study time is frozen, the break time ticks up.
                 myState.breakElapsed += 1;
@@ -3583,8 +3604,35 @@ body.focus-mode #focus-mini-charts { display: flex; }
         if (typeof renderFocusClock === "function") renderFocusClock();
     }
 
-    function moduleSuffix(s) {
-        return s.module ? " · " + escapeHtml(s.module) : "";
+    // A single-module session just shows " · Module"; one that switched shows
+    // each module's own time on its own line instead, using the full module
+    // name — fitBreakdownLines() shrinks any line that overflows the chip
+    // down to its podium abbreviation afterward. `p.live` (not array position)
+    // marks the part with the still-open segment: a module switched away from
+    // and back to (X -> Y -> X) collapses into one summed part per name, so
+    // the currently-running one isn't necessarily last in the list.
+    // "Session · " prefix shown before the total time whenever a chip has a
+    // multi-module breakdown, so the total line reads the same way as each
+    // module's own "Module · time" line below it.
+    function sessionLabelPrefix(s) {
+        const parts = (s.parts || []).filter(p => p.module);
+        return parts.length > 1 ? `<span class="chip-time-label">Session · </span>` : "";
+    }
+
+    function moduleSuffix(s, isRunning, i) {
+        const parts = (s.parts || []).filter(p => p.module);
+        if (parts.length <= 1) {
+            return s.module ? " · " + escapeHtml(s.module) : "";
+        }
+        const lines = parts.map((p) => {
+            const isLive = isRunning && p.live;
+            const timeAttr = isLive ? ` data-mod-idx="${i}"` : "";
+            return `<span class="chip-breakdown-line" data-module="${escapeHtml(p.module)}">` +
+                `<span class="bd-name">${escapeHtml(p.module)}</span> · ` +
+                `<span class="bd-time"${timeAttr}>${fmtClock(p.seconds)}</span>` +
+                `</span>`;
+        });
+        return `<span class="chip-module-breakdown">${lines.join("")}</span>`;
     }
 
     function renderStudying(list) {
@@ -3614,7 +3662,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
                     <span class="studying-chip ${isMe ? "me" : ""}">
                         <span class="pulse-dot"></span>
                         <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
-                        <span class="chip-meta"><span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s)}</span>
+                        <span class="chip-meta">${sessionLabelPrefix(s)}<span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s, true, i)}</span>
                     </span>
                 `;
             }).join("");
@@ -3632,7 +3680,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
                     <span class="studying-chip break ${isMe ? "me" : ""}">
                         <span class="pulse-dot paused"></span>
                         <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
-                        <span class="chip-meta">${fmtClock(s.elapsed)}${moduleSuffix(s)}<span class="chip-break" data-bidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span></span>
+                        <span class="chip-meta">${sessionLabelPrefix(s)}${fmtClock(s.elapsed)}${moduleSuffix(s, false, i)}<span class="chip-break" data-bidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span></span>
                     </span>
                 `;
             }).join("");
@@ -3654,13 +3702,28 @@ body.focus-mode #focus-mini-charts { display: flex; }
                     <span class="studying-chip library ${isMe ? "me" : ""}">
                         <span class="${dotCls}"></span>
                         <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
-                        <span class="chip-meta"><span class="chip-time" data-libidx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s)}${breakSpan}</span>
+                        <span class="chip-meta">${sessionLabelPrefix(s)}<span class="chip-time" data-libidx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s, s.running, i)}${breakSpan}</span>
                     </span>
                 `;
             }).join("");
         }
 
+        fitBreakdownLines();
         syncDockHeight();
+    }
+
+    // A module-breakdown line renders with the full module name first; if that
+    // makes the chip wider than its column (the row wraps mid-word or the
+    // chip overflows), swap that chip's lines down to the podium abbreviation
+    // instead. Checked per-chip since chip width can vary with the username.
+    function fitBreakdownLines() {
+        document.querySelectorAll(".studying-chip").forEach(chip => {
+            if (chip.scrollWidth <= chip.clientWidth) return;
+            chip.querySelectorAll(".chip-breakdown-line").forEach(line => {
+                const nameEl = line.querySelector(".bd-name");
+                if (nameEl) nameEl.textContent = abbrevModule(line.dataset.module);
+            });
+        });
     }
 
     // Tick the chips every second (re-synced to the server on each poll): study
@@ -3673,11 +3736,14 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
         studyingEntries.forEach((s, i) => {
             const el = studyingList.querySelector(`.chip-time[data-idx="${i}"]`);
-            if (!el) return;
-            const secs = (s.username === MY_USERNAME && myState.active && myState.running)
-                ? myState.elapsed
-                : s.elapsed + delta;
-            el.textContent = fmtClock(secs);
+            if (el) {
+                const secs = (s.username === MY_USERNAME && myState.active && myState.running)
+                    ? myState.elapsed
+                    : s.elapsed + delta;
+                el.textContent = fmtClock(secs);
+            }
+            const modEl = studyingList.querySelector(`.bd-time[data-mod-idx="${i}"]`);
+            if (modEl) modEl.textContent = fmtClock(liveModuleSeconds(s, delta));
         });
 
         breakEntries.forEach((s, i) => {
@@ -3698,7 +3764,10 @@ body.focus-mode #focus-mini-charts { display: flex; }
                     : s.elapsed;
                 timeEl.textContent = fmtClock(secs);
             }
-            if (!s.running) {
+            if (s.running) {
+                const modEl = libraryList.querySelector(`.bd-time[data-mod-idx="${i}"]`);
+                if (modEl) modEl.textContent = fmtClock(liveModuleSeconds(s, delta));
+            } else {
                 const brEl = libraryList.querySelector(`.chip-break[data-libbidx="${i}"]`);
                 if (brEl) {
                     const secs = (s.username === MY_USERNAME && myState.active && !myState.running)
@@ -3708,6 +3777,17 @@ body.focus-mode #focus-mini-charts { display: flex; }
                 }
             }
         });
+    }
+
+    // The live (currently open) module part for a chip: my own row mirrors
+    // myState.parts (already ticking every second via manageTicker); other
+    // users' rows extrapolate from the last poll with the shared delta.
+    function liveModuleSeconds(s, delta) {
+        const isMe = s.username === MY_USERNAME && myState.active && myState.running;
+        const parts = ((isMe ? myState.parts : s.parts) || []).filter(p => p.module);
+        if (!parts.length) return 0;
+        const live = parts.find(p => p.live) || parts[parts.length - 1];
+        return isMe ? live.seconds : live.seconds + delta;
     }
 
     // "I'm studying" prompts for a module first (the session starts with it);
@@ -3905,6 +3985,21 @@ body.focus-mode #focus-mini-charts { display: flex; }
         } else {
             dockCard.style.height = h;
         }
+        updateStickyMode();
+    }
+
+    // Recap (back face) stays sticky only while it's short enough that sticking
+    // wouldn't push it lower than the main column's content — otherwise it
+    // would hang past where the rest of the page already ended.
+    const studyMain = document.querySelector(".study-main");
+    function updateStickyMode() {
+        if (!dockCard.classList.contains("recap") || !studyMain) {
+            dockCard.classList.remove("recap-overflow");
+            return;
+        }
+        const topOffset = parseFloat(getComputedStyle(dockCard).top) || 0;
+        const fits = backFace.offsetHeight + topOffset <= studyMain.offsetHeight;
+        dockCard.classList.toggle("recap-overflow", !fits);
     }
 
     let flipPhase = [null, null];
@@ -4108,7 +4203,17 @@ body.focus-mode #focus-mini-charts { display: flex; }
         focusStartBtn.style.display = "none";
         focusBreakBtn.style.display = "";
         focusStopBtn.style.display  = "";
-        focusModuleEl.textContent = myState.module || "";
+
+        // A session that switched modules shows a total line plus each module's
+        // own time on its own line, so the big (whole-session) clock above isn't
+        // misread as time spent in the current module alone.
+        const parts = (myState.parts || []).filter(p => p.module);
+        if (parts.length > 1) {
+            const lines = [`Session · ${fmtClock(myState.elapsed)}`, ...parts.map(p => `${abbrevModule(p.module)} · ${fmtClock(p.seconds)}`)];
+            focusModuleEl.innerHTML = lines.map(escapeHtml).join("<br>");
+        } else {
+            focusModuleEl.textContent = myState.module || "";
+        }
 
         if (running) {
             focusClockEl.textContent = fmtClock(myState.elapsed);

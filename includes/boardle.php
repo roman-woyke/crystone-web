@@ -106,6 +106,35 @@ function boardleRandomSuggestions(int $len, int $count = 3): array
     return array_slice($pool, 0, min($count, count($pool)));
 }
 
+// ── History / archive navigation ─────────────────────────────────────────────
+// The archive goes back to the first day a puzzle ever existed (the earliest
+// `boardle_days` row) and never further forward than the server's real today —
+// a day beyond today has no rolled length/finalized words yet.
+
+function boardleEarliestDate(PDO $pdo): string
+{
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    $min = $pdo->query("SELECT MIN(game_date) FROM boardle_days")->fetchColumn();
+    return $cache = ($min ?: date("Y-m-d"));
+}
+
+// Validate + clamp a requested `date` param into [earliest, today]. Anything
+// missing, malformed, or out of range silently falls back to today rather than
+// erroring — the archive nav never needs to reject a request outright.
+function boardleResolveDate(PDO $pdo, ?string $raw): string
+{
+    $today = date("Y-m-d");
+    if (!is_string($raw) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) return $today;
+
+    $d = DateTime::createFromFormat('Y-m-d', $raw);
+    if (!$d || $d->format('Y-m-d') !== $raw) return $today;
+    if ($raw > $today) return $today;
+
+    $earliest = boardleEarliestDate($pdo);
+    return $raw < $earliest ? $earliest : $raw;
+}
+
 // ── Day length + lifecycle ───────────────────────────────────────────────────
 
 // Weighted random length: 5→30%, 6→30%, 7→20%, 8→10%, 9→5%, 10→5%.
@@ -732,7 +761,10 @@ function boardleState(PDO $pdo, string $date, int $userId): array
         'opponents'   => $opponents,
         'choose'      => $choose,
         'board_hints' => $boardHintsArr,
-        'stats'       => boardleStats($pdo, $date),
+        // Always today's standing, never the viewed day's — browsing an old
+        // day to catch up or replay a result shouldn't make the streak/avg
+        // panel look like it's showing history too.
+        'stats'       => boardleStats($pdo, date('Y-m-d')),
     ];
 }
 

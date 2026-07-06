@@ -244,6 +244,98 @@ CREATE TABLE boardle_hints (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (game_date, user_id, type)
 );
+
+-- ── Boardle: Unlimited real-time mode ───────────────────────────────────────
+-- A single shared "room" (id is always 1 — one instance app-wide, like the
+-- study counter's presence row). A round starts once >=2 players are ready,
+-- then moves lobby -> voting -> selecting -> playing -> results -> lobby.
+-- Phase transitions are resolved lazily (like boardleFinalizeWords): every
+-- state read/write calls boardleRtAdvance() first, which checks the phase's
+-- deadline and/or completion condition and steps the state machine forward.
+CREATE TABLE boardle_rt_state (
+    id               TINYINT NOT NULL PRIMARY KEY DEFAULT 1,
+    phase            ENUM('lobby','voting','selecting','playing','results') NOT NULL DEFAULT 'lobby',
+    round_id         INT NOT NULL DEFAULT 0,
+    phase_started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    length_choices   VARCHAR(20) NULL,
+    word_length      TINYINT UNSIGNED NULL,
+    num_boards       TINYINT UNSIGNED NULL
+);
+INSERT INTO boardle_rt_state (id) VALUES (1);
+
+-- Who has marked themselves ready in the lobby. Cleared whenever a round
+-- starts (snapshotted into boardle_rt_players) and whenever "Continue" on
+-- the results screen returns everyone to the lobby.
+CREATE TABLE boardle_rt_ready (
+    user_id    INT NOT NULL PRIMARY KEY REFERENCES users(id),
+    ready      TINYINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- The players locked into a round (snapshotted from ready players when
+-- voting starts) and their fixed board position — each player picks the
+-- word for their own position (auto-solved for them, like normal Boardle).
+CREATE TABLE boardle_rt_players (
+    round_id INT NOT NULL,
+    user_id  INT NOT NULL REFERENCES users(id),
+    position TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (round_id, user_id)
+);
+
+-- One length vote per player per round, from that round's 3 rolled choices.
+CREATE TABLE boardle_rt_votes (
+    round_id INT NOT NULL,
+    user_id  INT NOT NULL REFERENCES users(id),
+    length   TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (round_id, user_id)
+);
+
+-- Each round's boards: the word + mandatory hint the owning player chose
+-- (or an auto-pick if they ran out of time).
+CREATE TABLE boardle_rt_words (
+    round_id   INT NOT NULL,
+    position   TINYINT UNSIGNED NOT NULL,
+    chooser_id INT NOT NULL REFERENCES users(id),
+    word       VARCHAR(10) NOT NULL,
+    hint       VARCHAR(500) NOT NULL,
+    PRIMARY KEY (round_id, position)
+);
+
+-- Guesses during the playing phase — one shared guess stream per player,
+-- scored against every board in the round at once (Quordle-style).
+CREATE TABLE boardle_rt_guesses (
+    round_id    INT NOT NULL,
+    user_id     INT NOT NULL REFERENCES users(id),
+    guess_index TINYINT UNSIGNED NOT NULL,
+    guess       VARCHAR(10) NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (round_id, user_id, guess_index)
+);
+
+-- When the playing phase actually started, needed once the round has moved
+-- on and boardle_rt_state.phase_started_at has been overwritten by a later
+-- phase — solved_at - playing_started_at is a result row's solve time.
+CREATE TABLE boardle_rt_rounds (
+    round_id           INT NOT NULL PRIMARY KEY,
+    playing_started_at DATETIME NOT NULL
+);
+
+-- Per-round outcome, replayed into the unlimited-mode standings panel.
+-- Freezes/streaks don't apply here — this mode has its own two win
+-- categories instead: speed_win (fastest solve_at - playing_started_at
+-- among that round's solvers) and guess_win (fewest guesses_used among
+-- that round's solvers). Both flags are decided once, when the round ends.
+CREATE TABLE boardle_rt_results (
+    round_id     INT NOT NULL,
+    user_id      INT NOT NULL REFERENCES users(id),
+    finished     TINYINT NOT NULL DEFAULT 0,
+    solved       TINYINT NOT NULL DEFAULT 0,
+    guesses_used TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    solved_at    DATETIME NULL,
+    speed_win    TINYINT NOT NULL DEFAULT 0,
+    guess_win    TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (round_id, user_id)
+);
 ```
 
 > **Streak freezes** are not a table — everyone starts with 3, earns +3 per 7
@@ -294,6 +386,12 @@ CREATE TABLE boardle_hints (
 > ```sql
 > ALTER TABLE users ADD COLUMN avatar MEDIUMTEXT NULL AFTER password_hash;
 > ```
+>
+> **Boardle unlimited real-time mode migration:** new feature, new tables —
+> run the `boardle_rt_*` `CREATE TABLE` statements above (including the
+> `boardle_rt_state` seed row) before deploying `boardle-rt.php` /
+> `includes/boardle-rt.php` / the `api/boardle-rt-*.php` endpoints, otherwise
+> every request to them 500s.
 
 ---
 

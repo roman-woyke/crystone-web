@@ -4,7 +4,10 @@ require_once __DIR__ . "/includes/session.php";
 require_once __DIR__ . "/includes/boardle.php";
 
 // Server-render the full state so the grid paints complete on first byte.
-$initialState = boardleState($pdo, date("Y-m-d"), (int) $_SESSION["user_id"]);
+$today = date("Y-m-d");
+$initialState = boardleState($pdo, $today, (int) $_SESSION["user_id"]);
+$initialState["today"]         = $today;
+$initialState["earliest_date"] = boardleEarliestDate($pdo);
 
 $pageTitle = "Boardle";
 require_once __DIR__ . "/includes/header.php";
@@ -32,6 +35,106 @@ main.container { max-width: 1280px; }
     max-width: 640px;
     font-size: 0.92rem;
 }
+
+/* ── Day nav: prev/next arrows + calendar popup to jump to an old puzzle ──── */
+.fw-day-nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.fw-day-arrow {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.fw-day-label {
+    width: auto;
+    margin: 0;
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+.fw-day-today-btn {
+    width: auto;
+    margin: 0;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+.fw-day-arrow[disabled] { opacity: 0.35; cursor: not-allowed; }
+
+/* Calendar popup */
+.fw-cal-dialog { width: min(340px, calc(100vw - 32px)); }
+.fw-cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.fw-cal-head h2 { margin: 0; font-size: 1rem; }
+.fw-cal-nav-btn { width: 32px; height: 32px; padding: 0; margin: 0; border-radius: var(--radius-full); }
+.fw-cal-nav-btn[disabled] { opacity: 0.35; cursor: not-allowed; }
+.fw-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+.fw-cal-dow {
+    text-align: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-3);
+    text-transform: uppercase;
+    padding-bottom: 4px;
+}
+.fw-cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    font-weight: 600;
+    background: transparent;
+    color: var(--text-1);
+    cursor: pointer;
+    position: relative;
+}
+.fw-cal-day:hover:not(.disabled) { background: rgba(255, 255, 255, 0.08); }
+.fw-cal-day.disabled { color: var(--text-3); opacity: 0.35; cursor: default; }
+.fw-cal-day.empty { visibility: hidden; cursor: default; }
+.fw-cal-day.solved { background: rgba(46, 158, 91, 0.18); box-shadow: inset 0 0 0 1px rgba(46,158,91,0.5); }
+.fw-cal-day.missed { background: rgba(248, 113, 113, 0.12); box-shadow: inset 0 0 0 1px rgba(248,113,113,0.35); }
+.fw-cal-day.viewing { box-shadow: inset 0 0 0 2px var(--violet); }
+.fw-cal-day.is-today::after {
+    content: "";
+    position: absolute;
+    bottom: 4px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--violet);
+}
+.fw-cal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+    font-size: 0.72rem;
+    color: var(--text-3);
+}
+.fw-cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.fw-cal-legend .sw { width: 10px; height: 10px; border-radius: 3px; }
 
 /* ── Status bar ─────────────────────────────────────────────────────────── */
 .fw-status {
@@ -689,10 +792,18 @@ main.container { max-width: 1280px; }
     <div class="fw-intro">
         <h1 class="page-heading fw-head">B<span class="gradient-text">oardle</span></h1>
         <p class="fw-sub">
-            4 board puzzle a day. Solve every board before the guesses run out. 
+            4 board puzzle a day. Solve every board before the guesses run out.
             A guess can be any word from 5 letters up to the day's length (use the space bar to place it).
             Beat the day and you get to set one of tomorrow's words.
         </p>
+    </div>
+
+    <div class="fw-day-nav" id="fw-day-nav">
+        <button type="button" class="btn fw-day-arrow" id="fw-day-prev" title="Previous day" aria-label="Previous day">‹</button>
+        <button type="button" class="btn fw-day-label" id="fw-day-label" title="Pick a day"></button>
+        <button type="button" class="btn fw-day-arrow" id="fw-day-next" title="Next day" aria-label="Next day">›</button>
+        <button type="button" class="btn fw-day-today-btn" id="fw-day-today" style="display:none;">Back to today</button>
+        <a class="btn btn-primary" href="<?= BASE_PATH ?>/boardle-rt.php">Unlimited real-time mode</a>
     </div>
 
     <div class="fw-status" id="fw-status"></div>
@@ -742,6 +853,22 @@ main.container { max-width: 1280px; }
     </div>
 </div>
 
+<!-- ── Calendar popup: jump to any past puzzle day ───────────────────────────── -->
+<div id="fw-cal-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card modal-solid fw-cal-dialog">
+        <div class="fw-cal-head">
+            <button type="button" class="btn fw-cal-nav-btn" id="fw-cal-prev-month" aria-label="Previous month">‹</button>
+            <h2 id="fw-cal-month-label"></h2>
+            <button type="button" class="btn fw-cal-nav-btn" id="fw-cal-next-month" aria-label="Next month">›</button>
+        </div>
+        <div class="fw-cal-grid" id="fw-cal-grid"></div>
+        <div class="fw-cal-legend">
+            <span><span class="sw" style="background:rgba(46,158,91,0.6)"></span> Solved</span>
+            <span><span class="sw" style="background:rgba(248,113,113,0.5)"></span> Missed</span>
+        </div>
+    </div>
+</div>
+
 <aside class="fw-sidebar">
     <h2>🔥 Standings</h2>
     <div class="fw-stats" id="fw-stats"></div>
@@ -761,6 +888,12 @@ main.container { max-width: 1280px; }
 (function () {
     const BASE_PATH = "<?= BASE_PATH ?>";
     let STATE = <?= json_encode($initialState) ?>;
+
+    // The day currently shown. Defaults to today; the day-nav arrows/calendar
+    // move it within [STATE.earliest_date, STATE.today] to replay a missed day
+    // or look at an old result. Every state-changing request (guess/joker/hint)
+    // is scoped to this date, not necessarily the server's real "today".
+    let viewedDate = STATE.date;
 
     // My guess limit is personal: the base day limit plus the armor joker (+1).
     // It can change mid-game (when armor is bought), so always read it live.
@@ -796,6 +929,15 @@ main.container { max-width: 1280px; }
     const chooseAnchorEl = document.getElementById("fw-choose-anchor");
     const chooseModalEl  = document.getElementById("fw-choose-modal");
     const chooseModalCloseEl = document.getElementById("fw-choose-modal-close");
+    const dayPrevEl   = document.getElementById("fw-day-prev");
+    const dayNextEl   = document.getElementById("fw-day-next");
+    const dayLabelEl  = document.getElementById("fw-day-label");
+    const dayTodayEl  = document.getElementById("fw-day-today");
+    const calModalEl  = document.getElementById("fw-cal-modal");
+    const calGridEl   = document.getElementById("fw-cal-grid");
+    const calMonthLabelEl = document.getElementById("fw-cal-month-label");
+    const calPrevMonthEl  = document.getElementById("fw-cal-prev-month");
+    const calNextMonthEl  = document.getElementById("fw-cal-next-month");
 
     function escapeHtml(v) {
         return String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -1117,6 +1259,7 @@ main.container { max-width: 1280px; }
         setMsg("");
         const body = new FormData();
         body.append("type", type);
+        body.append("date", viewedDate);
         if (board !== null && board !== undefined) body.append("board", board);
         if (payFreeze) body.append("pay", "freeze");
         fetch(BASE_PATH + "/api/boardle-hint.php", { method: "POST", body })
@@ -1153,6 +1296,7 @@ main.container { max-width: 1280px; }
         const body = new FormData();
         body.append("board", hintModalBoard);
         body.append("hint", hint);
+        body.append("date", viewedDate);
         fetch(BASE_PATH + "/api/boardle-add-hint.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Could not save hint."); }))
             .then(state => { STATE = state; closeHintModal(); renderAll(); })
@@ -1348,7 +1492,10 @@ main.container { max-width: 1280px; }
         // the resting sidebar spot.
         const inModal = chooseEl.parentElement === chooseModalEl;
         const suppressResting = eligibleForPopup && !chooseModalDismissedOnce && !inModal;
-        const visible = c.eligible && (STATE.me.solved || c.for_today) && !suppressResting;
+        // Word-picking only ever concerns the real current day — replaying a
+        // missed past day shouldn't offer to set a word for its (long since
+        // finalized) "tomorrow".
+        const visible = viewedDate === STATE.today && c.eligible && (STATE.me.solved || c.for_today) && !suppressResting;
 
         // Only rebuild when something actually changed — otherwise a background
         // poll would wipe the custom-word input you're typing in. The rerolled
@@ -1451,7 +1598,7 @@ main.container { max-width: 1280px; }
     // one gets its own immediate popup — see maybeOpenTodayPickModal below).
     const CHOOSE_MODAL_DELAY_MS = 1800; // let the win sink in before popping the picker up
     function maybeOpenChooseModal() {
-        if (choosePrompted) return;
+        if (choosePrompted || viewedDate !== STATE.today) return;
         const c = STATE.me.finished && STATE.choose;
         if (c && c.eligible && !c.for_today && STATE.me.solved && !c.already) {
             choosePrompted = true; // set immediately so a re-render during the delay can't re-schedule it
@@ -1474,7 +1621,7 @@ main.container { max-width: 1280px; }
     // visit) can fire it again since it's tied to live state, not a one-time
     // event like a solve.
     function maybeOpenTodayPickModal() {
-        if (todayPickPrompted || choosePrompted) return;
+        if (todayPickPrompted || choosePrompted || viewedDate !== STATE.today) return;
         const c = STATE.choose;
         if (c && c.eligible && c.for_today && !c.already) {
             todayPickPrompted = true;
@@ -1566,6 +1713,7 @@ main.container { max-width: 1280px; }
         const body = new FormData();
         body.append("word", word);
         body.append("offset", first);
+        body.append("date", viewedDate);
         fetch(BASE_PATH + "/api/boardle-guess.php", { method: "POST", body })
             .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Guess failed."); }))
             .then(state => {
@@ -1589,12 +1737,13 @@ main.container { max-width: 1280px; }
     // ── Polling for opponents (and cross-tab self updates) ─────────────────
     function loadState() {
         if (busy) return;
-        fetch(BASE_PATH + "/api/boardle-state.php")
+        fetch(BASE_PATH + "/api/boardle-state.php?date=" + encodeURIComponent(viewedDate))
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
             .then(state => {
                 // Don't clobber an in-progress guess: the local buffer is kept.
                 const savedScroll = window.scrollY;
                 STATE = state;
+                renderDayNav();
                 renderStatus(); renderJokers(); renderBoards(); renderBoardHints(); renderHintRows();
                 renderControls(); renderKeyboard(); renderStats(); renderOpponents(); renderChoose();
                 maybeOpenChooseModal();
@@ -1604,7 +1753,118 @@ main.container { max-width: 1280px; }
             .catch(() => {});
     }
 
+    // ── Day nav: prev/next arrows + "back to today" + calendar popup ───────
+    function addDays(dateStr, delta) {
+        // Build the result from local date parts, not toISOString() (which
+        // converts to UTC and silently drops/duplicates a day in any
+        // timezone ahead of UTC).
+        const d = new Date(dateStr + "T00:00:00");
+        d.setDate(d.getDate() + delta);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    }
+    function fmtDayLabel(dateStr) {
+        const d = new Date(dateStr + "T00:00:00");
+        return d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+    }
+
+    function goToDate(dateStr) {
+        if (busy) return;
+        const earliest = STATE.earliest_date, today = STATE.today;
+        if (dateStr < earliest) dateStr = earliest;
+        if (dateStr > today) dateStr = today;
+        if (dateStr === viewedDate) return;
+        viewedDate = dateStr;
+        buffer = "";
+        kbBoard = 0;
+        pendingHint = null;
+        setMsg("");
+        loadState();
+    }
+
+    function renderDayNav() {
+        const today = STATE.today, earliest = STATE.earliest_date;
+        dayLabelEl.textContent = (viewedDate === today ? "Today · " : "") + fmtDayLabel(viewedDate);
+        dayPrevEl.disabled = viewedDate <= earliest;
+        dayNextEl.disabled = viewedDate >= today;
+        dayTodayEl.style.display = viewedDate === today ? "none" : "";
+    }
+
+    dayPrevEl.addEventListener("click", () => goToDate(addDays(viewedDate, -1)));
+    dayNextEl.addEventListener("click", () => goToDate(addDays(viewedDate, 1)));
+    dayTodayEl.addEventListener("click", () => goToDate(STATE.today));
+    dayLabelEl.addEventListener("click", openCalendar);
+
+    // ── Calendar popup ──────────────────────────────────────────────────────
+    let calHistory = null;      // { today, earliest_date, results: { "Y-m-d": {finished, solved} } }
+    let calMonthCursor = null;  // "Y-m-01" of the month currently shown
+
+    function openCalendar() {
+        calMonthCursor = viewedDate.slice(0, 8) + "01";
+        calModalEl.style.display = "flex";
+        if (calHistory) renderCalendar(); // paint the stale cache instantly, then refresh
+        fetch(BASE_PATH + "/api/boardle-history.php")
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(res => { calHistory = res; renderCalendar(); })
+            .catch(() => { if (!calHistory) calGridEl.innerHTML = `<p class="fw-empty-note">Couldn't load history.</p>`; });
+    }
+    function closeCalendar() { calModalEl.style.display = "none"; }
+
+    function renderCalendar() {
+        if (!calHistory) return;
+        const [cy, cm] = calMonthCursor.split("-").map(Number);
+        calMonthLabelEl.textContent = new Date(cy, cm - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+        const firstDow = new Date(cy, cm - 1, 1).getDay(); // 0=Sun
+        const daysInMonth = new Date(cy, cm, 0).getDate();
+        const dows = ["S", "M", "T", "W", "T", "F", "S"];
+
+        let html = dows.map(d => `<div class="fw-cal-dow">${d}</div>`).join("");
+        for (let i = 0; i < firstDow; i++) html += `<div class="fw-cal-day empty"></div>`;
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const ds = `${cy}-${String(cm).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const outOfRange = ds < calHistory.earliest_date || ds > calHistory.today;
+            const r = calHistory.results[ds];
+            const cls = ["fw-cal-day"];
+            if (outOfRange) cls.push("disabled");
+            else if (r && r.solved) cls.push("solved");
+            // A past day counts as missed whether it was played and not
+            // solved, or never opened at all — today is still in progress
+            // so it's left unmarked either way.
+            else if (ds !== calHistory.today) cls.push("missed");
+            if (ds === calHistory.today) cls.push("is-today");
+            if (ds === viewedDate) cls.push("viewing");
+            html += `<div class="${cls.join(" ")}" data-date="${ds}">${day}</div>`;
+        }
+        calGridEl.innerHTML = html;
+
+        calGridEl.querySelectorAll(".fw-cal-day[data-date]:not(.disabled)").forEach(el => {
+            el.addEventListener("click", () => { goToDate(el.dataset.date); closeCalendar(); });
+        });
+
+        calPrevMonthEl.disabled = calMonthCursor <= calHistory.earliest_date.slice(0, 8) + "01";
+        calNextMonthEl.disabled = calMonthCursor >= calHistory.today.slice(0, 8) + "01";
+    }
+
+    calPrevMonthEl.addEventListener("click", () => {
+        const [y, m] = calMonthCursor.split("-").map(Number);
+        const d = new Date(y, m - 2, 1);
+        calMonthCursor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+        renderCalendar();
+    });
+    calNextMonthEl.addEventListener("click", () => {
+        const [y, m] = calMonthCursor.split("-").map(Number);
+        const d = new Date(y, m, 1);
+        calMonthCursor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+        renderCalendar();
+    });
+    calModalEl.addEventListener("click", e => { if (e.target === calModalEl) closeCalendar(); });
+
     function renderAll() {
+        renderDayNav();
         renderStatus();
         renderJokers();
         renderBoards();

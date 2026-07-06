@@ -9,5 +9,11 @@ if (!isset($_SESSION["user_id"])) {
     exit("Not logged in.");
 }
 
+$date = boardleResolveDate($pdo, $_GET["date"] ?? null);
+
+$payload = boardleState($pdo, $date, (int) $_SESSION["user_id"]);
+$payload["today"]         = date("Y-m-d");
+$payload["earliest_date"] = boardleEarliestDate($pdo);
+
 header("Content-Type: application/json");
-echo json_encode(boardleState($pdo, date("Y-m-d"), (int) $_SESSION["user_id"]));
+echo json_encode($payload);

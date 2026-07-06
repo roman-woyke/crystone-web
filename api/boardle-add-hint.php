@@ -10,7 +10,7 @@ if (!isset($_SESSION["user_id"])) {
 }
 
 $userId = (int) $_SESSION["user_id"];
-$date   = date("Y-m-d");
+$date   = boardleResolveDate($pdo, $_POST["date"] ?? null);
 
 $board = filter_var($_POST["board"] ?? null, FILTER_VALIDATE_INT);
 $hint  = mb_substr(trim($_POST["hint"] ?? ""), 0, 500);

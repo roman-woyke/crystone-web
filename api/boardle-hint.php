@@ -10,7 +10,7 @@ if (!isset($_SESSION["user_id"])) {
 }
 
 $userId = (int) $_SESSION["user_id"];
-$date   = date("Y-m-d");
+$date   = boardleResolveDate($pdo, $_POST["date"] ?? null);
 
 $type  = $_POST["type"] ?? "";
 $board = filter_var($_POST["board"] ?? null, FILTER_VALIDATE_INT);
@@ -28,7 +28,7 @@ $rStmt = $pdo->prepare("SELECT finished FROM boardle_results WHERE game_date = ?
 $rStmt->execute([$date, $userId]);
 if ((int) $rStmt->fetchColumn() === 1) {
     http_response_code(409);
-    exit("You're already done for today.");
+    exit("You're already done with that day.");
 }
 
 // Each joker is once per day.

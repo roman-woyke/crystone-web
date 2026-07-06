@@ -1,6 +1,6 @@
--bug fix: flip card need to be sticky also when flipped (follow the scroll if it's small enough to be rendered without going lower than other containers).
--new feature: remove jokers, instead create a lootbox feature, like each X amount of days solved, you get to open one chest where you can find stuff like items (old jokers + others, buffs for you or debuff for other player) or cosmetics like profile borders or emotes. 
--new feature: create own asset for flaming and freezing animation to import instead of make it out of code.
+Long term (ignore for now): 
+    -new feature: remove jokers, instead create a lootbox feature, like each X amount of days solved, you get to open one chest where you can find stuff like items (old jokers + others, buffs for you or debuff for other player) or cosmetics like profile borders or emotes. 
+    -new feature: create own asset for flaming and freezing animation to import instead of make it out of code.
 
--bug fix: study counter - changing module (from module X to Y) after 2 hours, then displays 2 Hours: Module Y, where it should show 2 hours: Module X \n 1 min: Module Y .
--new feature: boardle should have a history of previous games, like the daily chess.com challenge, where you can do old days you've missed or look at previous results, with arrows to go to previous day and calendar pop up to choose a specific day.
+Short Term:
+   

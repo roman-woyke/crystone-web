@@ -10,7 +10,7 @@ if (!isset($_SESSION["user_id"])) {
 }
 
 $userId = (int) $_SESSION["user_id"];
-$date   = date("Y-m-d");
+$date   = boardleResolveDate($pdo, $_POST["date"] ?? null);
 
 boardleEnsureDay($pdo, $date);
 boardleFinalizeWords($pdo, $date);
@@ -29,7 +29,7 @@ $rStmt->execute([$date, $userId]);
 $result = $rStmt->fetch(PDO::FETCH_ASSOC);
 if ($result && (int) $result["finished"] === 1) {
     http_response_code(409);
-    exit("You're already done for today.");
+    exit("You're already done with that day.");
 }
 
 // How many guesses have I made?

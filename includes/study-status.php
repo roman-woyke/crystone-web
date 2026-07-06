@@ -33,7 +33,7 @@ function studyStatusPayload(PDO $pdo, $userId): array
         ORDER BY u.username
     ")->fetchAll(PDO::FETCH_ASSOC);
 
-    $studying = [];
+    $studyingByUser = [];
     $me = ["active" => false];
 
     foreach ($rows as $r) {
@@ -45,36 +45,59 @@ function studyStatusPayload(PDO $pdo, $userId): array
             "running"       => (bool) $r["running"],
             "break_elapsed" => (int) $r["break_elapsed"],
             "at_library"    => (bool) $r["at_library"],
+            "parts"         => [],
         ];
-        $studying[] = $entry;
+        $studyingByUser[(int) $r["user_id"]] = $entry;
 
         if ((int) $r["user_id"] === (int) $userId) {
             $me = array_merge(["active" => true], $entry);
         }
     }
 
-    // `me.parts` — my in-progress session broken down per module (one entry per
-    // module sub-session), summing each module's live intervals up to now. The
-    // stop checklist uses this to let me pick which parts to log. A null module
-    // is the time studied before any module was assigned (not loggable).
-    if ($me["active"]) {
-        // Pre-assignment intervals (module_name NULL) fall back to the session's
-        // current module, so they don't show up as orphaned "No module" time.
-        $p = $pdo->prepare("
-            SELECT COALESCE(module_name, ?) AS module,
-                   SUM(TIMESTAMPDIFF(SECOND, started_at, COALESCE(ended_at, NOW()))) AS seconds
-            FROM study_segments
-            WHERE user_id = ? AND session_id IS NULL
-            GROUP BY module
-            ORDER BY MIN(started_at)
+    // `parts` — every active user's in-progress session broken down per module
+    // (one entry per module sub-session), summing each module's live intervals
+    // up to now. Without this, a chip that switched modules mid-session would
+    // show its whole elapsed time next to whichever module is current — e.g.
+    // "2 hours: Module Y" after 2 hours on X and a few seconds on Y. The stop
+    // checklist also uses `me.parts` to let me pick which parts to log. A null
+    // module is the time studied before any module was assigned (not loggable).
+    if ($studyingByUser) {
+        // Pre-assignment intervals (module_name NULL) fall back to that user's
+        // session's current module, so they don't show up as orphaned time.
+        // Same-named modules can recur across separate intervals (X -> Y -> X),
+        // and GROUP BY module collapses them into one summed part whose
+        // position reflects the *first* time it was opened, not the most
+        // recent one — so "last part in the array" is not reliably "the part
+        // that's still running". is_live flags the group containing the
+        // still-open segment (at most one per user) so the client can find
+        // the ticking part directly instead of guessing from array order.
+        $partsStmt = $pdo->query("
+            SELECT seg.user_id,
+                   COALESCE(seg.module_name, st.module_name) AS module,
+                   SUM(TIMESTAMPDIFF(SECOND, seg.started_at, COALESCE(seg.ended_at, NOW()))) AS seconds,
+                   MIN(seg.started_at) AS first_started,
+                   MAX(seg.ended_at IS NULL) AS is_live
+            FROM study_segments seg
+            JOIN study_status st ON st.user_id = seg.user_id
+            WHERE seg.session_id IS NULL
+            GROUP BY seg.user_id, module
+            ORDER BY seg.user_id, first_started
         ");
-        $p->execute([$me["module"] ?? null, $userId]);
-        $parts = [];
-        foreach ($p->fetchAll(PDO::FETCH_ASSOC) as $pr) {
-            $parts[] = ["module" => $pr["module"], "seconds" => (int) $pr["seconds"]];
+        foreach ($partsStmt->fetchAll(PDO::FETCH_ASSOC) as $pr) {
+            $uid = (int) $pr["user_id"];
+            if (!isset($studyingByUser[$uid])) continue;
+            $studyingByUser[$uid]["parts"][] = [
+                "module"  => $pr["module"],
+                "seconds" => (int) $pr["seconds"],
+                "live"    => (bool) $pr["is_live"],
+            ];
         }
-        $me["parts"] = $parts;
+        if (isset($studyingByUser[(int) $userId])) {
+            $me["parts"] = $studyingByUser[(int) $userId]["parts"];
+        }
     }
+
+    $studying = array_values($studyingByUser);
 
     // `recap` is the current study day's timeline; `recap_prev` is the previous
     // study day's, so the dock can flip to a "Gestern" (yesterday) view.
