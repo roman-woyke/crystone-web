@@ -477,12 +477,24 @@ function boardleHasArmor(PDO $pdo, string $date, int $userId): bool
 //   - jokers settle on their day: a freeze-paid joker (`via_freeze`) spends a
 //     freeze; every other joker costs 1 streak.
 // `effective` is the freeze-aware streak, net of the joker streak-cost.
+//
+// Only solves made ON TIME count (solved_at's calendar date <= game_date):
+// the history feature lets a player solve a past day's puzzle belatedly, and
+// that must not retroactively fill a gap that already broke the streak.
 function boardleStreakInfo(PDO $pdo, string $date, int $userId): array
 {
-    $s = $pdo->prepare("SELECT game_date FROM boardle_results WHERE user_id = ? AND solved = 1 ORDER BY game_date");
+    $s = $pdo->prepare("SELECT game_date, solved_at FROM boardle_results WHERE user_id = ? AND solved = 1 ORDER BY game_date");
     $s->execute([$userId]);
-    $solvedList = $s->fetchAll(PDO::FETCH_COLUMN);
-    $solved = array_fill_keys($solvedList, true);
+    $solvedList = [];
+    $solved = [];
+    foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        // solved_at can be NULL on rows written before that column existed —
+        // treat those as on-time since there's no evidence otherwise.
+        $solvedOnTime = $r['solved_at'] === null || substr($r['solved_at'], 0, 10) <= $r['game_date'];
+        if (!$solvedOnTime) continue;
+        $solvedList[] = $r['game_date'];
+        $solved[$r['game_date']] = true;
+    }
 
     // Jokers per day, split by payment method.
     $h = $pdo->prepare("
