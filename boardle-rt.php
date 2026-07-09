@@ -38,6 +38,7 @@ body {
     text-align: center;
 }
 .rt-phase { display: none; width: 100%; max-width: 1100px; }
+#phase-playing.active { max-width: 1320px; }
 .rt-phase.active { display: block; animation: rt-fade-in 300ms var(--ease-out); }
 @keyframes rt-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
@@ -224,13 +225,34 @@ body {
 .rt-key.orange { background: var(--rt-orange); color: #fff; }
 .rt-key.grey   { background: var(--rt-grey); color: #fff; opacity: 0.85; }
 
-.rt-opponents { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-top: 24px; opacity: 0.8; }
-.rt-opp-name { font-size: 0.8rem; color: var(--text-3); margin-bottom: 4px; }
-.rt-opp-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; width: 90px; }
+/* Playing layout: boards + keyboard on the left, opponents' live progress
+   pinned to the right so it reads as a sidebar, not a trailing footer. */
+.rt-play-layout { display: flex; align-items: flex-start; justify-content: center; gap: 28px; }
+.rt-play-main { flex: 1; min-width: 0; max-width: 900px; }
+.rt-play-side {
+    width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px;
+    position: sticky; top: 16px;
+}
+.rt-opp {
+    padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+    background: var(--glass); text-align: left;
+}
+.rt-opp-name {
+    font-size: 0.82rem; font-weight: 700; color: var(--text-2); margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.rt-opp-name .rt-check { color: var(--success); }
+.rt-opp-boards { display: flex; gap: 6px; flex-wrap: wrap; }
+.rt-opp-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; width: 48px; }
 .rt-opp-cell { aspect-ratio: 1; border-radius: 2px; background: rgba(255,255,255,0.08); }
 .rt-opp-cell.green { background: var(--rt-green); }
 .rt-opp-cell.orange { background: var(--rt-orange); }
 .rt-opp-cell.grey { background: var(--rt-grey); }
+@media (max-width: 900px) {
+    .rt-play-layout { flex-direction: column; align-items: center; }
+    .rt-play-side { position: static; width: 100%; max-width: 500px; flex-direction: row; flex-wrap: wrap; }
+    .rt-opp { flex: 1; min-width: 140px; }
+}
 
 /* Results */
 .rt-results-table { margin: 0 auto 28px; border-collapse: collapse; }
@@ -284,16 +306,20 @@ body {
     </div>
 
     <div class="rt-phase" id="phase-playing">
-        <div class="rt-timer" id="play-timer">15:00</div>
-        <div class="rt-boards" id="play-boards"></div>
-        <p class="rt-msg" id="play-msg"></p>
-        <div class="rt-controls">
-            <div class="rt-kb-wrap">
-                <div class="rt-kb-selector" id="play-kb-selector"></div>
-                <div class="rt-keyboard" id="play-keyboard"></div>
+        <div class="rt-play-layout">
+            <div class="rt-play-main">
+                <div class="rt-timer" id="play-timer">15:00</div>
+                <div class="rt-boards" id="play-boards"></div>
+                <p class="rt-msg" id="play-msg"></p>
+                <div class="rt-controls">
+                    <div class="rt-kb-wrap">
+                        <div class="rt-kb-selector" id="play-kb-selector"></div>
+                        <div class="rt-keyboard" id="play-keyboard"></div>
+                    </div>
+                </div>
             </div>
+            <div class="rt-play-side" id="play-opponents"></div>
         </div>
-        <div class="rt-opponents" id="play-opponents"></div>
     </div>
 
     <div class="rt-phase" id="phase-results">
@@ -661,9 +687,13 @@ body {
         document.getElementById("play-opponents").innerHTML = (STATE.opponents || []).map(o => {
             // o.boards is a list of guess ROWS (each with colors per board
             // position) — build one mini-grid per board, freezing at the
-            // winning row like the main boards do.
+            // winning row like the main boards do. The board that is this
+            // opponent's own pick is skipped: it's auto-solved for them from
+            // the start, so it's not real progress and showing it would leak
+            // color hints about their own word to everyone else.
             let minis = "";
             for (let b = 0; b < n; b++) {
+                if (b === o.position) continue;
                 let shown = o.boards.length;
                 if (o.solved_boards[b]) {
                     for (let r = 0; r < o.boards.length; r++) {
@@ -678,8 +708,8 @@ body {
             }
             return `
                 <div class="rt-opp">
-                    ${o.solved ? '<div class="rt-opp-name">✓</div>' : ""}
-                    ${minis}
+                    <div class="rt-opp-name"><span>${o.username}</span>${o.solved ? '<span class="rt-check">✓</span>' : ""}</div>
+                    <div class="rt-opp-boards">${minis}</div>
                 </div>
             `;
         }).join("");

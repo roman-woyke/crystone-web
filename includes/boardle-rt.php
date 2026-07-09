@@ -469,6 +469,7 @@ function boardleRtPayload(PDO $pdo, int $userId): array
         unset($row2);
         $opponents[] = [
             "username"     => $p["username"],
+            "position"     => (int) $p["position"],
             "guesses_used" => count($oGuesses),
             "solved"       => $oBoards["solved"],
             "boards"       => $oBoards["guesses"],

@@ -4067,10 +4067,14 @@ body.focus-mode #focus-mini-charts { display: flex; }
     }
 
     // Tick the studying chips locally every second; re-sync from the server
-    // every 15s (covers other tabs and other users).
+    // every 15s (covers other tabs and other users). The tab title clock is
+    // the one thing users actually rely on while the tab is backgrounded, so
+    // it keeps ticking even when hidden — only the (invisible) DOM updates
+    // are skipped for performance.
     setInterval(() => {
+        tickTitle();
         if (document.hidden) return;
-        tickStudying(); tickTimeline(); renderFocusClock(); tickTitle();
+        tickStudying(); tickTimeline(); renderFocusClock();
     }, 1000);
     setInterval(() => { if (!document.hidden) loadStatus(); }, 15000);
     document.addEventListener("visibilitychange", () => {
