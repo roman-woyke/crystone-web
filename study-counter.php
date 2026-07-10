@@ -951,6 +951,38 @@ main.container {
 .sc-medal-3 { /* bronze — warm copper, kept clearly orange so it doesn't read as brown */ background: linear-gradient(145deg, #f7b878, #e07f37 45%, #b85f1e); color: #4a2400; }
 .sc-medal-4 { /* chocolate — dark brown */ background: linear-gradient(145deg, #8a5a36, #5e3a1e 45%, #3a2210); color: #f3e2d0; }
 
+/* ── Wizard hat: lifetime milestone at 100h total studied ─────────────────
+   A transparent PNG (assets/images/cartoon_wizard_hat.png, 586x740) worn on
+   top of the avatar. The avatar circle clips its children (overflow: hidden
+   + border-radius), so the hat is an absolutely-positioned sibling inside
+   this wrapper. Percentage sizing scales it with any avatar size (64px
+   podium, 48px rank-4, 108px detail modal). The offsets are tuned to the
+   artwork: its brim opening sits ~68% down the image, so this puts the brim
+   line across the top ~quarter of the circle. */
+.sc-avatar-wrap {
+    position: relative;
+    width: fit-content;
+    margin: 0 auto 10px;
+}
+.sc-avatar-wrap .sc-avatar,
+.sc-avatar-wrap .pd-avatar { margin: 0; }
+.pd-avatar-wrap { margin-bottom: 16px; }
+
+.sc-hat {
+    position: absolute;
+    width: 130%;
+    max-width: none;
+    left: 50%;
+    top: -90%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 1;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+}
+
+/* Room for the hat to rise above the avatar without crossing the card edge. */
+#overall-podium .podium-card { padding-top: 34px; }
+
 /* Desktop: 1→4 left-to-right staircase, with a smaller 4th place. */
 @media (min-width: 769px) {
     #overall-podium { align-items: flex-start; }
@@ -958,7 +990,7 @@ main.container {
     #overall-podium .podium-card.rank-1 { order: 1; max-width: 230px; }
     #overall-podium .podium-card.rank-2 { order: 2; margin-top: 14px; }
     #overall-podium .podium-card.rank-3 { order: 3; margin-top: 26px; }
-    #overall-podium .podium-card.rank-4 { order: 4; margin-top: 38px; max-width: 168px; padding: 18px 14px; }
+    #overall-podium .podium-card.rank-4 { order: 4; margin-top: 38px; max-width: 168px; padding: 26px 14px 18px; }
     #overall-podium .podium-card.rank-4 .sc-avatar { width: 48px; height: 48px; }
     #overall-podium .podium-card.rank-4 .podium-score { font-size: 1.6rem; }
 }
@@ -2696,6 +2728,24 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
     const podiumFullname = document.getElementById("podium-module-fullname");
 
+    // ── Wizard hat milestone ──────────────────────────────────────────────
+    // Awarded at 100 hours studied lifetime (always computed from the
+    // unfiltered session list), but only rendered on the unfiltered podium
+    // (Period = Overall and View = all) — weekly/daily, per-module and
+    // library podiums stay hat-free.
+    const WIZARD_HAT_SECS = 100 * 3600;
+
+    function wearsWizardHat(username) {
+        let total = 0;
+        for (const s of SESSIONS) if (s.username === username) total += s.seconds;
+        return total >= WIZARD_HAT_SECS;
+    }
+
+    // The hat itself is a transparent PNG worn on top of the avatar circle.
+    function hatImg() {
+        return `<img class="sc-hat" src="${BASE_PATH}/assets/images/cartoon_wizard_hat.png" alt="">`;
+    }
+
     function buildOverallPodium() {
         const sessions = filteredSessions();
         const totals = {};
@@ -2729,11 +2779,12 @@ body.focus-mode #focus-mini-charts { display: flex; }
             const avatarInner = av
                 ? `<img src="${av}" alt="">`
                 : `<span class="sc-avatar-fallback">${escapeHtml((username[0] || "?").toUpperCase())}</span>`;
+            const hat = podiumPeriod === "overall" && podiumView === "all" && wearsWizardHat(username) ? hatImg() : "";
             return `
                 <div class="podium-card glass-card rank-${rank}" style="${style}"
                      data-username="${escapeHtml(username)}" data-rank="${rank}" data-secs="${secs}"
                      role="button" tabindex="0" aria-label="View ${escapeHtml(username)}'s study breakdown">
-                    <div class="sc-avatar" style="border-color:${color}">${avatarInner}</div>
+                    <div class="sc-avatar-wrap"><div class="sc-avatar" style="border-color:${color}">${avatarInner}</div>${hat}</div>
                     <div class="podium-name">${escapeHtml(username)}</div>
                     <div class="podium-score" style="color:${color}">${fmtTime(secs)}</div>
                     <div class="podium-sub podium-sub-time">${sublabel}</div>
@@ -2782,8 +2833,9 @@ body.focus-mode #focus-mini-charts { display: flex; }
             `;
         }).join("");
 
+        const detailHat = podiumPeriod === "overall" && podiumView === "all" && wearsWizardHat(username) ? hatImg() : "";
         detailBody.innerHTML = `
-            <div class="pd-avatar" style="border-color:${color}">${avatarHtml}</div>
+            <div class="sc-avatar-wrap pd-avatar-wrap"><div class="pd-avatar" style="border-color:${color}">${avatarHtml}</div>${detailHat}</div>
             <div class="pd-username" style="color:${color}">${escapeHtml(username)}</div>
             <div class="pd-rank-row">
                 <span class="sc-medal sc-medal-${rank}">${rank}</span>
