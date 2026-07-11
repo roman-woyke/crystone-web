@@ -13,7 +13,7 @@ $userId = (int) $_SESSION["user_id"];
 $date   = boardleResolveDate($pdo, $_POST["date"] ?? null);
 
 $board = filter_var($_POST["board"] ?? null, FILTER_VALIDATE_INT);
-$hint  = mb_substr(trim($_POST["hint"] ?? ""), 0, 500);
+$hint  = trim($_POST["hint"] ?? "");
 
 if ($board === false || $board < 0) {
     http_response_code(400);

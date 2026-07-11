@@ -843,7 +843,7 @@ main.container { max-width: 1280px; }
         <h2>Add a hint for others</h2>
         <p class="muted">Give the next players a clue without spoiling the word.</p>
         <div class="fw-hint-wrap">
-            <textarea id="fw-hint-input" maxlength="500" placeholder="e.g. Think kitchen appliances..."></textarea>
+            <textarea id="fw-hint-input" placeholder="e.g. Think kitchen appliances..."></textarea>
         </div>
         <p class="fw-choose-msg" id="fw-hint-modal-msg"></p>
         <div class="modal-actions">
@@ -1558,7 +1558,7 @@ main.container { max-width: 1280px; }
             </div>
             <div class="fw-hint-wrap">
                 <label for="fw-hint">Hint for players (optional — shown under their board from the start):</label>
-                <textarea id="fw-hint" maxlength="500" placeholder="Give players a clue without spoiling the word...">${escapeHtml(c.already_hint || "")}</textarea>
+                <textarea id="fw-hint" placeholder="Give players a clue without spoiling the word...">${escapeHtml(c.already_hint || "")}</textarea>
             </div>
             <p class="fw-choose-msg" id="fw-choose-msg"></p>
         `;

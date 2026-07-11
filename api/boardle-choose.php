@@ -46,7 +46,7 @@ if (!boardleIsValidWord($word, $tlen)) {
     exit("Pick a valid $tlen-letter word.");
 }
 
-$hint = mb_substr(trim($_POST["hint"] ?? ""), 0, 500);
+$hint = trim($_POST["hint"] ?? "");
 if ($hint === "") $hint = null;
 
 // Duplicates between players are allowed — rejecting a taken word would leak
