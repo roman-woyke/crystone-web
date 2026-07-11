@@ -178,9 +178,14 @@ if ($action === "start") {
             segOpen($pdo, $userId, $resolved);
         }
         // Same module re-selected → nothing to do.
+    } elseif ($row["started_at"] === null) {
+        // Paused — picking a module means "I'm back to studying it", so end
+        // the break and open a fresh interval under the new module instead
+        // of silently queuing it for whenever resume is next clicked.
+        $pdo->prepare("UPDATE study_status SET started_at = NOW() WHERE user_id = ?")
+            ->execute([$userId]);
+        segOpen($pdo, $userId, $resolved);
     }
-    // Paused (no open interval): the module is just updated; the next resume
-    // opens a fresh interval under it.
 
     $extra["custom_added"] = $customAdded;
 } elseif ($action === "pause") {
@@ -256,6 +261,30 @@ if ($action === "start") {
             }
             $byMod[$k]["total"] += (int) $sr["dur"];
             $byMod[$k]["segs"][] = $sr;
+        }
+
+        // Fold short (< 5 min) gaps between chronologically-adjacent segments
+        // of the same module into that module's total — a brief break
+        // shouldn't cost the module time it would have kept counting through,
+        // matching what the live breakdown already showed before Stop was
+        // clicked (see studyMergeRuns() in includes/study-status.php).
+        $chronoStmt = $pdo->prepare("
+            SELECT module_name, started_at, ended_at
+            FROM study_segments
+            WHERE user_id = ? AND session_id IS NULL AND ended_at IS NOT NULL
+            ORDER BY started_at
+        ");
+        $chronoStmt->execute([$userId]);
+        $chrono = $chronoStmt->fetchAll(PDO::FETCH_ASSOC);
+        for ($i = 1; $i < count($chrono); $i++) {
+            $prev = $chrono[$i - 1];
+            $cur  = $chrono[$i];
+            if ($prev["module_name"] === null || $prev["module_name"] !== $cur["module_name"]) continue;
+            $gap = strtotime($cur["started_at"]) - strtotime($prev["ended_at"]);
+            if ($gap > 0 && $gap < 300) {
+                $k = mb_strtolower($prev["module_name"]);
+                if (isset($byMod[$k])) $byMod[$k]["total"] += $gap;
+            }
         }
 
         $loggedSeconds = 0;

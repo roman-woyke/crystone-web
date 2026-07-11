@@ -673,12 +673,6 @@ main.container {
     font-variant-numeric: tabular-nums; /* keep chip width stable while ticking */
 }
 
-.studying-chip .chip-break {
-    margin-left: 6px;
-    color: var(--warning);
-    font-weight: 600;
-}
-
 .chip-module-breakdown {
     display: block;
     margin-top: 2px;
@@ -689,6 +683,36 @@ main.container {
 .chip-breakdown-line {
     display: block;
     white-space: nowrap;
+}
+
+/* Completed history lines (modules no longer running, breaks already over)
+   stay the same neutral grey as the rest of the chip meta text. The
+   currently-running module matches the green "session active" colour;
+   at the library it switches to blue instead so BIB sessions read
+   distinctly at a glance. A break in progress is always yellow. */
+.chip-breakdown-line.live {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.chip-breakdown-line.live-lib {
+    color: var(--info, #38bdf8);
+    font-weight: 600;
+}
+
+.chip-breakdown-line.break-line.live {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.chip-time-label.session-active,
+.chip-time.session-active {
+    color: var(--success);
+}
+
+.chip-time-label.session-break,
+.chip-time.session-break {
+    color: var(--danger);
 }
 
 /* Pulsing presence dots */
@@ -1925,16 +1949,6 @@ body.focus-mode .dock-card { top: 20px; }
     line-height: 1.5;
 }
 
-.focus-break-text {
-    margin-top: 2px;
-    font-size: 0.9rem;
-    color: var(--warning);
-    font-variant-numeric: tabular-nums;
-    /* Reserve a line even when empty */
-    min-height: 1.4em;
-    line-height: 1.4;
-}
-
 .focus-actions {
     display: flex;
     flex-direction: row;
@@ -2186,7 +2200,6 @@ body.focus-mode #focus-mini-charts { display: flex; }
         <button type="button" class="btn focus-dock-toggle" id="focus-dock-toggle" title="Hide sidebar">&#x203A;</button>
         <div class="focus-clock" id="focus-clock">00:00</div>
         <div class="focus-clock-module" id="focus-clock-module"></div>
-        <div class="focus-break-text" id="focus-break-text"></div>
         <div class="focus-actions" id="focus-actions">
             <button type="button" class="btn studying-toggle" id="focus-start-btn">I'm studying</button>
             <button type="button" class="btn studying-break" id="focus-break-btn" style="display:none;">Take a break</button>
@@ -3327,17 +3340,17 @@ body.focus-mode #focus-mini-charts { display: flex; }
         ticker = setInterval(() => {
             if (myState.running) {
                 myState.elapsed += 1; // keeps my chip ticking live
-                // The part with the still-open segment ticks too, so a live
-                // per-module breakdown isn't stuck between polls. Not
-                // necessarily the last array entry: switching X -> Y -> X
-                // collapses both X intervals into one part positioned at X's
-                // first occurrence.
-                const live = myState.parts.find(p => p.live);
-                if (live) live.seconds += 1;
             } else {
                 // On break — the study time is frozen, the break time ticks up.
                 myState.breakElapsed += 1;
             }
+            // Whichever part is still open (a running module, or an
+            // in-progress break) ticks too, so the breakdown line isn't stuck
+            // between polls — this is the same figure the server folded any
+            // short interruptions into, so it just keeps counting up as one
+            // continuous number rather than resetting when it started.
+            const live = myState.parts.find(p => p.live);
+            if (live) live.seconds += 1;
         }, 1000);
     }
 
@@ -3656,35 +3669,61 @@ body.focus-mode #focus-mini-charts { display: flex; }
         if (typeof renderFocusClock === "function") renderFocusClock();
     }
 
-    // A single-module session just shows " · Module"; one that switched shows
-    // each module's own time on its own line instead, using the full module
-    // name — fitBreakdownLines() shrinks any line that overflows the chip
-    // down to its podium abbreviation afterward. `p.live` (not array position)
-    // marks the part with the still-open segment: a module switched away from
-    // and back to (X -> Y -> X) collapses into one summed part per name, so
-    // the currently-running one isn't necessarily last in the list.
-    // "Session · " prefix shown before the total time whenever a chip has a
-    // multi-module breakdown, so the total line reads the same way as each
-    // module's own "Module · time" line below it.
-    function sessionLabelPrefix(s) {
-        const parts = (s.parts || []).filter(p => p.module);
-        return parts.length > 1 ? `<span class="chip-time-label">Session · </span>` : "";
+    // The full chronological history of a session: each module run and each
+    // break, in the order they happened. The server (studyMergeRuns() in
+    // includes/study-status.php) already folds interruptions shorter than 5
+    // minutes into whichever run they interrupted — so a brief break during
+    // continuous studying (or a brief module check during a break) shows up
+    // as more time on the run it interrupted rather than as its own tiny
+    // line, and `s.parts` here is never fragmented or missing that time.
+    // `includeLiveBreak: false` drops the in-progress break entry for
+    // callers (the focus clock) that already show an "On break" indicator of
+    // their own and would otherwise show the same number twice.
+    function breakdownParts(s, includeLiveBreak = true) {
+        return (s.parts || []).filter(p => {
+            if (p.type === "break") return includeLiveBreak || !p.live;
+            return !!p.module;
+        });
     }
 
-    function moduleSuffix(s, isRunning, i) {
-        const parts = (s.parts || []).filter(p => p.module);
-        if (parts.length <= 1) {
-            return s.module ? " · " + escapeHtml(s.module) : "";
-        }
+    // Every chip is rendered as a breakdown: one line per history entry
+    // (module run or break), using the full module name — fitBreakdownLines()
+    // shrinks any line that overflows the chip down to its podium
+    // abbreviation afterward. The still-open module or break (`p.live`, not
+    // array position) is picked out in blue/green/yellow so it reads as
+    // "what's happening right now"; finished entries stay the neutral grey
+    // of the rest of the chip. The "Session · total" header line (green
+    // while running, red while on break) only appears once there's actually
+    // more than one entry to sum — a plain single-module, no-break session
+    // is just its one line, no separate total needed.
+    function sessionMeta(s, isRunning, i, timeAttr) {
+        const parts = breakdownParts(s);
+        const attr  = timeAttr ? ` ${timeAttr}="${i}"` : "";
+
         const lines = parts.map((p) => {
-            const isLive = isRunning && p.live;
-            const timeAttr = isLive ? ` data-mod-idx="${i}"` : "";
-            return `<span class="chip-breakdown-line" data-module="${escapeHtml(p.module)}">` +
+            if (p.type === "break") {
+                const liveAttr = p.live ? ` data-brk-idx="${i}"` : "";
+                return `<span class="chip-breakdown-line break-line${p.live ? " live" : ""}">` +
+                    `<span class="bd-name">Break</span> · ` +
+                    `<span class="bd-time"${liveAttr}>${fmtClock(p.seconds)}</span>` +
+                    `</span>`;
+            }
+            const isLive   = isRunning && p.live;
+            const liveCls  = isLive ? (s.at_library ? " live-lib" : " live") : "";
+            const liveAttr = isLive ? ` data-mod-idx="${i}"` : "";
+            return `<span class="chip-breakdown-line${liveCls}" data-module="${escapeHtml(p.module)}">` +
                 `<span class="bd-name">${escapeHtml(p.module)}</span> · ` +
-                `<span class="bd-time"${timeAttr}>${fmtClock(p.seconds)}</span>` +
+                `<span class="bd-time"${liveAttr}>${fmtClock(p.seconds)}</span>` +
                 `</span>`;
         });
-        return `<span class="chip-module-breakdown">${lines.join("")}</span>`;
+
+        const sessionCls = isRunning ? "session-active" : "session-break";
+        const header = parts.length > 1
+            ? `<span class="chip-time-label ${sessionCls}">Session · </span>` +
+              `<span class="chip-time ${sessionCls}"${attr}>${fmtClock(s.elapsed)}</span>`
+            : "";
+
+        return `${header}<span class="chip-module-breakdown">${lines.join("")}</span>`;
     }
 
     function renderStudying(list) {
@@ -3714,7 +3753,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
                     <span class="studying-chip ${isMe ? "me" : ""}">
                         <span class="pulse-dot"></span>
                         <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
-                        <span class="chip-meta">${sessionLabelPrefix(s)}<span class="chip-time" data-idx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s, true, i)}</span>
+                        <span class="chip-meta">${sessionMeta(s, true, i, "data-idx")}</span>
                     </span>
                 `;
             }).join("");
@@ -3727,12 +3766,12 @@ body.focus-mode #focus-mini-charts { display: flex; }
             breakBox.style.display = "";
             breakList.innerHTML = paused.map((s, i) => {
                 const isMe = s.username === MY_USERNAME;
-                // Study time is frozen; the break time (.chip-break) ticks up.
+                // Study time is frozen; the live "Break" breakdown line ticks up.
                 return `
                     <span class="studying-chip break ${isMe ? "me" : ""}">
                         <span class="pulse-dot paused"></span>
                         <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
-                        <span class="chip-meta">${sessionLabelPrefix(s)}${fmtClock(s.elapsed)}${moduleSuffix(s, false, i)}<span class="chip-break" data-bidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span></span>
+                        <span class="chip-meta">${sessionMeta(s, false, i, null)}</span>
                     </span>
                 `;
             }).join("");
@@ -3746,15 +3785,11 @@ body.focus-mode #focus-mini-charts { display: flex; }
             libraryList.innerHTML = library.map((s, i) => {
                 const isMe   = s.username === MY_USERNAME;
                 const dotCls = s.running ? "pulse-dot" : "pulse-dot paused";
-                // While paused at the library, also show a ☕ break timer.
-                const breakSpan = !s.running
-                    ? `<span class="chip-break" data-libbidx="${i}">☕ ${fmtClock(s.break_elapsed || 0)}</span>`
-                    : "";
                 return `
                     <span class="studying-chip library ${isMe ? "me" : ""}">
                         <span class="${dotCls}"></span>
                         <span class="chip-name" style="color:${colorFor(s.username)}">${escapeHtml(s.username)}</span>
-                        <span class="chip-meta">${sessionLabelPrefix(s)}<span class="chip-time" data-libidx="${i}">${fmtClock(s.elapsed)}</span>${moduleSuffix(s, s.running, i)}${breakSpan}</span>
+                        <span class="chip-meta">${sessionMeta(s, s.running, i, "data-libidx")}</span>
                     </span>
                 `;
             }).join("");
@@ -3771,7 +3806,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
     function fitBreakdownLines() {
         document.querySelectorAll(".studying-chip").forEach(chip => {
             if (chip.scrollWidth <= chip.clientWidth) return;
-            chip.querySelectorAll(".chip-breakdown-line").forEach(line => {
+            chip.querySelectorAll(".chip-breakdown-line[data-module]").forEach(line => {
                 const nameEl = line.querySelector(".bd-name");
                 if (nameEl) nameEl.textContent = abbrevModule(line.dataset.module);
             });
@@ -3799,12 +3834,12 @@ body.focus-mode #focus-mini-charts { display: flex; }
         });
 
         breakEntries.forEach((s, i) => {
-            const el = breakList.querySelector(`.chip-break[data-bidx="${i}"]`);
+            const el = breakList.querySelector(`.bd-time[data-brk-idx="${i}"]`);
             if (!el) return;
             const secs = (s.username === MY_USERNAME && myState.active && !myState.running)
                 ? myState.breakElapsed
                 : (s.break_elapsed || 0) + delta;
-            el.textContent = "☕ " + fmtClock(secs);
+            el.textContent = fmtClock(secs);
         });
 
         libraryEntries.forEach((s, i) => {
@@ -3820,12 +3855,12 @@ body.focus-mode #focus-mini-charts { display: flex; }
                 const modEl = libraryList.querySelector(`.bd-time[data-mod-idx="${i}"]`);
                 if (modEl) modEl.textContent = fmtClock(liveModuleSeconds(s, delta));
             } else {
-                const brEl = libraryList.querySelector(`.chip-break[data-libbidx="${i}"]`);
+                const brEl = libraryList.querySelector(`.bd-time[data-brk-idx="${i}"]`);
                 if (brEl) {
                     const secs = (s.username === MY_USERNAME && myState.active && !myState.running)
                         ? myState.breakElapsed
                         : (s.break_elapsed || 0) + delta;
-                    brEl.textContent = "☕ " + fmtClock(secs);
+                    brEl.textContent = fmtClock(secs);
                 }
             }
         });
@@ -3950,12 +3985,14 @@ body.focus-mode #focus-mini-charts { display: flex; }
     }
 
     function openStopModal() {
-        stopRows = (myState.parts || []).map(p => ({
-            module:  p.module,
-            full:    p.seconds,
-            secs:    p.seconds,
-            removed: false,
-        }));
+        stopRows = (myState.parts || [])
+            .filter(p => p.type !== "break" && p.module)
+            .map(p => ({
+                module:  p.module,
+                full:    p.seconds,
+                secs:    p.seconds,
+                removed: false,
+            }));
         renderStopRows();
         stopModal.style.display = "flex";
     }
@@ -4111,10 +4148,12 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
     const PAGE_TITLE = document.title;
     function tickTitle() {
-        if (myState.active && myState.running) {
+        if (!myState.active) {
+            document.title = PAGE_TITLE;
+        } else if (myState.running) {
             document.title = fmtClock(myState.elapsed) + " · " + PAGE_TITLE;
         } else {
-            document.title = PAGE_TITLE;
+            document.title = "Break " + fmtClock(myState.breakElapsed) + " · " + PAGE_TITLE;
         }
     }
 
@@ -4223,7 +4262,6 @@ body.focus-mode #focus-mini-charts { display: flex; }
     });
     const focusClockEl    = document.getElementById("focus-clock");
     const focusModuleEl   = document.getElementById("focus-clock-module");
-    const focusBreakText  = document.getElementById("focus-break-text");
     const focusActionsEl  = document.getElementById("focus-actions");
     const focusStartBtn   = document.getElementById("focus-start-btn");
     const focusBreakBtn   = document.getElementById("focus-break-btn");
@@ -4249,7 +4287,6 @@ body.focus-mode #focus-mini-charts { display: flex; }
             focusClockEl.textContent = "00:00";
             focusClockEl.classList.remove("on-break");
             focusModuleEl.textContent = "";
-            focusBreakText.textContent = "";
             focusStartBtn.style.display = "";
             focusBreakBtn.style.display = "none";
             focusStopBtn.style.display  = "none";
@@ -4260,26 +4297,33 @@ body.focus-mode #focus-mini-charts { display: flex; }
         focusBreakBtn.style.display = "";
         focusStopBtn.style.display  = "";
 
-        // A session that switched modules shows a total line plus each module's
-        // own time on its own line, so the big (whole-session) clock above isn't
-        // misread as time spent in the current module alone.
-        const parts = (myState.parts || []).filter(p => p.module);
+        // A session that switched modules, or has taken a break, shows a total
+        // line plus each history entry on its own line — including a break
+        // still in progress — so the big (whole-session) clock above isn't
+        // misread as time spent in the current module alone, and there's no
+        // need for a separate "on break" readout.
+        const parts = breakdownParts(myState);
         if (parts.length > 1) {
-            const lines = [`Session · ${fmtClock(myState.elapsed)}`, ...parts.map(p => `${abbrevModule(p.module)} · ${fmtClock(p.seconds)}`)];
+            const lines = [`Session · ${fmtClock(myState.elapsed)}`, ...parts.map(p =>
+                p.type === "break" ? `Break · ${fmtClock(p.seconds)}` : `${abbrevModule(p.module)} · ${fmtClock(p.seconds)}`
+            )];
             focusModuleEl.innerHTML = lines.map(escapeHtml).join("<br>");
         } else {
-            focusModuleEl.textContent = myState.module || "";
+            // The lone entry can be a break rather than a module — e.g. a
+            // session that opened with a too-short-to-stand-alone module tap
+            // gets folded entirely into the break that followed it (see
+            // studyMergeRuns()) — so this can't just assume myState.module.
+            const only = parts[0];
+            focusModuleEl.textContent = only && only.type === "break" ? "Break" : (myState.module || "");
         }
 
         if (running) {
             focusClockEl.textContent = fmtClock(myState.elapsed);
             focusClockEl.classList.remove("on-break");
-            focusBreakText.textContent = "";
             focusBreakBtn.textContent = "Take a break";
         } else {
             focusClockEl.textContent = fmtClock(myState.elapsed);
             focusClockEl.classList.add("on-break");
-            focusBreakText.textContent = "On break · " + fmtClock(myState.breakElapsed);
             focusBreakBtn.textContent = "Resume";
         }
     }
