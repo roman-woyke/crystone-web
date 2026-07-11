@@ -233,12 +233,21 @@ if ($action === "start") {
             $reqList = [];
         }
         // module (lower-cased) → requested seconds (0/absent = keep full).
+        // A module can appear as more than one row here — the breakdown
+        // shows separate lines for runs split by a real break — and since
+        // $byMod below sums *all* of that module's segments regardless of
+        // gaps, the requested amounts must be summed too. Overwriting
+        // instead of summing (the previous bug) let the last row silently
+        // clobber the others' requested seconds, so keeping every row at
+        // its full amount could still read as "only keep the last run's
+        // seconds" and trim — or entirely delete — the earlier ones.
         $reqByMod = [];
         foreach ($reqList as $s) {
             if (!is_array($s)) continue;
             $m = trim((string) ($s["module"] ?? ""));
             if ($m === "") continue;
-            $reqByMod[mb_strtolower($m)] = (int) ($s["seconds"] ?? 0);
+            $k = mb_strtolower($m);
+            $reqByMod[$k] = ($reqByMod[$k] ?? 0) + (int) ($s["seconds"] ?? 0);
         }
 
         // This session's live intervals, with ids/durations, grouped per module.
