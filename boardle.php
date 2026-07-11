@@ -405,6 +405,7 @@ main.container { max-width: 1280px; }
     --fw-green:  #2e9e5b;
     --fw-orange: #c2992f;
     --fw-grey:   #4b4b55;
+    --fw-key-grey: #222224;
 }
 
 /* ── Controls / keyboard ────────────────────────────────────────────────── */
@@ -439,6 +440,12 @@ main.container { max-width: 1280px; }
     max-width: 40px;
     flex: none;
 }
+.fw-key.fw-kb-tab {
+    background: var(--glass-card);
+    border-color: var(--glass-border);
+    color: var(--text-1);
+}
+.fw-key.fw-kb-tab:hover { background: rgba(255, 255, 255, 0.12); border-color: var(--text-3); }
 .fw-kb-tab.active {
     background: var(--grad-accent);
     color: #fff;
@@ -466,19 +473,19 @@ main.container { max-width: 1280px; }
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
+    border: 1px solid rgba(0, 0, 0, 0.15);
     border-radius: 7px;
-    background: var(--glass-card);
-    color: var(--text-1);
+    background: #818384;
+    color: #fff;
     font-family: var(--font-display);
     font-weight: 600;
     font-size: 0.95rem;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background var(--t-fast), transform var(--t-fast);
+    transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
 }
 
-.fw-key:hover { background: rgba(255, 255, 255, 0.12); }
+.fw-key:hover { background: #6f7071; border-color: rgba(0, 0, 0, 0.25); }
 .fw-key:active { transform: translateY(1px); }
 
 /* Press feedback — fires on click and on physical-keyboard typing. */
@@ -496,9 +503,9 @@ main.container { max-width: 1280px; }
 .fw-key[disabled] { cursor: not-allowed; }
 
 /* Letter feedback (for the currently selected board). */
-.fw-key.green  { background: var(--fw-green); color: #fff; }
-.fw-key.orange { background: var(--fw-orange); color: #fff; }
-.fw-key.grey   { background: var(--fw-grey); color: #fff; opacity: 0.85; }
+.fw-key.green  { background: var(--fw-green); border-color: var(--fw-green); color: #fff; }
+.fw-key.orange { background: var(--fw-orange); border-color: var(--fw-orange); color: #fff; }
+.fw-key.grey   { background: var(--fw-key-grey); border-color: var(--fw-key-grey); color: #fff; opacity: 0.7; transform: scale(0.92); }
 
 /* ── Word-picker hints shown under the boards ───────────────────────────── */
 .fw-board-hints:empty { margin: 0; }
@@ -519,8 +526,6 @@ main.container { max-width: 1280px; }
     font-size: 0.84rem;
     color: var(--text-2);
     line-height: 1.55;
-    word-break: break-word;
-    white-space: pre-wrap;
 }
 .fw-board-hint-label {
     display: block;
@@ -530,6 +535,51 @@ main.container { max-width: 1280px; }
     text-transform: uppercase;
     color: var(--text-3);
     margin-bottom: 6px;
+}
+/* Clamp long hints (e.g. ASCII art) to 3 lines; overflow opens the full-hint modal. */
+.fw-board-hint-text {
+    word-break: break-word;
+    white-space: pre-wrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.fw-board-hint-more {
+    display: block;
+    margin-top: 6px;
+    padding: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--violet);
+    cursor: pointer;
+    text-decoration: underline;
+}
+.fw-board-hint-more:hover { opacity: 0.85; }
+
+/* ── Full-hint modal — big, monospace, unwrapped so ASCII art stays intact. ── */
+.fw-full-hint-dialog {
+    width: min(94vw, 900px);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+.fw-full-hint-dialog h2 { margin: 0 0 12px; font-size: 1.05rem; }
+.fw-full-hint-body {
+    flex: 1;
+    overflow: auto;
+    padding: 14px 16px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.25);
+    font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.86rem;
+    line-height: 1.4;
+    white-space: pre;
+    color: var(--text-1);
 }
 
 /* ── Tomorrow's word picker ─────────────────────────────────────────────── */
@@ -853,6 +903,17 @@ main.container { max-width: 1280px; }
     </div>
 </div>
 
+<!-- ── Full-hint modal — opened from a clamped hint card that overflows 3 lines. ── -->
+<div id="fw-full-hint-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-dialog glass-card modal-solid fw-full-hint-dialog">
+        <h2 id="fw-full-hint-title">Board clue</h2>
+        <div class="fw-full-hint-body" id="fw-full-hint-body"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="fw-full-hint-close">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── Calendar popup: jump to any past puzzle day ───────────────────────────── -->
 <div id="fw-cal-modal" class="modal-overlay" style="display:none;">
     <div class="modal-dialog glass-card modal-solid fw-cal-dialog">
@@ -1080,7 +1141,7 @@ main.container { max-width: 1280px; }
         for (let b = 0; b < n; b++) {
             const hint = (hints[b] || "").trim();
             if (hint) {
-                html += `<div class="fw-board-hint" style="grid-column:${b + 1}"><span class="fw-board-hint-label">Board ${b + 1} clue</span>${escapeHtml(hint)}</div>`;
+                html += `<div class="fw-board-hint" style="grid-column:${b + 1}"><span class="fw-board-hint-label">Board ${b + 1} clue</span><div class="fw-board-hint-text" data-hint-board="${b}">${escapeHtml(hint)}</div></div>`;
             } else if (me.solved_boards[b] || owned.includes(b)) {
                 // Same card, same footprint — the hover/click affordance lives on
                 // the whole card, not just the CTA text. The two states never
@@ -1092,7 +1153,35 @@ main.container { max-width: 1280px; }
 
         boardHintsEl.querySelectorAll("[data-add-hint]").forEach(el =>
             el.addEventListener("click", () => openHintModal(parseInt(el.dataset.addHint, 10))));
+
+        // A hint clamped to 3 lines that actually overflows gets a "click for
+        // full hint" button appended below it, opening the big unwrapped modal.
+        boardHintsEl.querySelectorAll(".fw-board-hint-text").forEach(el => {
+            if (el.scrollHeight > el.clientHeight + 1) {
+                const b = parseInt(el.dataset.hintBoard, 10);
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "fw-board-hint-more";
+                btn.textContent = "Click for full hint";
+                btn.addEventListener("click", () => openFullHintModal(b, hints[b] || ""));
+                el.insertAdjacentElement("afterend", btn);
+            }
+        });
     }
+
+    // ── Full-hint modal: shows the untruncated hint, monospace + unwrapped so
+    //    ASCII art someone pastes in stays intact. ────────────────────────────
+    const fullHintModalEl = document.getElementById("fw-full-hint-modal");
+    const fullHintTitleEl = document.getElementById("fw-full-hint-title");
+    const fullHintBodyEl  = document.getElementById("fw-full-hint-body");
+    function openFullHintModal(board, hint) {
+        fullHintTitleEl.textContent = `Board ${board + 1} clue`;
+        fullHintBodyEl.textContent = hint;
+        fullHintModalEl.style.display = "flex";
+    }
+    function closeFullHintModal() { fullHintModalEl.style.display = "none"; }
+    document.getElementById("fw-full-hint-close").addEventListener("click", closeFullHintModal);
+    fullHintModalEl.addEventListener("click", e => { if (e.target === fullHintModalEl) closeFullHintModal(); });
 
     // ── Jokers: one shared bar of 3 buttons, doubling as the legend. Each costs
     //    1 streak. Armor applies instantly (no board); orange/green need a board
