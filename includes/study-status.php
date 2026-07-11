@@ -186,12 +186,28 @@ function studyStatusPayload(PDO $pdo, $userId): array
 
             $studyingByUser[$uid]["parts"] = $parts;
 
-            // The top-level break_elapsed (used outside the breakdown, e.g.
-            // the dock's simple "on break" state) should agree with the
-            // merged live break line rather than only counting time since
-            // the *last* pause — otherwise a short module tap mid-break
-            // would make this number jump backward even though the
-            // breakdown correctly kept counting through it.
+            // The top-level "elapsed" (the "Session · total" header above the
+            // breakdown, and the focus-mode clock) must agree with the sum of
+            // the module lines actually listed below it — otherwise a short
+            // break folded into a module's line (see studyMergeRuns()) makes
+            // that line's own number bigger than the DB's raw accumulated
+            // running-clock value, which never counted the folded break as
+            // study time. Recomputing from the merged parts keeps this in
+            // sync with what stop/log actually stores (it folds the same
+            // short gaps into the same module totals).
+            $sessionSecs = array_sum(array_map(
+                fn($p) => $p["type"] === "module" ? $p["seconds"] : 0,
+                $parts
+            ));
+            $studyingByUser[$uid]["elapsed"] = $sessionSecs;
+            if ($uid === (int) $userId) $me["elapsed"] = $sessionSecs;
+
+            // Same reasoning for break_elapsed (used outside the breakdown,
+            // e.g. the dock's simple "on break" state): it should agree with
+            // the merged live break line rather than only counting time
+            // since the *last* pause — otherwise a short module tap
+            // mid-break would make this number jump backward even though
+            // the breakdown correctly kept counting through it.
             $liveBreak = end($parts);
             if ($liveBreak && $liveBreak["type"] === "break" && $liveBreak["live"]) {
                 $studyingByUser[$uid]["break_elapsed"] = $liveBreak["seconds"];
