@@ -32,6 +32,26 @@ const MEDAL_CLASS = [
   "bg-gradient-to-br from-amber-800 to-amber-950",
 ];
 
+// Wizard hat: lifetime milestone at 100h total studied. A transparent PNG
+// worn on top of the avatar circle — the circle clips its children
+// (overflow-hidden + rounded-full), so the hat is an absolutely-positioned
+// sibling inside a relative wrapper. Percentage sizing scales it with any
+// avatar size; the offsets are tuned to the artwork (its brim opening sits
+// ~68% down the image, putting the brim line across the top ~quarter of the
+// circle).
+const WIZARD_HAT_SECS = 100 * 3600;
+
+function WizardHat() {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/images/cartoon_wizard_hat.png"
+      alt=""
+      className="pointer-events-none absolute top-[-90%] left-1/2 z-10 w-[130%] max-w-none -translate-x-1/2 drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]"
+    />
+  );
+}
+
 export function Podium({
   sessions,
   allUsers,
@@ -115,6 +135,18 @@ export function Podium({
     setModuleFilterOpen(false);
   }
 
+  // Awarded from the unfiltered lifetime total, but only rendered on the
+  // unfiltered podium (Period = Overall and View = all) — weekly/daily,
+  // per-module and library podiums stay hat-free.
+  const lifetimeTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const s of sessions) totals.set(s.username, (totals.get(s.username) ?? 0) + s.seconds);
+    return totals;
+  }, [sessions]);
+  const hatsVisible = period === "overall" && view === "all";
+  const wearsWizardHat = (username: string) =>
+    hatsVisible && (lifetimeTotals.get(username) ?? 0) >= WIZARD_HAT_SECS;
+
   const detailSessions = detail ? filtered.filter((s) => s.username === detail.username) : [];
   const detailModuleTotals = new Map<string, number>();
   for (const s of detailSessions) {
@@ -181,17 +213,22 @@ export function Podium({
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") setDetail({ username, rank: i + 1, secs });
               }}
-              className={`glow-card cursor-pointer space-y-2 overflow-hidden rounded-xl border-2 p-4 text-center ${RANK_CARD_CLASS[i]}`}
+              className={`glow-card cursor-pointer space-y-2 rounded-xl border-2 p-4 text-center ${
+                hatsVisible ? "pt-12" : ""
+              } ${RANK_CARD_CLASS[i]}`}
             >
-              <div className="mx-auto size-14 overflow-hidden rounded-full bg-muted">
-                {userAvatars[username] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={userAvatars[username]} alt="" className="size-full object-cover" />
-                ) : (
-                  <span className="flex size-full items-center justify-center text-lg font-semibold">
-                    {initial}
-                  </span>
-                )}
+              <div className="relative mx-auto w-fit">
+                <div className="size-14 overflow-hidden rounded-full bg-muted">
+                  {userAvatars[username] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={userAvatars[username]} alt="" className="size-full object-cover" />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-lg font-semibold">
+                      {initial}
+                    </span>
+                  )}
+                </div>
+                {wearsWizardHat(username) && <WizardHat />}
               </div>
               <div className="font-semibold">{username}</div>
               <div className="text-xl font-bold">{fmtTime(secs)}</div>
@@ -242,15 +279,18 @@ export function Podium({
                 <DialogTitle>{detail.username}</DialogTitle>
               </DialogHeader>
               <div className="text-center">
-                <div className="mx-auto mb-2 size-24 overflow-hidden rounded-full bg-muted">
-                  {userAvatars[detail.username] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={userAvatars[detail.username]} alt="" className="size-full object-cover" />
-                  ) : (
-                    <span className="flex size-full items-center justify-center text-3xl font-semibold">
-                      {(detail.username[0] ?? "?").toUpperCase()}
-                    </span>
-                  )}
+                <div className={`relative mx-auto mb-2 w-fit ${wearsWizardHat(detail.username) ? "mt-16" : ""}`}>
+                  <div className="size-24 overflow-hidden rounded-full bg-muted">
+                    {userAvatars[detail.username] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={userAvatars[detail.username]} alt="" className="size-full object-cover" />
+                    ) : (
+                      <span className="flex size-full items-center justify-center text-3xl font-semibold">
+                        {(detail.username[0] ?? "?").toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  {wearsWizardHat(detail.username) && <WizardHat />}
                 </div>
                 <div className="text-2xl font-bold">{fmtTime(detail.secs)}</div>
                 <div className="text-sm text-muted-foreground">{sublabel}</div>
