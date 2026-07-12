@@ -89,12 +89,15 @@ function Key({
       disabled={disabled}
       onClick={() => onKey(k)}
       className={cn(
-        "h-12 max-w-16 flex-1 rounded-md bg-muted text-sm font-semibold uppercase transition-transform disabled:cursor-not-allowed disabled:opacity-50",
+        // Wordle-style keys: neutral grey with white text; a struck-out
+        // (grey-state) key drops to near-background and shrinks slightly so
+        // dead letters visibly recede from the live ones.
+        "h-12 max-w-16 flex-1 rounded-md border border-black/15 bg-[#818384] text-sm font-semibold text-white uppercase transition-transform hover:border-black/25 hover:bg-[#6f7071] disabled:cursor-not-allowed disabled:opacity-50",
         wide && "max-w-24 text-xs",
         space && "max-w-96 text-xs tracking-widest",
-        state === "green" && "bg-emerald-600 text-white",
-        state === "orange" && "bg-amber-500 text-white",
-        state === "grey" && "bg-neutral-500 text-white opacity-85",
+        state === "green" && "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-600",
+        state === "orange" && "border-amber-500 bg-amber-500 text-white hover:bg-amber-500",
+        state === "grey" && "scale-[0.92] border-[#222224] bg-[#222224] text-white opacity-70 hover:bg-[#222224]",
         pressedKey === k && "scale-90",
       )}
     >

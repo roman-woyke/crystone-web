@@ -61,6 +61,9 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
   const [addHintText, setAddHintText] = useState("");
   const [addHintErr, setAddHintErr] = useState<string | null>(null);
 
+  // Full-hint modal — opened from a clamped hint card that overflows 3 lines.
+  const [fullHint, setFullHint] = useState<{ board: number; hint: string } | null>(null);
+
   const busyRef = useRef(busy);
   busyRef.current = busy;
 
@@ -538,12 +541,12 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
               hint?.trim() ? (
                 <div
                   key={b}
-                  className="glow-card overflow-hidden rounded-md border bg-card p-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground"
+                  className="glow-card overflow-hidden rounded-md border bg-card p-3 text-sm leading-relaxed text-muted-foreground"
                 >
                   <span className="mb-1.5 block text-[0.68rem] font-bold tracking-wide text-muted-foreground/70 uppercase">
                     Board {b + 1} clue
                   </span>
-                  {hint}
+                  <ClampedHint hint={hint} onExpand={() => setFullHint({ board: b, hint })} />
                 </div>
               ) : canAddHint(b) ? (
                 <button
@@ -627,6 +630,29 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
         </div>
       )}
 
+      {/* Full-hint modal: the untruncated hint, monospace + unwrapped so
+          ASCII art someone pastes in stays intact. */}
+      {fullHint && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setFullHint(null);
+          }}
+        >
+          <div className="glow-card flex max-h-[85vh] w-[min(94vw,900px)] flex-col overflow-hidden rounded-xl border bg-card p-5">
+            <h2 className="mb-3 text-lg font-semibold">Board {fullHint.board + 1} clue</h2>
+            <div className="flex-1 overflow-auto rounded-md border bg-black/25 px-4 py-3.5 font-mono text-sm leading-snug whitespace-pre">
+              {fullHint.hint}
+            </div>
+            <div className="mt-3.5 flex justify-end">
+              <Button type="button" variant="outline" onClick={() => setFullHint(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Calendar popup: jump to any past puzzle day. */}
       {calendarOpen && (
         <HistoryCalendar
@@ -670,6 +696,39 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
         </div>
       )}
     </div>
+  );
+}
+
+// A community/word-picker clue clamped to 3 lines; when the full text
+// overflows (e.g. ASCII art), a "Click for full hint" button opens the big
+// unwrapped modal instead of letting the card grow unbounded.
+function ClampedHint({ hint, onExpand }: { hint: string; onExpand: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    // Measuring rendered size can only happen after layout, so this has to
+    // be an effect rather than derived state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (el) setOverflowing(el.scrollHeight > el.clientHeight + 1);
+  }, [hint]);
+
+  return (
+    <>
+      <div ref={ref} className="line-clamp-3 break-words whitespace-pre-wrap">
+        {hint}
+      </div>
+      {overflowing && (
+        <button
+          type="button"
+          onClick={onExpand}
+          className="mt-1.5 block cursor-pointer text-xs font-bold text-primary underline hover:opacity-85"
+        >
+          Click for full hint
+        </button>
+      )}
+    </>
   );
 }
 
