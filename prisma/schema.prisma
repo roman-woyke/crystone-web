@@ -296,3 +296,98 @@ enum BoardleHintType {
   orange
   green
 }
+
+// ── Boardle: Unlimited real-time mode ────────────────────────────────────────
+// A single shared "room" (id is always 1) cycling lobby -> voting ->
+// selecting -> playing -> results -> lobby; see lib/boardle-rt.ts. These
+// models carry no User relations on purpose — usernames are joined in
+// TypeScript from the (tiny) users table.
+
+model BoardleRtState {
+  id             Int            @id @db.TinyInt
+  phase          BoardleRtPhase @default(lobby)
+  roundId        Int            @default(0) @map("round_id")
+  phaseStartedAt DateTime       @default(now()) @map("phase_started_at") @db.DateTime(0)
+  lengthChoices  String?        @map("length_choices") @db.VarChar(20)
+  wordLength     Int?           @map("word_length") @db.UnsignedTinyInt
+  numBoards      Int?           @map("num_boards") @db.UnsignedTinyInt
+
+  @@map("boardle_rt_state")
+}
+
+model BoardleRtReady {
+  userId    Int      @id @map("user_id")
+  ready     Int      @default(0) @db.TinyInt
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamp(0)
+
+  @@map("boardle_rt_ready")
+}
+
+model BoardleRtPlayer {
+  roundId  Int @map("round_id")
+  userId   Int @map("user_id")
+  position Int @db.UnsignedTinyInt
+
+  @@id([roundId, userId])
+  @@map("boardle_rt_players")
+}
+
+model BoardleRtVote {
+  roundId Int @map("round_id")
+  userId  Int @map("user_id")
+  length  Int @db.UnsignedTinyInt
+
+  @@id([roundId, userId])
+  @@map("boardle_rt_votes")
+}
+
+model BoardleRtWord {
+  roundId   Int    @map("round_id")
+  position  Int    @db.UnsignedTinyInt
+  chooserId Int    @map("chooser_id")
+  word      String @db.VarChar(10)
+  hint      String @db.VarChar(500)
+
+  @@id([roundId, position])
+  @@map("boardle_rt_words")
+}
+
+model BoardleRtGuess {
+  roundId    Int       @map("round_id")
+  userId     Int       @map("user_id")
+  guessIndex Int       @map("guess_index") @db.UnsignedTinyInt
+  guess      String    @db.VarChar(10)
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@id([roundId, userId, guessIndex])
+  @@map("boardle_rt_guesses")
+}
+
+model BoardleRtRound {
+  roundId          Int      @id @map("round_id")
+  playingStartedAt DateTime @map("playing_started_at") @db.DateTime(0)
+
+  @@map("boardle_rt_rounds")
+}
+
+model BoardleRtResult {
+  roundId     Int       @map("round_id")
+  userId      Int       @map("user_id")
+  finished    Int       @default(0) @db.TinyInt
+  solved      Int       @default(0) @db.TinyInt
+  guessesUsed Int       @default(0) @map("guesses_used") @db.UnsignedTinyInt
+  solvedAt    DateTime? @map("solved_at") @db.DateTime(0)
+  speedWin    Int       @default(0) @map("speed_win") @db.TinyInt
+  guessWin    Int       @default(0) @map("guess_win") @db.TinyInt
+
+  @@id([roundId, userId])
+  @@map("boardle_rt_results")
+}
+
+enum BoardleRtPhase {
+  lobby
+  voting
+  selecting
+  playing
+  results
+}

@@ -79,6 +79,13 @@ All return JSON. Auth failures return 401; ownership failures return 404 (Prisma
 | `api/boardle/suggest` | GET | Fresh random word suggestions (the picker's randomize button) |
 | `api/boardle/add-hint` | POST | Write a community clue onto a solved, still-hintless board |
 | `api/boardle/history` | GET | My per-day finished/solved map + archive bounds (the calendar popup's markers) |
+| `api/boardle/rt/state` | GET | Unlimited real-time mode: full room state (also the presence heartbeat + lazy phase tick) |
+| `api/boardle/rt/ready` | POST | Toggle my lobby ready flag |
+| `api/boardle/rt/vote` | POST | Vote one of the round's 3 rolled word lengths |
+| `api/boardle/rt/choose` | POST | Lock in my board's word + mandatory hint (selecting phase) |
+| `api/boardle/rt/suggest` | GET | Random word suggestions for the RT picker |
+| `api/boardle/rt/guess` | POST | Submit a guess during the playing phase |
+| `api/boardle/rt/continue` | POST | Results screen -> back to the lobby |
 
 ### Ownership checks
 
@@ -117,6 +124,8 @@ The timer is server-backed (`study_status` table, one row per user) via the sing
 `app/(app)/boardle/page.tsx` server-renders initial state, then `BoardleApp.tsx` polls `api/boardle/state` every 6s + `visibilitychange` + `pageshow`. Logic lives in `lib/boardle.ts` (orchestrator) split across `lib/boardle-words.ts`, `lib/boardle-score.ts`, `lib/boardle-streak.ts`, `lib/boardle-dates.ts`. Word lists are bundled text files in `includes/boardle/` (`dict-<5..10>.txt` for validation, `answers-<5..10>.txt` for the answer pool), read via `fs.readFileSync` relative to `process.cwd()`.
 
 One puzzle per day, N boards (fixed at 4) all of the same length L, solved Quordle-style. `Board.tsx` renders the grid, `Keyboard.tsx` the on-screen keyboard with a per-board color switcher (`kbStatesFor` in `BoardleApp.tsx`), `JokerBar.tsx` the joker buttons + streak/freeze wallets, `OpponentsPanel.tsx`/`StatsPanel.tsx` the sidebar (Standings: one row per player, podium tint for the top 3). `ChooseWord.tsx` is the tomorrow's-word picker for solvers — it also pops up as an overlay right after a full solve (once per solve, tracked in `localStorage`) and immediately on load for the anyone-may-pick-today case (no guesses made yet). Solved-but-hintless boards show a "+ Add a hint for others" card that posts to `api/boardle/add-hint`.
+
+Unlimited real-time mode (Patch 1.2): `app/(app)/boardle-rt/page.tsx` + `BoardleRtApp.tsx` polls `api/boardle/rt/state` every 1.5s. One shared room (`boardle_rt_state` singleton row, id always 1) cycles lobby -> voting -> selecting -> playing -> results; `lib/boardle-rt.ts` resolves phase transitions lazily on every read/write (`boardleRtAdvance()` under a `FOR UPDATE` row lock). The lobby uses a presence heartbeat (`boardle_rt_ready.updated_at`, 8s window) so a round only starts when everyone actually watching is ready; players own one board each (auto-solved), AFK players get auto-filled words, and rounds score two win categories (fastest solve, fewest guesses) into `boardle_rt_results`. Reuses `Board.tsx` (via its `title`/`hintText` props) and `Keyboard.tsx`.
 
 History (Patch 1.2): a day-nav bar (prev/next arrows + `HistoryCalendar.tsx` month popup fed by `api/boardle/history`) lets a player replay any past day back to the earliest `boardle_days` row. The viewed date is threaded through every state/guess/joker/add-hint request (`boardleResolveDate` clamps it server-side); word-picking and its popups only ever apply to the real today, and the Standings panel always shows today's stats regardless of the viewed day. Belated solves don't count toward streaks (`boardleStreakInfo` drops rows whose `solved_at` date is after `game_date`). Behavioral details (guess encoding as an L-char string with `_` blanks, joker types/costs, streak-freeze bridging, board ownership/auto-solve for your own pick, opponents only ever seeing colors) are unchanged from the PHP original — see `plan.md` Phase 6 notes for anything intentionally simplified (word-picker hint cards and joker-reveal rows render in natural order rather than pixel-pinned under their board column).
 

@@ -45,6 +45,8 @@ export function Board({
   buffer,
   pickable,
   onPick,
+  title,
+  hintText,
 }: {
   index: number;
   length: number;
@@ -59,6 +61,10 @@ export function Board({
   buffer: string;
   pickable: boolean;
   onPick?: () => void;
+  // Real-time mode labels each board with its owner and shows the mandatory
+  // hint inline (daily mode keeps "Board N" and a separate clue row).
+  title?: string;
+  hintText?: string | null;
 }) {
   const failed = finished && !solved;
   const rows: React.ReactNode[][] = [];
@@ -122,13 +128,22 @@ export function Board({
       )}
     >
       <div className="mb-2 flex items-center justify-between text-[0.68rem] font-bold tracking-wide text-muted-foreground uppercase">
-        <span>Board {index + 1}</span>
+        <span>{title ?? `Board ${index + 1}`}</span>
         {isOwned ? (
           <span className="text-emerald-500">★ your word</span>
         ) : solved ? (
           <span className="text-emerald-500">✓ solved</span>
         ) : null}
       </div>
+      {hintText != null && (
+        <div className="mb-2 min-h-[1.2em] text-xs leading-snug text-muted-foreground">
+          {hintText.trim() !== "" && (
+            <>
+              <strong>Hint:</strong> {hintText}
+            </>
+          )}
+        </div>
+      )}
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${length}, minmax(0, 1fr))` }}>
         {rows.map((cells, r) => (
           <div key={r} className="contents">
