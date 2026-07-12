@@ -18,10 +18,14 @@ A shared leaderboard for tracking internship applications, plus a study counter,
 
 ## Running locally
 
+**Docker-only (no local Node needed):** `docker compose up -d` starts the whole stack — MySQL (schema auto-applied on first boot via `docker/bootstrap-db.mjs` → `prisma db push`; an existing database is never touched), phpMyAdmin (`:8081`), the Next.js dev server (`:3000`, repo bind-mounted with container-side `node_modules` volumes; first boot takes minutes for `npm install`), and the socket.io realtime push server (`:3001`). Secrets come from a repo-root `.env` if present, otherwise dev-only defaults apply (invite code `letmein`). See `SETUP.md`.
+
+**Manual (host Node, DB in Docker):**
+
 1. `npm install`
-2. Local MySQL: `docker compose up -d` (starts `db` on `localhost:3306` + phpMyAdmin on `localhost:8081`; see `docker-compose.yml`) — or point at any MySQL 8 instance.
+2. `docker compose up -d db phpmyadmin` — or point at any MySQL 8 instance. (Plain `docker compose up -d` would also start the containerized app/realtime servers, which hold ports 3000/3001.)
 3. Copy `.env.example` to `.env` and fill in `DATABASE_URL`, `AUTH_SECRET` (`npx auth secret`), `INVITE_CODE`. For the realtime push server also set `REALTIME_INTERNAL_SECRET` (any random string, shared between the two processes); optional overrides: `REALTIME_PORT` (default 3001), `REALTIME_INTERNAL_URL` (where Next.js reaches the push server, default `http://localhost:3001`), `REALTIME_APP_ORIGIN` (browser origin for CORS, default `http://localhost:3000`), `NEXT_PUBLIC_REALTIME_URL` (where browsers connect, defaults to the page's hostname on port 3001).
-4. Apply the schema from `README.md`'s "Database schema" section to that database (it's the authoritative source; `prisma/schema.prisma` is introspected from it — keep both in sync when either changes).
+4. Apply the schema: `npx prisma db push` on a fresh database (see `SETUP.md`; `README.md` documents the deployed SQL — keep it and `prisma/schema.prisma` in sync when either changes).
 5. `npx prisma generate`
 6. `npm run dev` — and in a second terminal `npm run realtime` (the socket.io push server; everything still works without it, clients just fall back to refetch-on-focus instead of instant pushes).
 

@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers — CRLF after a Windows checkout
+# would break their shebangs, so pin them to LF.
+*.sh text eol=lf
+*.mjs text eol=lf

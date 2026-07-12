@@ -36,6 +36,7 @@ CREATE TABLE applications (
 CREATE TABLE application_status_history (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     application_id INT NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    user_id        INT NOT NULL REFERENCES users(id),
     status         ENUM('PENDING','INTERVIEW','OFFER','REJECTED','GHOSTED') NOT NULL,
     score_delta    INT NOT NULL DEFAULT 0,
     changed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -6,14 +6,51 @@ never run it before. See [`CLAUDE.md`](CLAUDE.md) for architecture and
 
 ## Prerequisites
 
-- **Node.js 20+** and npm (check with `node -v` / `npm -v`)
-- **Docker Desktop** (or any Docker engine with `docker compose`) — used to run
-  a local MySQL instance so you don't need a real MySQL server installed.
+- **Docker Desktop** (or any Docker engine with `docker compose`).
   - macOS/Windows: install Docker Desktop and make sure it's actually
     *running* (whale icon in the menu bar/tray) before continuing — `docker
     compose` commands hang or fail with a cryptic error otherwise.
   - Linux: install `docker` + the `docker-compose-plugin`, and make sure your
     user can run `docker` without `sudo` (or prefix commands with `sudo`).
+- **Node.js 20+** and npm — *only* for the manual path below; the Docker-only
+  quick start needs no local Node at all.
+
+## Quick start — everything in Docker (no local Node needed)
+
+```sh
+docker compose up -d
+```
+
+That single command starts the whole stack (see `docker-compose.yml`):
+
+- **MySQL 8** on `localhost:3306` — on the very first boot (empty data
+  volume) the app container applies the schema automatically via
+  `prisma db push` (`docker/bootstrap-db.mjs`); a database that already has
+  tables is never touched.
+- **phpMyAdmin** on [http://localhost:8081](http://localhost:8081)
+  (`root` / `rootpass`).
+- **The Next.js dev server** on [http://localhost:3000](http://localhost:3000)
+  — a plain `node:22` container with the repo bind-mounted; `npm install` +
+  `npx prisma generate` run inside the container on start (dependencies live
+  in a container-side volume, so the first boot takes a few minutes and
+  later boots are fast). Follow along with `docker compose logs -f app`.
+- **The socket.io realtime push server** on `localhost:3001`.
+
+Secrets come from a repo-root `.env` if one exists (`AUTH_SECRET`,
+`INVITE_CODE`, `REALTIME_INTERNAL_SECRET`); without one, dev-only defaults
+apply (invite code `letmein`) — fine for localhost, never for a deployment.
+Register your first account at
+[http://localhost:3000/register](http://localhost:3000/register) with that
+invite code. Stop everything with `docker compose down` (data survives in
+the `db_data` volume).
+
+Note: the app and realtime containers publish ports 3000/3001, so don't run
+`npm run dev` / `npm run realtime` on the host at the same time.
+
+---
+
+The rest of this guide is the **manual path** (host-side Node, only the
+database in Docker) — useful if you prefer running Next.js directly.
 
 ## 1. Install dependencies
 
@@ -80,16 +117,30 @@ Re-run this any time `prisma/schema.prisma` changes.
 npm run dev
 ```
 
+And in a second terminal, the realtime push server (optional — everything
+works without it, updates are just poll-free only when it runs):
+
+```sh
+npm run realtime
+```
+
 Open [http://localhost:3000](http://localhost:3000) — you should be redirected
 to `/login`. Register a new account using the `INVITE_CODE` you set in `.env`.
 
+If you use the manual path, either stop the dockerized `app`/`realtime`
+services first (`docker compose stop app realtime`) or they'll already be
+holding ports 3000/3001.
+
 ## Everyday use (after the first setup)
 
-Once the above has been done once on a machine, day-to-day is just:
+Docker-only workflow: `docker compose up -d`, that's it.
+
+Manual workflow:
 
 ```sh
-docker compose up -d   # if the containers aren't already running
+docker compose up -d db phpmyadmin   # just the database side
 npm run dev
+npm run realtime                     # second terminal, optional
 ```
 
 Data persists across restarts in the `db_data` Docker volume — you only need

@@ -1,8 +1,18 @@
 version: '3.8'
 
-# Local MySQL for Prisma dev/migrations against the shared schema (see
-# README.md). Point DATABASE_URL in .env at this instance, e.g.
-# mysql://root:rootpass@localhost:3306/local_site_db
+# Full local stack — `docker compose up -d` is the only requirement (no local
+# Node needed): MySQL (schema auto-applied on first boot via prisma db push,
+# see docker/bootstrap-db.mjs), phpMyAdmin, the Next.js dev server, and the
+# socket.io realtime push server.
+#
+# The app/realtime services run plain node:22 images with the repo
+# bind-mounted; node_modules live in container-side volumes (Linux binaries,
+# independent from any node_modules on the host), installed on first start.
+# First boot therefore takes a few minutes; later starts reuse the volumes.
+#
+# Secrets: taken from a repo-root .env if present (AUTH_SECRET, INVITE_CODE,
+# REALTIME_INTERNAL_SECRET), otherwise the dev-only defaults below apply —
+# fine for localhost, never for a deployment.
 
 services:
   db:
@@ -16,6 +26,11 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -30,5 +45,56 @@ services:
     depends_on:
       - db
 
+  app:
+    image: node:22
+    container_name: leaderboard_app
+    restart: unless-stopped
+    working_dir: /app
+    # --no-save keeps the container-side npm (a different major than on a
+    # host) from rewriting the bind-mounted package-lock.json.
+    command: bash -c "npm install --no-save && npx prisma generate && node docker/bootstrap-db.mjs && exec npx next dev --hostname 0.0.0.0"
+    environment:
+      # Inside the compose network the DB host is the service name, not
+      # localhost — do not point this at a host .env value.
+      DATABASE_URL: mysql://root:rootpass@db:3306/local_site_db
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-secret-not-for-deployment}
+      INVITE_CODE: ${INVITE_CODE:-letmein}
+      REALTIME_INTERNAL_SECRET: ${REALTIME_INTERNAL_SECRET:-dev-only-internal-secret}
+      # Server-to-server notify() goes over the compose network; browsers
+      # reach the realtime server on localhost:3001 (the client default).
+      REALTIME_INTERNAL_URL: http://realtime:3001
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - app_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+
+  realtime:
+    image: node:22
+    container_name: leaderboard_realtime
+    restart: unless-stopped
+    working_dir: /app
+    command: bash -c "npm install --no-save && exec node server/realtime.mjs"
+    environment:
+      # Must match the app service so session cookies verify on both.
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-secret-not-for-deployment}
+      REALTIME_INTERNAL_SECRET: ${REALTIME_INTERNAL_SECRET:-dev-only-internal-secret}
+      REALTIME_APP_ORIGIN: http://localhost:3000
+      REALTIME_PORT: "3001"
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      # Own volume (not shared with app) so both services can npm install
+      # concurrently on first boot without racing each other.
+      - realtime_node_modules:/app/node_modules
+
 volumes:
   db_data:
+  app_node_modules:
+  realtime_node_modules:
