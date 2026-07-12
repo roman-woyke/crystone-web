@@ -268,11 +268,11 @@ export function StudyCounterApp({
   }
 
   const examLine =
-    examCountdown.daysUntilExam > 0
-      ? { value: `D-${examCountdown.daysUntilExam}`, label: "until exam week" }
-      : examCountdown.daysUntilExam === 0
-        ? { value: "D-Day", label: "exam week starts today" }
-        : { value: "done", label: "exams finished" };
+    examCountdown.daysUntilExam === null
+      ? { value: "done", label: "exams finished" }
+      : examCountdown.daysUntilExam > 0
+        ? { value: `D-${examCountdown.daysUntilExam}`, label: "until next exam" }
+        : { value: "D-Day", label: "next exam today" };
 
   return (
     <div className="space-y-8">

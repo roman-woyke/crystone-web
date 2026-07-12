@@ -45,17 +45,13 @@ export default async function CalendarPage({
   const todayStr = toDbDateStr(dbToday());
 
   const dDay =
-    countdown.daysUntilExam > 0
-      ? `D-${countdown.daysUntilExam}`
-      : countdown.daysUntilExam === 0
-        ? "D-Day"
-        : "Done";
+    countdown.daysUntilExam === null ? "done" : countdown.daysUntilExam > 0 ? `D-${countdown.daysUntilExam}` : "D-Day";
   const dDayLabel =
-    countdown.daysUntilExam > 0
-      ? "until first exam"
-      : countdown.daysUntilExam === 0
-        ? "first exam today"
-        : "exams done";
+    countdown.daysUntilExam === null
+      ? "exams finished"
+      : countdown.daysUntilExam > 0
+        ? "until next exam"
+        : "next exam today";
 
   return (
     // Breaks out of the layout's max-width container (like calendar.php's

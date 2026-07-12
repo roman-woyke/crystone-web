@@ -2,22 +2,22 @@ import { prisma } from "@/lib/prisma";
 import { dbNow, dbToday } from "@/lib/dates";
 
 export type ExamCountdown = {
-  daysUntilExam: number;
+  // Days until the next exam this user is actually writing; null once all
+  // of their selected exams are behind them (or they selected none).
+  daysUntilExam: number | null;
   passedExams: number;
   totalExams: number;
 };
 
-// Mirrors calendar.php's countdown block: days until the earliest exam
-// overall, and how many of *this user's* selected exams have already
-// happened (exam_date + exam_time combined, compared against now).
+// Days until the next of *this user's* selected exams (not the earliest
+// exam overall — someone who skips the first exams shouldn't see a
+// countdown to a day they're not writing anything), plus how many of their
+// selected exams have already happened (exam_date + exam_time combined,
+// compared against now).
 export async function examCountdown(username: string): Promise<ExamCountdown> {
   const exams = await prisma.exam.findMany({
     orderBy: [{ examDate: "asc" }, { examTime: "asc" }],
   });
-
-  const firstExamDate = exams[0]?.examDate ?? new Date("2026-07-13T00:00:00Z");
-  const today = dbToday();
-  const daysUntilExam = Math.ceil((firstExamDate.getTime() - today.getTime()) / 86_400_000);
 
   const selected = await prisma.userExam.findMany({
     where: { username },
@@ -27,6 +27,7 @@ export async function examCountdown(username: string): Promise<ExamCountdown> {
 
   const now = dbNow();
   let passedExams = 0;
+  let nextExamDate: Date | null = null;
   for (const e of exams) {
     if (!selectedSet.has(e.id)) continue;
     const examDateTime = new Date(
@@ -39,8 +40,16 @@ export async function examCountdown(username: string): Promise<ExamCountdown> {
         e.examTime.getUTCSeconds(),
       ),
     );
-    if (examDateTime < now) passedExams++;
+    if (examDateTime < now) {
+      passedExams++;
+    } else if (nextExamDate === null) {
+      nextExamDate = e.examDate;
+    }
   }
+
+  const today = dbToday();
+  const daysUntilExam =
+    nextExamDate !== null ? Math.ceil((nextExamDate.getTime() - today.getTime()) / 86_400_000) : null;
 
   return { daysUntilExam, passedExams, totalExams: selectedSet.size };
 }
