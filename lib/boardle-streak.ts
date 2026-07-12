@@ -27,13 +27,24 @@ export type StreakInfo = {
 //   - jokers settle on their day: a freeze-paid joker spends a freeze; every
 //     other joker costs 1 streak.
 // `effective` is the freeze-aware streak, net of the joker streak-cost.
+//
+// Only solves made ON TIME count (solved_at's calendar date <= game_date):
+// the history feature lets a player solve a past day's puzzle belatedly, and
+// that must not retroactively fill a gap that already broke the streak.
 export async function boardleStreakInfo(date: string, userId: number): Promise<StreakInfo> {
   const solvedRows = await prisma.boardleResult.findMany({
     where: { userId, solved: 1 },
     orderBy: { gameDate: "asc" },
-    select: { gameDate: true },
+    select: { gameDate: true, solvedAt: true },
   });
-  const solvedList = solvedRows.map((r) => toDbDateStr(r.gameDate));
+  const solvedList: string[] = [];
+  for (const r of solvedRows) {
+    // solved_at can be NULL on rows written before that column existed —
+    // treat those as on-time since there's no evidence otherwise.
+    const day = toDbDateStr(r.gameDate);
+    if (r.solvedAt !== null && toDbDateStr(r.solvedAt) > day) continue;
+    solvedList.push(day);
+  }
   const solved = new Set(solvedList);
 
   const hintRows = await prisma.boardleHint.findMany({
