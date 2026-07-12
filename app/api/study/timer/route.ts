@@ -127,6 +127,13 @@ export async function POST(request: NextRequest) {
         await segClose(userId);
         await segOpen(userId, resolved);
       }
+      // Same module re-selected: nothing to do.
+    } else if (row.startedAt === null) {
+      // Paused — picking a module means "I'm back to studying it", so end
+      // the break and open a fresh interval under the new module instead
+      // of silently queuing it for whenever resume is next clicked.
+      await prisma.studyStatus.update({ where: { userId }, data: { startedAt: dbNow() } });
+      await segOpen(userId, resolved);
     }
 
     extra.custom_added = customAdded;
@@ -160,12 +167,22 @@ export async function POST(request: NextRequest) {
       await segClose(userId);
 
       const reqList: LogRequestSession[] = Array.isArray(body.sessions) ? body.sessions : [];
+      // module (lower-cased) -> requested seconds (0/absent = keep full).
+      // A module can appear as more than one row here — the breakdown shows
+      // separate lines for runs split by a real break — and since byMod
+      // below sums *all* of that module's segments regardless of gaps, the
+      // requested amounts must be summed too. Overwriting instead of summing
+      // (the previous bug) let the last row silently clobber the others'
+      // requested seconds, so keeping every row at its full amount could
+      // still read as "only keep the last run's seconds" and trim — or
+      // entirely delete — the earlier ones.
       const reqByMod = new Map<string, number>();
       for (const s of reqList) {
         if (typeof s !== "object" || s === null) continue;
         const m = String(s.module ?? "").trim();
         if (m === "") continue;
-        reqByMod.set(m.toLowerCase(), Number(s.seconds ?? 0) | 0);
+        const key = m.toLowerCase();
+        reqByMod.set(key, (reqByMod.get(key) ?? 0) + (Number(s.seconds ?? 0) | 0));
       }
 
       const segments = await prisma.studySegment.findMany({
@@ -187,6 +204,24 @@ export async function POST(request: NextRequest) {
         g.total += dur;
         g.segs.push({ id: seg.id, startedAt: seg.startedAt, endedAt: seg.endedAt as Date, dur });
         byMod.set(key, g);
+      }
+
+      // Fold short (< 5 min) gaps between chronologically-adjacent segments
+      // of the same module into that module's total — a brief break
+      // shouldn't cost the module time it would have kept counting through,
+      // matching what the live breakdown already showed before Stop was
+      // clicked (see studyMergeRuns() in lib/study-status.ts).
+      const chrono = [...segments].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+      for (let i = 1; i < chrono.length; i++) {
+        const prev = chrono[i - 1];
+        const cur = chrono[i];
+        if (prev.moduleName === null || prev.moduleName !== cur.moduleName) continue;
+        const gap = diffSeconds(prev.endedAt as Date, cur.startedAt);
+        if (gap > 0 && gap < 300) {
+          const key = prev.moduleName.toLowerCase();
+          const g = byMod.get(key);
+          if (g) g.total += gap;
+        }
       }
 
       let loggedSeconds = 0;

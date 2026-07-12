@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { buildModuleColors } from "@/lib/study-colors";
-import { fmtTime } from "@/lib/study-format";
+import { fmtClock, fmtTime } from "@/lib/study-format";
 import type { StudyModuleOption } from "@/lib/study-modules";
 import type { AggregatedSession } from "@/lib/study-sessions";
 import type { MyStudyStatus, StudyingEntry, RecapBlock } from "@/lib/study-status";
@@ -142,6 +142,30 @@ export function StudyCounterApp({
       window.removeEventListener("pageshow", onPageShow);
     };
   }, [loadStatus]);
+
+  // Tab title clock: the running session's timer (or the break timer while
+  // paused) in front of the page title. This is the one thing users actually
+  // rely on while the tab is backgrounded, so it ticks unconditionally —
+  // extrapolated from the last sync just like the visible chips.
+  useEffect(() => {
+    const base = document.title;
+    const tick = () => {
+      const d = Math.floor((Date.now() - syncTs) / 1000);
+      if (!myState.active) {
+        document.title = base;
+      } else if (myState.running) {
+        document.title = `${fmtClock(myState.elapsed + d)} · ${base}`;
+      } else {
+        document.title = `Break ${fmtClock(myState.break_elapsed + d)} · ${base}`;
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearInterval(id);
+      document.title = base;
+    };
+  }, [myState, syncTs]);
 
   function toggleFocusMode() {
     setFocusMode((prev) => {
@@ -334,7 +358,7 @@ export function StudyCounterApp({
 
       <StopModal
         open={stopModalOpen}
-        parts={myState.active ? myState.parts : []}
+        parts={myState.active ? myState.parts.filter((p) => p.type === "module" && p.module) : []}
         moduleColors={moduleColors}
         onClose={() => setStopModalOpen(false)}
         onDiscard={handleDiscard}

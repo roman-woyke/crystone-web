@@ -21,27 +21,74 @@ function delta(syncTs: number, now: number): number {
   return Math.floor((now - syncTs) / 1000);
 }
 
-// A single-module session just shows " · Module" inline; one that switched
-// modules shows each module's own time on its own line instead, so a chip
-// can't misread as "whole elapsed time on the current module" (e.g.
-// "2 hours · Module Y" after 2 hours on X and a few seconds on Y). `p.live`
-// (not array position) marks the part with the still-open segment: a module
-// switched away from and back to (X -> Y -> X) collapses into one summed
-// part per name, so the currently-running one isn't necessarily last.
-function namedParts(s: StudyingEntry): StudyPart[] {
-  return (s.parts ?? []).filter((p) => p.module);
+// The full chronological history of a session: each module run and each
+// break, in the order they happened. The server (studyMergeRuns() in
+// lib/study-status.ts) already folds interruptions shorter than 5 minutes
+// into whichever run they interrupted — so a brief break during continuous
+// studying (or a brief module check during a break) shows up as more time
+// on the run it interrupted rather than as its own tiny line, and `s.parts`
+// here is never fragmented or missing that time. `includeLiveBreak: false`
+// drops the in-progress break entry for callers that already show an "on
+// break" indicator of their own and would otherwise show the same number
+// twice.
+export function breakdownParts(s: { parts: StudyPart[] }, includeLiveBreak = true): StudyPart[] {
+  return (s.parts ?? []).filter((p) => (p.type === "break" ? includeLiveBreak || !p.live : !!p.module));
 }
 
-function ModuleBreakdown({ s, ticking, d }: { s: StudyingEntry; ticking: boolean; d: number }) {
-  const parts = namedParts(s);
-  if (parts.length <= 1) return null;
+// Every chip is rendered as a breakdown: one line per history entry (module
+// run or break). Completed history lines stay the neutral grey of the rest
+// of the chip meta; the currently-running module matches the green "session
+// active" colour (blue at the library so BIB sessions read distinctly at a
+// glance), and a break in progress is always yellow. The "Session · total"
+// header (green while running, red while on break) only appears once
+// there's actually more than one entry to sum — a plain single-module,
+// no-break session is just its one line, no separate total needed.
+function ChipMeta({ s, running, d }: { s: StudyingEntry; running: boolean; d: number }) {
+  const parts = breakdownParts(s);
+  const total = s.elapsed + (running ? d : 0);
+
+  if (parts.length === 0) {
+    return (
+      <span className="ml-auto tabular-nums text-muted-foreground">
+        {fmtClock(total)}
+        {s.module ? ` · ${s.module}` : ""}
+      </span>
+    );
+  }
+
   return (
-    <span className="mt-0.5 block leading-snug">
-      {parts.map((p, i) => (
-        <span key={i} className="block truncate whitespace-nowrap" title={p.module ?? undefined}>
-          {p.module} · {fmtClock(p.seconds + (ticking && p.live ? d : 0))}
+    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
+      {parts.length > 1 && (
+        <span className={`block font-semibold ${running ? "text-emerald-500" : "text-destructive"}`}>
+          Session · {fmtClock(total)}
         </span>
-      ))}
+      )}
+      <span className="mt-0.5 block leading-snug">
+        {parts.map((p, i) => {
+          if (p.type === "break") {
+            return (
+              <span
+                key={i}
+                className={`block whitespace-nowrap ${p.live ? "font-semibold text-yellow-500" : ""}`}
+              >
+                Break · {fmtClock(p.seconds + (p.live ? d : 0))}
+              </span>
+            );
+          }
+          const live = running && p.live;
+          return (
+            <span
+              key={i}
+              className={`block truncate whitespace-nowrap ${
+                live ? (s.at_library ? "font-semibold text-sky-400" : "font-semibold text-emerald-500") : ""
+              }`}
+              title={p.module ?? undefined}
+            >
+              {p.module} · {fmtClock(p.seconds + (live ? d : 0))}
+            </span>
+          );
+        })}
+      </span>
     </span>
   );
 }
@@ -73,16 +120,6 @@ export function Dock({
   const library = studying.filter((s) => s.at_library);
   const running = studying.filter((s) => !s.at_library && s.running);
   const paused = studying.filter((s) => !s.at_library && !s.running);
-
-  const myElapsed = myState.active && myState.running ? myState.elapsed : null;
-  const myBreakElapsed = myState.active && !myState.running ? myState.break_elapsed : null;
-
-  function chipElapsed(s: StudyingEntry, isMe: boolean): number {
-    return isMe && myElapsed !== null ? myElapsed : s.elapsed + d;
-  }
-  function chipBreakElapsed(s: StudyingEntry, isMe: boolean): number {
-    return isMe && myBreakElapsed !== null ? myBreakElapsed : s.break_elapsed + d;
-  }
 
   const extraUsersToday = new Set<string>([...running, ...paused].map((s) => s.username));
 
@@ -152,12 +189,7 @@ export function Dock({
                     <span style={{ color: colorFor(s.username) }} className="font-medium">
                       {s.username}
                     </span>
-                    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
-                      {namedParts(s).length > 1 ? "Session · " : ""}
-                      {fmtClock(chipElapsed(s, s.username === myUsernameOf(myState)))}
-                      {namedParts(s).length <= 1 && s.module ? ` · ${s.module}` : ""}
-                      <ModuleBreakdown s={s} ticking d={d} />
-                    </span>
+                    <ChipMeta s={s} running d={d} />
                   </div>
                 ))
               )}
@@ -172,13 +204,7 @@ export function Dock({
                     <span style={{ color: colorFor(s.username) }} className="font-medium">
                       {s.username}
                     </span>
-                    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
-                      {namedParts(s).length > 1 ? "Session · " : ""}
-                      {fmtClock(chipElapsed(s, s.username === myUsernameOf(myState)))}
-                      {namedParts(s).length <= 1 && s.module ? ` · ${s.module}` : ""} · ☕{" "}
-                      {fmtClock(chipBreakElapsed(s, s.username === myUsernameOf(myState)))}
-                      <ModuleBreakdown s={s} ticking={false} d={d} />
-                    </span>
+                    <ChipMeta s={s} running={false} d={d} />
                   </div>
                 ))}
               </div>
@@ -193,13 +219,7 @@ export function Dock({
                     <span style={{ color: colorFor(s.username) }} className="font-medium">
                       {s.username}
                     </span>
-                    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
-                      {namedParts(s).length > 1 ? "Session · " : ""}
-                      {fmtClock(chipElapsed(s, s.username === myUsernameOf(myState)))}
-                      {namedParts(s).length <= 1 && s.module ? ` · ${s.module}` : ""}
-                      {!s.running ? ` · ☕ ${fmtClock(chipBreakElapsed(s, s.username === myUsernameOf(myState)))}` : ""}
-                      <ModuleBreakdown s={s} ticking={s.running} d={d} />
-                    </span>
+                    <ChipMeta s={s} running={s.running} d={d} />
                   </div>
                 ))}
               </div>
@@ -246,8 +266,4 @@ export function Dock({
       )}
     </div>
   );
-}
-
-function myUsernameOf(myState: MyStudyStatus): string | null {
-  return myState.active ? myState.username : null;
 }

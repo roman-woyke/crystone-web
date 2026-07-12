@@ -8,6 +8,7 @@ import type { AggregatedSession } from "@/lib/study-sessions";
 import type { MyStudyStatus } from "@/lib/study-status";
 import { Button } from "@/components/ui/button";
 import { useTooltip, TooltipEl } from "@/components/study/Tooltip";
+import { breakdownParts } from "@/components/study/Dock";
 
 const BAR_MAX_PX = 88;
 
@@ -124,6 +125,7 @@ export function FocusMode({
   if (!active) return null;
 
   const onBreak = myState.active && !myState.running;
+  const parts = myState.active ? breakdownParts(myState) : [];
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-8 bg-background p-8">
@@ -135,26 +137,28 @@ export function FocusMode({
         <div className={`font-mono text-7xl font-bold tabular-nums ${onBreak ? "text-yellow-500" : ""}`}>
           {myState.active ? fmtClock(myState.elapsed) : "00:00"}
         </div>
-        {/* A session that switched modules shows a total line plus each
-            module's own time on its own line, so the big (whole-session)
-            clock above isn't misread as time spent in the current module
-            alone. */}
-        {myState.active && myState.parts.filter((p) => p.module).length > 1 ? (
+        {/* A session that switched modules, or has taken a break, shows a
+            total line plus each history entry on its own line — including a
+            break still in progress — so the big (whole-session) clock above
+            isn't misread as time spent in the current module alone, and
+            there's no need for a separate "on break" readout. */}
+        {myState.active && parts.length > 1 ? (
           <div className="mt-2 text-muted-foreground">
             <div>Session · {fmtClock(myState.elapsed)}</div>
-            {myState.parts
-              .filter((p) => p.module)
-              .map((p, i) => (
-                <div key={i}>
-                  {abbrevModule(p.module)} · {fmtClock(p.seconds)}
-                </div>
-              ))}
+            {parts.map((p, i) => (
+              <div key={i} className={p.type === "break" && p.live ? "text-yellow-500" : ""}>
+                {p.type === "break" ? "Break" : abbrevModule(p.module)} · {fmtClock(p.seconds)}
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="mt-2 text-muted-foreground">{myState.active ? myState.module || "" : ""}</div>
-        )}
-        {onBreak && (
-          <div className="mt-1 text-sm text-yellow-500">On break · {fmtClock(myState.break_elapsed)}</div>
+          // The lone entry can be a break rather than a module — e.g. a
+          // session that opened with a too-short-to-stand-alone module tap
+          // gets folded entirely into the break that followed it (see
+          // studyMergeRuns()) — so this can't just assume myState.module.
+          <div className="mt-2 text-muted-foreground">
+            {myState.active ? (parts[0]?.type === "break" ? "Break" : myState.module || "") : ""}
+          </div>
         )}
 
         <div className="mt-6 flex justify-center gap-3">
