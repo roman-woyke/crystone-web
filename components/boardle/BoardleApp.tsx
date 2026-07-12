@@ -216,8 +216,10 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
     ) {
       choosePromptedRef.current = true;
       localStorage.setItem(seenKey, "1");
-      const t = setTimeout(() => setChooseModalOpen(true), 1800);
-      return () => clearTimeout(t);
+      // No cleanup: a background poll re-running this effect must not cancel
+      // the one-shot timer (the ref guard means it would never be re-armed).
+      setTimeout(() => setChooseModalOpen(true), 1800);
+      return;
     }
     if (!todayPickPromptedRef.current && !choosePromptedRef.current && c.eligible && c.for_today && !c.already) {
       todayPickPromptedRef.current = true;
