@@ -7,8 +7,8 @@ import {
   boardleEnsureDay,
   boardleFinalizeWords,
   boardleOwnedPositions,
+  boardleResolveDate,
   boardleState,
-  boardleToday,
 } from "@/lib/boardle";
 import { boardleUserBoards } from "@/lib/boardle-score";
 
@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Not logged in.", { status: 401 });
   }
   const userId = Number(session.user.id);
-  const date = boardleToday();
 
   const body = await request.json().catch(() => ({}));
+  const date = await boardleResolveDate(body.date);
   const board = Number.isInteger(body.board) ? (body.board as number) : NaN;
   const hint = String(body.hint ?? "").trim().slice(0, 500);
 

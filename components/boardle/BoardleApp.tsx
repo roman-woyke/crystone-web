@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
-import type { BoardleState } from "@/lib/boardle";
+import type { BoardleState, BoardleWireState } from "@/lib/boardle";
 import type { ParsedHint } from "@/lib/boardle-score";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,6 +13,7 @@ import { JokerBar } from "@/components/boardle/JokerBar";
 import { ChooseWord } from "@/components/boardle/ChooseWord";
 import { StatsPanel } from "@/components/boardle/StatsPanel";
 import { OpponentsPanel } from "@/components/boardle/OpponentsPanel";
+import { HistoryCalendar } from "@/components/boardle/HistoryCalendar";
 
 const HINT_TYPES: { type: "armor" | "orange" | "green"; board: boolean }[] = [
   { type: "armor", board: false },
@@ -27,8 +29,8 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function BoardleApp({ initialState }: { initialState: BoardleState }) {
-  const [state, setState] = useState(initialState);
+export function BoardleApp({ initialState }: { initialState: BoardleWireState }) {
+  const [state, setState] = useState<BoardleState>(initialState);
   const [buffer, setBuffer] = useState("");
   const [busy, setBusy] = useState(false);
   const [kbBoard, setKbBoard] = useState(0);
@@ -36,6 +38,18 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   const [payMode, setPayMode] = useState<"streak" | "freeze">("streak");
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
+
+  // The day currently shown. Defaults to today; the day-nav arrows/calendar
+  // move it within [earliest, today] to replay a missed day or look at an old
+  // result. Every state-changing request (guess/joker/hint) is scoped to this
+  // date, not necessarily the server's real "today". The bounds live outside
+  // `state` because guess/joker responses don't carry them.
+  const [viewedDate, setViewedDate] = useState(initialState.date);
+  const [bounds, setBounds] = useState({ today: initialState.today, earliest: initialState.earliest_date });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const viewedDateRef = useRef(viewedDate);
+  viewedDateRef.current = viewedDate;
+  const onToday = viewedDate === bounds.today;
 
   // "You solved it!" / today's-late-pick popup (ChooseWord in an overlay).
   const [chooseModalOpen, setChooseModalOpen] = useState(false);
@@ -81,16 +95,52 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   }
   const effectivePendingHint = isPendingHintValid() ? pendingHint : null;
 
-  async function loadState() {
+  async function loadState(date?: string) {
     if (busyRef.current) return;
+    const wanted = date ?? viewedDateRef.current;
     try {
-      const res = await fetch("/api/boardle/state");
+      const res = await fetch(`/api/boardle/state?date=${encodeURIComponent(wanted)}`);
       if (!res.ok) return;
-      const next: BoardleState = await res.json();
+      const next: BoardleWireState = await res.json();
+      // Drop a stale response if the user has already navigated elsewhere.
+      if (next.date !== viewedDateRef.current) return;
       setState(next);
+      setBounds({ today: next.today, earliest: next.earliest_date });
     } catch {
       // ignore transient poll failures
     }
+  }
+
+  // ── Day nav: prev/next arrows + "back to today" + calendar popup ────────
+  function addDays(dateStr: string, delta: number): string {
+    // Build the result from local date parts, not toISOString() (which
+    // converts to UTC and silently drops/duplicates a day in any timezone
+    // ahead of UTC).
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + delta);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function fmtDayLabel(dateStr: string): string {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function goToDate(dateStr: string) {
+    if (busyRef.current) return;
+    if (dateStr < bounds.earliest) dateStr = bounds.earliest;
+    if (dateStr > bounds.today) dateStr = bounds.today;
+    if (dateStr === viewedDate) return;
+    setViewedDate(dateStr);
+    viewedDateRef.current = dateStr;
+    setBuffer("");
+    setKbBoard(0);
+    setPendingHint(null);
+    setMsg(null);
+    loadState(dateStr);
   }
 
   useEffect(() => {
@@ -140,6 +190,10 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
   // immediate popup instead — once per pageview, tied to live state, so a
   // later visit can fire it again while the slot is still up for grabs.
   useEffect(() => {
+    // Word-picking only ever concerns the real current day — replaying a
+    // missed past day shouldn't offer to set a word for its (long since
+    // finalized) "tomorrow".
+    if (!onToday) return;
     const c = state.choose;
     const seenKey = `boardle_choose_seen_${state.date}`;
     if (
@@ -160,7 +214,7 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
       todayPickPromptedRef.current = true;
       setChooseModalOpen(true);
     }
-  }, [state]);
+  }, [state, onToday]);
 
   function flashKey(key: string) {
     setPressedKey(key);
@@ -220,7 +274,7 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
       const res = await fetch("/api/boardle/guess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word, offset: first }),
+        body: JSON.stringify({ word, offset: first, date: viewedDate }),
       });
       if (!res.ok) throw new Error((await res.text()) || "Guess failed.");
       const next: BoardleState = await res.json();
@@ -268,7 +322,7 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
       const res = await fetch("/api/boardle/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, board: board ?? undefined, pay: payFreeze ? "freeze" : undefined }),
+        body: JSON.stringify({ type, board: board ?? undefined, pay: payFreeze ? "freeze" : undefined, date: viewedDate }),
       });
       if (!res.ok) throw new Error((await res.text()) || "Joker failed.");
       const next: BoardleState = await res.json();
@@ -307,7 +361,7 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
       const res = await fetch("/api/boardle/add-hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ board: addHintBoard, hint }),
+        body: JSON.stringify({ board: addHintBoard, hint, date: viewedDate }),
       });
       if (!res.ok) throw new Error((await res.text()) || "Could not save hint.");
       const next: BoardleState = await res.json();
@@ -348,7 +402,7 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
 
   const kbBoardClamped = kbBoard >= state.num_boards ? 0 : kbBoard;
   const pickSet = effectivePendingHint ? new Set(eligibleBoards(state)) : null;
-  const showChoose = state.choose.eligible && (state.me.solved || state.choose.for_today);
+  const showChoose = onToday && state.choose.eligible && (state.me.solved || state.choose.for_today);
   // A hintless board still earns a card in the clue row if I can add a
   // community hint to it (solved it, or own it) — the "+ Add a hint" CTA
   // takes the clue's place. The two states never coexist for a given board.
@@ -371,6 +425,48 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
           }
           description="4 board puzzle a day. Solve every board before the guesses run out. A guess can be any word from 5 letters up to the day's length (use the space bar to place it). Beat the day and you get to set one of tomorrow's words."
         />
+
+        <div className="rise rise-1 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-[34px] w-[34px] rounded-full"
+            title="Previous day"
+            aria-label="Previous day"
+            disabled={viewedDate <= bounds.earliest}
+            onClick={() => goToDate(addDays(viewedDate, -1))}
+          >
+            ‹
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full font-bold"
+            title="Pick a day"
+            onClick={() => setCalendarOpen(true)}
+          >
+            <span suppressHydrationWarning>{(onToday ? "Today · " : "") + fmtDayLabel(viewedDate)}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-[34px] w-[34px] rounded-full"
+            title="Next day"
+            aria-label="Next day"
+            disabled={viewedDate >= bounds.today}
+            onClick={() => goToDate(addDays(viewedDate, 1))}
+          >
+            ›
+          </Button>
+          {!onToday && (
+            <Button type="button" variant="outline" size="sm" onClick={() => goToDate(bounds.today)}>
+              Back to today
+            </Button>
+          )}
+          <Button render={<Link href="/boardle-rt" />}>Unlimited real-time mode</Button>
+        </div>
 
         <div className="rise rise-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Pill>
@@ -529,6 +625,18 @@ export function BoardleApp({ initialState }: { initialState: BoardleState }) {
             ✕
           </button>
         </div>
+      )}
+
+      {/* Calendar popup: jump to any past puzzle day. */}
+      {calendarOpen && (
+        <HistoryCalendar
+          viewedDate={viewedDate}
+          onPick={(date) => {
+            goToDate(date);
+            setCalendarOpen(false);
+          }}
+          onClose={() => setCalendarOpen(false)}
+        />
       )}
 
       {/* Add-a-hint modal (styled like the word picker). */}

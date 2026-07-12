@@ -5,7 +5,7 @@
 // (streaks/stats) for the pieces this orchestrates.
 
 import { prisma } from "@/lib/prisma";
-import { dbNow } from "@/lib/dates";
+import { dbNow, toDbDateStr } from "@/lib/dates";
 import { boardleAddDays, boardleDateOnly, boardleToday } from "@/lib/boardle-dates";
 import {
   BOARDLE_MAX_WORDS,
@@ -28,6 +28,31 @@ import type { BoardleDay } from "@/app/generated/prisma/client";
 export { BOARDLE_MAX_WORDS, BOARDLE_MIN_LEN, BOARDLE_MAX_LEN, boardleIsValidWord, boardleMaxGuesses } from "@/lib/boardle-words";
 export { boardleScore } from "@/lib/boardle-score";
 export { boardleToday } from "@/lib/boardle-dates";
+
+// ── History / archive navigation ─────────────────────────────────────────────
+// The archive goes back to the first day a puzzle ever existed (the earliest
+// `boardle_days` row) and never further forward than the server's real today —
+// a day beyond today has no rolled length/finalized words yet.
+
+export async function boardleEarliestDate(): Promise<string> {
+  const min = await prisma.boardleDay.aggregate({ _min: { gameDate: true } });
+  return min._min.gameDate ? toDbDateStr(min._min.gameDate) : boardleToday();
+}
+
+// Validate + clamp a requested `date` param into [earliest, today]. Anything
+// missing, malformed, or out of range silently falls back to today rather than
+// erroring — the archive nav never needs to reject a request outright.
+export async function boardleResolveDate(raw: unknown): Promise<string> {
+  const today = boardleToday();
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return today;
+
+  const d = boardleDateOnly(raw);
+  if (Number.isNaN(d.getTime()) || toDbDateStr(d) !== raw) return today;
+  if (raw > today) return today;
+
+  const earliest = await boardleEarliestDate();
+  return raw < earliest ? earliest : raw;
+}
 
 // Fetch the day row, creating it (with a freshly rolled length) if absent.
 export async function boardleEnsureDay(date: string): Promise<BoardleDay> {
@@ -232,6 +257,11 @@ export type ChooseInfo = {
   suggestions: string[];
   for_today: boolean;
 };
+
+// The client-facing payload: boardleState() plus the archive bounds the
+// day-nav needs. Built by the page/state route; guess/joker responses omit
+// the extra fields and the client keeps its previous bounds.
+export type BoardleWireState = BoardleState & { today: string; earliest_date: string };
 
 export type BoardleState = {
   date: string;
@@ -451,6 +481,9 @@ export async function boardleState(date: string, userId: number): Promise<Boardl
     opponents,
     choose,
     board_hints: boardHintsArr,
-    stats: await boardleStats(date),
+    // Always today's standing, never the viewed day's — browsing an old
+    // day to catch up or replay a result shouldn't make the streak/avg
+    // panel look like it's showing history too.
+    stats: await boardleStats(boardleToday()),
   };
 }

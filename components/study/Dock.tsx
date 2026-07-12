@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { colorFor } from "@/lib/study-colors";
 import { fmtClock } from "@/lib/study-format";
-import type { StudyingEntry, RecapBlock, MyStudyStatus } from "@/lib/study-status";
+import type { StudyingEntry, RecapBlock, MyStudyStatus, StudyPart } from "@/lib/study-status";
 import { Button } from "@/components/ui/button";
 import { Timeline } from "@/components/study/Timeline";
 
@@ -19,6 +19,31 @@ export function useNowTick(): number {
 
 function delta(syncTs: number, now: number): number {
   return Math.floor((now - syncTs) / 1000);
+}
+
+// A single-module session just shows " · Module" inline; one that switched
+// modules shows each module's own time on its own line instead, so a chip
+// can't misread as "whole elapsed time on the current module" (e.g.
+// "2 hours · Module Y" after 2 hours on X and a few seconds on Y). `p.live`
+// (not array position) marks the part with the still-open segment: a module
+// switched away from and back to (X -> Y -> X) collapses into one summed
+// part per name, so the currently-running one isn't necessarily last.
+function namedParts(s: StudyingEntry): StudyPart[] {
+  return (s.parts ?? []).filter((p) => p.module);
+}
+
+function ModuleBreakdown({ s, ticking, d }: { s: StudyingEntry; ticking: boolean; d: number }) {
+  const parts = namedParts(s);
+  if (parts.length <= 1) return null;
+  return (
+    <span className="mt-0.5 block leading-snug">
+      {parts.map((p, i) => (
+        <span key={i} className="block truncate whitespace-nowrap" title={p.module ?? undefined}>
+          {p.module} · {fmtClock(p.seconds + (ticking && p.live ? d : 0))}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 export function Dock({
@@ -119,17 +144,19 @@ export function Dock({
                 </span>
               ) : (
                 running.map((s) => (
-                  <div key={s.username} className="flex items-center gap-2 text-sm">
-                    <span className="relative flex size-2">
+                  <div key={s.username} className="flex items-start gap-2 text-sm">
+                    <span className="relative mt-1.5 flex size-2">
                       <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
                       <span className="relative inline-flex size-2 rounded-full bg-green-500" />
                     </span>
                     <span style={{ color: colorFor(s.username) }} className="font-medium">
                       {s.username}
                     </span>
-                    <span className="ml-auto tabular-nums text-muted-foreground">
+                    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
+                      {namedParts(s).length > 1 ? "Session · " : ""}
                       {fmtClock(chipElapsed(s, s.username === myUsernameOf(myState)))}
-                      {s.module ? ` · ${s.module}` : ""}
+                      {namedParts(s).length <= 1 && s.module ? ` · ${s.module}` : ""}
+                      <ModuleBreakdown s={s} ticking d={d} />
                     </span>
                   </div>
                 ))
@@ -140,14 +167,17 @@ export function Dock({
               <div className="space-y-1.5 rounded-md bg-muted/50 p-2">
                 <div className="text-xs text-muted-foreground">☕ On break</div>
                 {paused.map((s) => (
-                  <div key={s.username} className="flex items-center gap-2 text-sm">
-                    <span className="size-2 rounded-full bg-yellow-500" />
+                  <div key={s.username} className="flex items-start gap-2 text-sm">
+                    <span className="mt-1.5 size-2 rounded-full bg-yellow-500" />
                     <span style={{ color: colorFor(s.username) }} className="font-medium">
                       {s.username}
                     </span>
-                    <span className="ml-auto tabular-nums text-muted-foreground">
+                    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
+                      {namedParts(s).length > 1 ? "Session · " : ""}
                       {fmtClock(chipElapsed(s, s.username === myUsernameOf(myState)))}
-                      {s.module ? ` · ${s.module}` : ""} · ☕ {fmtClock(chipBreakElapsed(s, s.username === myUsernameOf(myState)))}
+                      {namedParts(s).length <= 1 && s.module ? ` · ${s.module}` : ""} · ☕{" "}
+                      {fmtClock(chipBreakElapsed(s, s.username === myUsernameOf(myState)))}
+                      <ModuleBreakdown s={s} ticking={false} d={d} />
                     </span>
                   </div>
                 ))}
@@ -158,15 +188,17 @@ export function Dock({
               <div className="space-y-1.5 rounded-md bg-blue-500/10 p-2">
                 <div className="text-xs text-muted-foreground">📚 At the library</div>
                 {library.map((s) => (
-                  <div key={s.username} className="flex items-center gap-2 text-sm">
-                    <span className={`size-2 rounded-full ${s.running ? "bg-green-500" : "bg-yellow-500"}`} />
+                  <div key={s.username} className="flex items-start gap-2 text-sm">
+                    <span className={`mt-1.5 size-2 rounded-full ${s.running ? "bg-green-500" : "bg-yellow-500"}`} />
                     <span style={{ color: colorFor(s.username) }} className="font-medium">
                       {s.username}
                     </span>
-                    <span className="ml-auto tabular-nums text-muted-foreground">
+                    <span className="ml-auto min-w-0 text-right tabular-nums text-muted-foreground">
+                      {namedParts(s).length > 1 ? "Session · " : ""}
                       {fmtClock(chipElapsed(s, s.username === myUsernameOf(myState)))}
-                      {s.module ? ` · ${s.module}` : ""}
+                      {namedParts(s).length <= 1 && s.module ? ` · ${s.module}` : ""}
                       {!s.running ? ` · ☕ ${fmtClock(chipBreakElapsed(s, s.username === myUsernameOf(myState)))}` : ""}
+                      <ModuleBreakdown s={s} ticking={s.running} d={d} />
                     </span>
                   </div>
                 ))}

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { boardleDateOnly } from "@/lib/boardle-dates";
-import { boardleEnsureDay, boardleFinalizeWords, boardleState, boardleToday } from "@/lib/boardle";
+import { boardleEnsureDay, boardleFinalizeWords, boardleResolveDate, boardleState } from "@/lib/boardle";
 import { boardleStreakInfo } from "@/lib/boardle-streak";
 import { boardleComputeHint } from "@/lib/boardle-score";
 
@@ -16,10 +16,11 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Not logged in.", { status: 401 });
   }
   const userId = Number(session.user.id);
-  const date = boardleToday();
-  const gameDate = boardleDateOnly(date);
 
   const body = await request.json().catch(() => ({}));
+  const date = await boardleResolveDate(body.date);
+  const gameDate = boardleDateOnly(date);
+
   const type = String(body.type ?? "");
   const boardRaw = body.board;
   const board = boardRaw === undefined || boardRaw === null || boardRaw === "" ? null : Number(boardRaw);
@@ -31,10 +32,10 @@ export async function POST(request: NextRequest) {
   await boardleEnsureDay(date);
   await boardleFinalizeWords(date);
 
-  // Done for the day? No more jokers.
+  // Done with that day? No more jokers.
   const result = await prisma.boardleResult.findUnique({ where: { gameDate_userId: { gameDate, userId } } });
   if (result?.finished === 1) {
-    return new NextResponse("You're already done for today.", { status: 409 });
+    return new NextResponse("You're already done with that day.", { status: 409 });
   }
 
   // Each joker is once per day.

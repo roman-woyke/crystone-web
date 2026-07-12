@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { dbNow } from "@/lib/dates";
 import { boardleDateOnly } from "@/lib/boardle-dates";
-import { boardleHasArmor, boardleMaxGuesses, boardleOwnedPositions, boardleState, boardleToday } from "@/lib/boardle";
+import { boardleHasArmor, boardleMaxGuesses, boardleOwnedPositions, boardleResolveDate, boardleState } from "@/lib/boardle";
 import { BOARDLE_MIN_LEN, boardleIsValidWord } from "@/lib/boardle-words";
 import { boardleUserBoards } from "@/lib/boardle-score";
 
@@ -14,7 +14,9 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Not logged in.", { status: 401 });
   }
   const userId = Number(session.user.id);
-  const date = boardleToday();
+
+  const body = await request.json().catch(() => ({}));
+  const date = await boardleResolveDate(body.date);
   const gameDate = boardleDateOnly(date);
 
   const day = await prisma.boardleDay.findUnique({ where: { gameDate } });
@@ -23,10 +25,10 @@ export async function POST(request: NextRequest) {
   const numBoards = await prisma.boardleWord.count({ where: { gameDate } });
   const maxGuesses = boardleMaxGuesses(numBoards) + ((await boardleHasArmor(date, userId)) ? 1 : 0);
 
-  // Already finished today? No more guesses.
+  // Already finished that day? No more guesses.
   const result = await prisma.boardleResult.findUnique({ where: { gameDate_userId: { gameDate, userId } } });
   if (result && result.finished === 1) {
-    return new NextResponse("You're already done for today.", { status: 409 });
+    return new NextResponse("You're already done with that day.", { status: 409 });
   }
 
   const used = await prisma.boardleGuess.count({ where: { gameDate, userId } });
@@ -35,7 +37,6 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Validate the submitted word + position ──
-  const body = await request.json().catch(() => ({}));
   const word = String(body.word ?? "").trim().toLowerCase();
   const offset = Number(body.offset);
   const wl = word.length;

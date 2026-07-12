@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import { addDays, fmtClock, fmtMini, fmtTime, mondayOf, studyDayStart, toDateStr } from "@/lib/study-format";
-import { colorFor } from "@/lib/study-colors";
+import { abbrevModule, colorFor } from "@/lib/study-colors";
 import type { AggregatedSession } from "@/lib/study-sessions";
 import type { MyStudyStatus } from "@/lib/study-status";
 import { Button } from "@/components/ui/button";
@@ -135,7 +135,24 @@ export function FocusMode({
         <div className={`font-mono text-7xl font-bold tabular-nums ${onBreak ? "text-yellow-500" : ""}`}>
           {myState.active ? fmtClock(myState.elapsed) : "00:00"}
         </div>
-        <div className="mt-2 text-muted-foreground">{myState.active ? myState.module || "" : ""}</div>
+        {/* A session that switched modules shows a total line plus each
+            module's own time on its own line, so the big (whole-session)
+            clock above isn't misread as time spent in the current module
+            alone. */}
+        {myState.active && myState.parts.filter((p) => p.module).length > 1 ? (
+          <div className="mt-2 text-muted-foreground">
+            <div>Session · {fmtClock(myState.elapsed)}</div>
+            {myState.parts
+              .filter((p) => p.module)
+              .map((p, i) => (
+                <div key={i}>
+                  {abbrevModule(p.module)} · {fmtClock(p.seconds)}
+                </div>
+              ))}
+          </div>
+        ) : (
+          <div className="mt-2 text-muted-foreground">{myState.active ? myState.module || "" : ""}</div>
+        )}
         {onBreak && (
           <div className="mt-1 text-sm text-yellow-500">On break · {fmtClock(myState.break_elapsed)}</div>
         )}
