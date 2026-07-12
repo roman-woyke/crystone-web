@@ -6,6 +6,7 @@ import { dbNow, dbToday, diffSeconds } from "@/lib/dates";
 import { resolveStudyModule } from "@/lib/study-modules";
 import { segOpen, segClose, segClearLive } from "@/lib/study-segments";
 import { studyStatusPayload } from "@/lib/study-status";
+import { notify } from "@/lib/realtime";
 
 type LogRequestSession = { module?: unknown; seconds?: unknown };
 
@@ -297,6 +298,10 @@ export async function POST(request: NextRequest) {
   } else {
     return new NextResponse("Invalid action.", { status: 400 });
   }
+
+  // Every timer action changes what the presence dock shows — push it to
+  // everyone in the study room instead of waiting for their next poll.
+  await notify("study", "update");
 
   const payload = await studyStatusPayload(userId);
   return NextResponse.json({ ...extra, ...payload });

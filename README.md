@@ -140,6 +140,17 @@ CREATE TABLE project_time_entries (
     logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Live chat (app/(app)/chat): one shared room for the whole friend group.
+-- created_at is written by the app (dbNow(), Berlin wall-clock) like every
+-- other DATETIME here. New messages are pushed to connected clients over
+-- the socket.io realtime server; the table is the source of truth.
+CREATE TABLE chat_messages (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NOT NULL REFERENCES users(id),
+    body       TEXT NOT NULL,
+    created_at DATETIME NOT NULL
+);
+
 -- Boardle (app/(app)/boardle): a daily multi-board, multiplayer Wordle. One puzzle a
 -- day; N boards (1–4) all of the same length L. The word lists live as bundled
 -- text files in includes/boardle/, NOT in the DB.
@@ -368,6 +379,9 @@ CREATE TABLE boardle_rt_results (
 > ```sql
 > ALTER TABLE users ADD COLUMN avatar MEDIUMTEXT NULL AFTER password_hash;
 > ```
+>
+> **Live chat migration:** new feature, new table — run the `chat_messages`
+> `CREATE TABLE` above before deploying the chat page / `api/chat/messages`.
 >
 > **hint length limit removal migration:** hints can now hold ASCII art of
 > any length, so the 500-char columns become TEXT:

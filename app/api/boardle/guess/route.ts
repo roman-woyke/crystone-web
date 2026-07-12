@@ -7,6 +7,7 @@ import { boardleDateOnly } from "@/lib/boardle-dates";
 import { boardleHasArmor, boardleMaxGuesses, boardleOwnedPositions, boardleResolveDate, boardleState } from "@/lib/boardle";
 import { BOARDLE_MIN_LEN, boardleIsValidWord } from "@/lib/boardle-words";
 import { boardleUserBoards } from "@/lib/boardle-score";
+import { notify } from "@/lib/realtime";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -92,6 +93,9 @@ export async function POST(request: NextRequest) {
     create: { gameDate, userId, finished: finished ? 1 : 0, solved: solved ? 1 : 0, guessesUsed: usedNow, solvedAt },
     update: { finished: finished ? 1 : 0, solved: solved ? 1 : 0, guessesUsed: usedNow, solvedAt },
   });
+
+  // Push, don't poll: everyone watching this day's boards refetches now.
+  await notify(`wordle:${date}`, "update");
 
   return NextResponse.json(await boardleState(date, userId));
 }

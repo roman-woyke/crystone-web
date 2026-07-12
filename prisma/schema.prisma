@@ -390,3 +390,14 @@ enum BoardleRtPhase {
   playing
   results
 }
+
+// Live chat: one shared room. No User relation on purpose (same pattern as
+// the boardle_rt_* models) — usernames are joined in TypeScript.
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  body      String   @db.Text
+  createdAt DateTime @map("created_at") @db.DateTime(0)
+
+  @@map("chat_messages")
+}

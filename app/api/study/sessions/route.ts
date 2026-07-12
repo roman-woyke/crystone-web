@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { dbNow, dbToday, toDbDateStr } from "@/lib/dates";
 import { allowedStudyModules } from "@/lib/study-modules";
+import { notify } from "@/lib/realtime";
 
 function parseHM(str: string): { h: number; m: number } | null {
   const match = str.match(/^(\d{1,2}):(\d{2})$/);
@@ -122,6 +123,8 @@ export async function POST(request: NextRequest) {
       data: { userId, sessionId: created.id, startedAt, endedAt, createdAt: now },
     });
   }
+
+  await notify("study", "update");
 
   return NextResponse.json({ ok: true, module: finalModule, custom: isCustom, seconds, date: studiedOnStr });
 }

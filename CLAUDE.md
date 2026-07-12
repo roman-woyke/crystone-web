@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A shared leaderboard for tracking internship applications, plus a study counter, project time tracker, exam calendar, and a daily multiplayer Wordle (Boardle). Originally a PHP/MySQL app; fully rewritten as this TypeScript/Next.js app. See [`plan.md`](plan.md) for the phase-by-phase migration plan, stack choice, and per-phase deviation notes — useful if you need to understand *why* something works the way it does, or what the original PHP behavior was for a feature.
+A shared leaderboard for tracking internship applications, plus a study counter, project time tracker, exam calendar, a daily multiplayer Wordle (Boardle) with an unlimited real-time mode, and a live chat. Originally a PHP/MySQL app; fully rewritten as this TypeScript/Next.js app. See [`plan.md`](plan.md) for the phase-by-phase migration plan, stack choice, and per-phase deviation notes — useful if you need to understand *why* something works the way it does, or what the original PHP behavior was for a feature.
 
 **Deployment status:** not yet deployed. Vercel + Hostinger-remote-MySQL wiring is still pending (see `plan.md` Phase 1.5) — there is currently no live production instance.
 
@@ -20,10 +20,10 @@ A shared leaderboard for tracking internship applications, plus a study counter,
 
 1. `npm install`
 2. Local MySQL: `docker compose up -d` (starts `db` on `localhost:3306` + phpMyAdmin on `localhost:8081`; see `docker-compose.yml`) — or point at any MySQL 8 instance.
-3. Copy `.env.example` to `.env` and fill in `DATABASE_URL`, `AUTH_SECRET` (`npx auth secret`), `INVITE_CODE`.
+3. Copy `.env.example` to `.env` and fill in `DATABASE_URL`, `AUTH_SECRET` (`npx auth secret`), `INVITE_CODE`. For the realtime push server also set `REALTIME_INTERNAL_SECRET` (any random string, shared between the two processes); optional overrides: `REALTIME_PORT` (default 3001), `REALTIME_INTERNAL_URL` (where Next.js reaches the push server, default `http://localhost:3001`), `REALTIME_APP_ORIGIN` (browser origin for CORS, default `http://localhost:3000`), `NEXT_PUBLIC_REALTIME_URL` (where browsers connect, defaults to the page's hostname on port 3001).
 4. Apply the schema from `README.md`'s "Database schema" section to that database (it's the authoritative source; `prisma/schema.prisma` is introspected from it — keep both in sync when either changes).
 5. `npx prisma generate`
-6. `npm run dev`
+6. `npm run dev` — and in a second terminal `npm run realtime` (the socket.io push server; everything still works without it, clients just fall back to refetch-on-focus instead of instant pushes).
 
 ## Architecture
 
@@ -86,6 +86,17 @@ All return JSON. Auth failures return 401; ownership failures return 404 (Prisma
 | `api/boardle/rt/suggest` | GET | Random word suggestions for the RT picker |
 | `api/boardle/rt/guess` | POST | Submit a guess during the playing phase |
 | `api/boardle/rt/continue` | POST | Results screen -> back to the lobby |
+| `api/chat/messages` | GET, POST | Live chat backlog / send a message (pushed to the `chat` room) |
+
+### Real-time push (socket.io)
+
+`server/realtime.mjs` is a standalone Node socket.io server run alongside Next.js (`npm run realtime`) — serverless API routes can't hold persistent connections, so the push side lives in its own process. It is the Observer pattern's Subject and nothing else: it holds no state and never touches the DB. One socket per client tab (`lib/realtime-client.ts` singleton, authenticated by decoding the Auth.js session cookie) multiplexes every live feature over rooms — `chat`, `study`, and `wordle:<gameId>` (`wordle:<date>` for daily Boardle, `wordle:rt` for unlimited mode). Components join/leave rooms on mount/unmount via `useRealtimeRoom()`.
+
+Writes are unchanged: actions still go through normal POST routes. After committing a change, a route calls `notify(room, event, payload)` (`lib/realtime.ts`), which POSTs to the push server's internal `/notify` endpoint (guarded by the shared `REALTIME_INTERNAL_SECRET`); the event is emitted only to that room's members. Most events are just "something changed, refetch your own view" — Boardle state is per-user (letters vs colors-only), so pushing a shared payload would either leak or duplicate work; the chat message is the one event that carries its payload. This replaced the fixed-interval polling on the Boardle page (was 6s) and the study counter (was 15s); `visibilitychange`/`pageshow` refetches remain as the catch-up path, so everything still works (just less live) when the push server is down. Exception: Boardle RT keeps its 1.5s poll — it doubles as the lobby presence heartbeat and drives the lazy deadline-based phase transitions — with room pushes layered on top so opponents' actions land instantly.
+
+### Live chat
+
+`app/(app)/chat/page.tsx` server-renders the latest backlog (200 messages from `chat_messages`), then `ChatApp.tsx` receives new messages as `chat:new` events on the `chat` room — no polling at all. Sending posts to `api/chat/messages`, which stores the row (`created_at` via `dbNow()`) and notifies the room with the full wire message; the sender appends from the POST response and the socket echo is deduped by id.
 
 ### Ownership checks
 
@@ -109,7 +120,7 @@ All return JSON. Auth failures return 401; ownership failures return 404 (Prisma
 
 ### Study counter
 
-`app/(app)/study/page.tsx` (Server Component) embeds initial status + aggregated sessions (`INITIAL_STATUS`/`INITIAL_SESSIONS`) so `StudyCounterApp.tsx` paints synchronously on load — no fetch round-trip, no loading flash. `api/study/data` and `api/study/status` are only used for background refresh after that (`setInterval(15s)` + `visibilitychange` + `pageshow`, no SWR — the state is one tightly-coupled blob, see `plan.md` Phase 4 notes).
+`app/(app)/study/page.tsx` (Server Component) embeds initial status + aggregated sessions (`INITIAL_STATUS`/`INITIAL_SESSIONS`) so `StudyCounterApp.tsx` paints synchronously on load — no fetch round-trip, no loading flash. After that, refreshes are push-driven: timer/session routes notify the `study` socket room and the client refetches `api/study/status` once per change (plus `visibilitychange` + `pageshow` catch-ups; no SWR — the state is one tightly-coupled blob, see `plan.md` Phase 4 notes). Elapsed clocks tick locally off the last sync timestamp between pushes.
 
 Key components: `StudyCounterApp.tsx` (orchestrator), `Dock.tsx` + `Timeline.tsx` (the sticky flip-card presence panel — front: running/on-break chips; back: today's per-module timeline), `Chart.tsx` (hand-built grouped bar chart, per-user solid bars, per-module split shown only in tooltip + `Podium.tsx`), `ModulePicker.tsx`/`ModuleModal.tsx`, `StopModal.tsx` (log modal built from the live per-module breakdown, trim/drop per module), `ManualLogModal.tsx`, `ManageSessionsModal.tsx`, `FocusMode.tsx` (fullscreen timer, not in the original PHP plan — added on user request).
 
@@ -121,7 +132,7 @@ The timer is server-backed (`study_status` table, one row per user) via the sing
 
 ### Boardle
 
-`app/(app)/boardle/page.tsx` server-renders initial state, then `BoardleApp.tsx` polls `api/boardle/state` every 6s + `visibilitychange` + `pageshow`. Logic lives in `lib/boardle.ts` (orchestrator) split across `lib/boardle-words.ts`, `lib/boardle-score.ts`, `lib/boardle-streak.ts`, `lib/boardle-dates.ts`. Word lists are bundled text files in `includes/boardle/` (`dict-<5..10>.txt` for validation, `answers-<5..10>.txt` for the answer pool), read via `fs.readFileSync` relative to `process.cwd()`.
+`app/(app)/boardle/page.tsx` server-renders initial state, then `BoardleApp.tsx` refetches `api/boardle/state` when the viewed day's `wordle:<date>` socket room signals a change (guess/joker/hint/late pick by anyone), plus on `visibilitychange`/`pageshow` — the old 6s poll is gone. Logic lives in `lib/boardle.ts` (orchestrator) split across `lib/boardle-words.ts`, `lib/boardle-score.ts`, `lib/boardle-streak.ts`, `lib/boardle-dates.ts`. Word lists are bundled text files in `includes/boardle/` (`dict-<5..10>.txt` for validation, `answers-<5..10>.txt` for the answer pool), read via `fs.readFileSync` relative to `process.cwd()`.
 
 One puzzle per day, N boards (fixed at 4) all of the same length L, solved Quordle-style. `Board.tsx` renders the grid, `Keyboard.tsx` the on-screen keyboard with a per-board color switcher (`kbStatesFor` in `BoardleApp.tsx`), `JokerBar.tsx` the joker buttons + streak/freeze wallets, `OpponentsPanel.tsx`/`StatsPanel.tsx` the sidebar (Standings: one row per player, podium tint for the top 3). `ChooseWord.tsx` is the tomorrow's-word picker for solvers — it also pops up as an overlay right after a full solve (once per solve, tracked in `localStorage`) and immediately on load for the anyone-may-pick-today case (no guesses made yet). Solved-but-hintless boards show a "+ Add a hint for others" card that posts to `api/boardle/add-hint`.
 

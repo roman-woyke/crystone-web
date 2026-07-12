@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notify } from "@/lib/realtime";
 
 export async function DELETE(
   _request: NextRequest,
@@ -26,6 +27,8 @@ export async function DELETE(
   if (result.count === 0) {
     return new NextResponse("Session not found.", { status: 404 });
   }
+
+  await notify("study", "update");
 
   return new NextResponse("OK");
 }

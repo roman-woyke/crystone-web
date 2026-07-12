@@ -6,6 +6,7 @@ import { boardleDateOnly } from "@/lib/boardle-dates";
 import { boardleEnsureDay, boardleFinalizeWords, boardleResolveDate, boardleState } from "@/lib/boardle";
 import { boardleStreakInfo } from "@/lib/boardle-streak";
 import { boardleComputeHint } from "@/lib/boardle-score";
+import { notify } from "@/lib/realtime";
 
 const HINT_TYPES = ["armor", "orange", "green"] as const;
 type HintType = (typeof HINT_TYPES)[number];
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
     } catch {
       return new NextResponse("Joker conflict — reload and try again.", { status: 409 });
     }
+    await notify(`wordle:${date}`, "update");
     return NextResponse.json(await boardleState(date, userId));
   }
 
@@ -122,6 +124,8 @@ export async function POST(request: NextRequest) {
   } catch {
     return new NextResponse("Joker conflict — reload and try again.", { status: 409 });
   }
+
+  await notify(`wordle:${date}`, "update");
 
   return NextResponse.json(await boardleState(date, userId));
 }

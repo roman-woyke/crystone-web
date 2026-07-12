@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import type { BoardleRtPayload, RtStandingRow } from "@/lib/boardle-rt";
 import type { CellColor } from "@/lib/boardle-score";
+import { useRealtimeRoom } from "@/lib/realtime-client";
 import { Button } from "@/components/ui/button";
 import { Board } from "@/components/boardle/Board";
 import { Keyboard } from "@/components/boardle/Keyboard";
@@ -54,6 +55,14 @@ export function BoardleRtApp({ myUsername }: { myUsername: string }) {
       // ignore transient poll failures
     }
   }, [apply]);
+
+  // Push on top of the poll: the 1.5s poll must stay (it doubles as the
+  // lobby presence heartbeat and drives the lazy deadline-based phase
+  // transitions), but a room notification lands opponents' actions
+  // instantly instead of up to one poll interval later.
+  useRealtimeRoom("wordle:rt", "update", () => {
+    if (!document.hidden) loadState();
+  });
 
   useEffect(() => {
     // Initial fetch on mount (there's no server-rendered state to hydrate

@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { dbNow } from "@/lib/dates";
 import { boardleRtAdvance, boardleRtPayload, boardleRtRow } from "@/lib/boardle-rt";
+import { notify } from "@/lib/realtime";
 import { BOARDLE_MIN_LEN, boardleIsValidWord, boardleMaxGuesses } from "@/lib/boardle-words";
 import { boardleUserBoards } from "@/lib/boardle-score";
 
@@ -94,6 +95,10 @@ export async function POST(request: NextRequest) {
     create: { roundId, userId, finished: finished ? 1 : 0, solved: solved ? 1 : 0, guessesUsed: usedNow, solvedAt },
     update: { finished: finished ? 1 : 0, solved: solved ? 1 : 0, guessesUsed: usedNow, solvedAt },
   });
+
+  // Wake the room: the 1.5s poll stays (presence heartbeat + lazy
+  // deadline advance) but this makes opponents see the change instantly.
+  await notify("wordle:rt", "update");
 
   return NextResponse.json(await boardleRtPayload(userId));
 }

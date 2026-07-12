@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { boardleAddDays, boardleDateOnly } from "@/lib/boardle-dates";
 import { boardleChoiceEligible, boardleEnsureDay, boardleToday } from "@/lib/boardle";
 import { boardleIsValidWord } from "@/lib/boardle-words";
+import { notify } from "@/lib/realtime";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -74,6 +75,12 @@ export async function POST(request: NextRequest) {
         data: { word, hint, source: "chosen", chooserId: userId },
       });
     }
+  }
+
+  // Only a for-today pick changes anything anyone can currently see (a
+  // tomorrow pick stays private until finalization).
+  if (pickingForToday) {
+    await notify(`wordle:${date}`, "update");
   }
 
   return NextResponse.json({ ok: true, word, hint, tomorrow_length: tlen });

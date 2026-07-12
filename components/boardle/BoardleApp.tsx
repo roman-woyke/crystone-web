@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import type { BoardleState, BoardleWireState } from "@/lib/boardle";
 import type { ParsedHint } from "@/lib/boardle-score";
+import { useRealtimeRoom } from "@/lib/realtime-client";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Board } from "@/components/boardle/Board";
@@ -146,10 +147,16 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
     loadState(dateStr);
   }
 
+  // Real-time push instead of the old 6s poll: while mounted, this client
+  // observes the viewed day's room; any state change there (someone's
+  // guess, joker, hint, late pick) triggers exactly one refetch. The
+  // visibility/pageshow refetches stay as the catch-up path for a hidden
+  // tab or a realtime server that's down.
+  useRealtimeRoom(`wordle:${viewedDate}`, "update", () => {
+    if (!document.hidden) loadState();
+  });
+
   useEffect(() => {
-    const poll = setInterval(() => {
-      if (!document.hidden) loadState();
-    }, 6000);
     const onVisible = () => {
       if (!document.hidden) loadState();
     };
@@ -159,7 +166,6 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("pageshow", onPageShow);
     return () => {
-      clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", onPageShow);
     };
@@ -710,7 +716,6 @@ function ClampedHint({ hint, onExpand }: { hint: string; onExpand: () => void })
     const el = ref.current;
     // Measuring rendered size can only happen after layout, so this has to
     // be an effect rather than derived state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (el) setOverflowing(el.scrollHeight > el.clientHeight + 1);
   }, [hint]);
 

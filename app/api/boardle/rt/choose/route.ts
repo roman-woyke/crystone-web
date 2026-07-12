@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { boardleRtAdvance, boardleRtPayload, boardleRtRow } from "@/lib/boardle-rt";
+import { notify } from "@/lib/realtime";
 import { boardleIsValidWord } from "@/lib/boardle-words";
 
 export async function POST(request: NextRequest) {
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
   } catch {
     return new NextResponse("Word conflict — reload and try again.", { status: 409 });
   }
+
+  // Wake the room: the 1.5s poll stays (presence heartbeat + lazy
+  // deadline advance) but this makes opponents see the change instantly.
+  await notify("wordle:rt", "update");
 
   return NextResponse.json(await boardleRtPayload(userId));
 }

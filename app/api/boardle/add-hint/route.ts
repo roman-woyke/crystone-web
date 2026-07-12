@@ -11,6 +11,7 @@ import {
   boardleState,
 } from "@/lib/boardle";
 import { boardleUserBoards } from "@/lib/boardle-score";
+import { notify } from "@/lib/realtime";
 
 // Write a shared clue onto a board that has none yet — visible to every
 // player from then on. Only allowed once the author has SOLVED that board
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
     },
     data: { hint },
   });
+
+  await notify(`wordle:${date}`, "update");
 
   return NextResponse.json(await boardleState(date, userId));
 }

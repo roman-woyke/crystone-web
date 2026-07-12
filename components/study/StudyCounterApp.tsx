@@ -8,6 +8,7 @@ import type { StudyModuleOption } from "@/lib/study-modules";
 import type { AggregatedSession } from "@/lib/study-sessions";
 import type { MyStudyStatus, StudyingEntry, RecapBlock } from "@/lib/study-status";
 import type { ExamCountdown } from "@/lib/exam-countdown";
+import { useRealtimeRoom } from "@/lib/realtime-client";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -126,8 +127,16 @@ export function StudyCounterApp({
       .catch(() => {});
   }, []);
 
+  // Real-time push instead of the old 15s poll: any study timer action
+  // anywhere (start/pause/module switch/log) notifies the "study" room and
+  // this client refetches once. The elapsed clocks keep ticking locally off
+  // syncTs between pushes; visibility/pageshow refetches remain the
+  // catch-up path for a hidden tab or a realtime server that's down.
+  useRealtimeRoom("study", "update", () => {
+    if (!document.hidden) loadStatus();
+  });
+
   useEffect(() => {
-    const poll = setInterval(loadStatus, 15_000);
     const onVisible = () => {
       if (!document.hidden) loadStatus();
     };
@@ -137,7 +146,6 @@ export function StudyCounterApp({
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("pageshow", onPageShow);
     return () => {
-      clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", onPageShow);
     };

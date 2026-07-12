@@ -9,6 +9,7 @@ import {
   Gamepad2,
   LayoutDashboard,
   Menu,
+  MessageCircle,
   Timer,
   Trophy,
   X,
@@ -21,6 +22,7 @@ const NAV_LINKS = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/boardle", label: "Boardle", icon: Gamepad2 },
+  { href: "/chat", label: "Chat", icon: MessageCircle },
 ];
 
 export function MainNav() {
