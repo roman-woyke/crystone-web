@@ -28,20 +28,27 @@ $stmt->execute([$selectedUser]);
 $selectedExamIds = array_map("intval", array_column($stmt->fetchAll(PDO::FETCH_ASSOC), "exam_id"));
 $selectedSet = array_flip($selectedExamIds);
 
-// ── Countdown to first exam ───────────────────────────────────────────
-$firstExamDate = $exams[0]["exam_date"] ?? "2026-07-13";
-$today    = new DateTime("today");
-$firstDay = new DateTime($firstExamDate);
-$daysUntil = (int) ceil(($firstDay->getTimestamp() - $today->getTimestamp()) / 86400);
-
-// ── Progress: how many of the selected exams are already written ──────
+// ── Progress + countdown to the next exam the selected user is writing ──
 $now            = new DateTime("now");
 $totalSelected  = count($selectedExamIds);
 $passedSelected = 0;
+$nextExam       = null;
 foreach ($exams as $e) {
     if (!isset($selectedSet[(int) $e["id"]])) continue;
     $examDateTime = new DateTime($e["exam_date"] . " " . $e["exam_time"]);
-    if ($examDateTime < $now) $passedSelected++;
+    if ($examDateTime < $now) {
+        $passedSelected++;
+    } elseif ($nextExam === null) {
+        $nextExam = $e;
+    }
+}
+
+$today = new DateTime("today");
+if ($nextExam !== null) {
+    $nextDay   = new DateTime($nextExam["exam_date"]);
+    $daysUntil = (int) ceil(($nextDay->getTimestamp() - $today->getTimestamp()) / 86400);
+} else {
+    $daysUntil = null;
 }
 
 // ── Calendar window: Mon 13.07.2026 → Sun 26.07.2026 ──────────────────
@@ -438,15 +445,15 @@ main.container {
             </div>
 
             <div class="exam-countdown glass-card">
-                <?php if ($daysUntil > 0): ?>
+                <?php if ($daysUntil === null): ?>
+                    <span class="cd-value">done</span>
+                    <span class="cd-label">exams finished</span>
+                <?php elseif ($daysUntil > 0): ?>
                     <span class="cd-value">D-<?= $daysUntil ?></span>
-                    <span class="cd-label">until first exam</span>
-                <?php elseif ($daysUntil === 0): ?>
-                    <span class="cd-value">D-Day</span>
-                    <span class="cd-label">first exam today</span>
+                    <span class="cd-label">until next exam</span>
                 <?php else: ?>
-                    <span class="cd-value">🎉</span>
-                    <span class="cd-label">exams done</span>
+                    <span class="cd-value">D-Day</span>
+                    <span class="cd-label">next exam today</span>
                 <?php endif; ?>
             </div>
         </div>

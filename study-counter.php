@@ -40,13 +40,9 @@ foreach ($pdo->query("SELECT username, avatar FROM users ORDER BY username")->fe
     if (!empty($u["avatar"])) $userAvatars[$u["username"]] = $u["avatar"];
 }
 
-// ── Countdown to first exam + exams-written (mirrors calendar.php logic) ──
+// ── Countdown to the next exam I'm writing + exams-written (mirrors calendar.php logic) ──
 $_exams = $pdo->query("SELECT id, exam_date, exam_time FROM exams ORDER BY exam_date, exam_time")
     ->fetchAll(PDO::FETCH_ASSOC);
-$firstExamDate  = $_exams[0]["exam_date"] ?? "2026-07-13";
-$_today         = new DateTime("today");
-$_firstDay      = new DateTime($firstExamDate);
-$daysUntilExam  = (int) ceil(($_firstDay->getTimestamp() - $_today->getTimestamp()) / 86400);
 
 $_myUsername    = $_SESSION["username"] ?? "";
 $_stmt          = $pdo->prepare("SELECT exam_id FROM user_exams WHERE username = ?");
@@ -55,9 +51,23 @@ $_selectedIds   = array_flip(array_map("intval", array_column($_stmt->fetchAll(P
 $totalExams     = count($_selectedIds);
 $passedExams    = 0;
 $_now           = new DateTime("now");
+$_nextExam      = null;
 foreach ($_exams as $_e) {
     if (!isset($_selectedIds[(int) $_e["id"]])) continue;
-    if ((new DateTime($_e["exam_date"] . " " . $_e["exam_time"])) < $_now) $passedExams++;
+    $_examDateTime = new DateTime($_e["exam_date"] . " " . $_e["exam_time"]);
+    if ($_examDateTime < $_now) {
+        $passedExams++;
+    } elseif ($_nextExam === null) {
+        $_nextExam = $_e;
+    }
+}
+
+$_today = new DateTime("today");
+if ($_nextExam !== null) {
+    $_nextDay      = new DateTime($_nextExam["exam_date"]);
+    $daysUntilExam = (int) ceil(($_nextDay->getTimestamp() - $_today->getTimestamp()) / 86400);
+} else {
+    $daysUntilExam = null;
 }
 
 $pageTitle = "Study Counter";
@@ -2129,15 +2139,15 @@ body.focus-mode #focus-mini-charts { display: flex; }
     <div class="study-intro">
         <h1 class="page-heading study-head">Study <span class="gradient-text">Counter</span></h1>
         <div class="sc-exam-countdown">
-            <?php if ($daysUntilExam > 0): ?>
-                <span class="cd-value">D-<?= $daysUntilExam ?></span>
-                <span class="cd-label">until exam week</span>
-            <?php elseif ($daysUntilExam === 0): ?>
-                <span class="cd-value">D-Day</span>
-                <span class="cd-label">exam week starts today</span>
-            <?php else: ?>
+            <?php if ($daysUntilExam === null): ?>
                 <span class="cd-value done">done</span>
                 <span class="cd-label">exams finished</span>
+            <?php elseif ($daysUntilExam > 0): ?>
+                <span class="cd-value">D-<?= $daysUntilExam ?></span>
+                <span class="cd-label">until next exam</span>
+            <?php else: ?>
+                <span class="cd-value">D-Day</span>
+                <span class="cd-label">next exam today</span>
             <?php endif; ?>
             <div class="sc-exams-written">
                 <span class="sc-ew-value"><?= $passedExams ?>/<?= $totalExams ?></span>
