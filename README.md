@@ -162,7 +162,7 @@ CREATE TABLE boardle_words (
     word       VARCHAR(10) NOT NULL,
     source     ENUM('chosen','random') NOT NULL DEFAULT 'random',
     chooser_id INT NULL REFERENCES users(id),
-    hint       VARCHAR(500) NULL,
+    hint       TEXT NULL,
     UNIQUE KEY uniq_day_pos (game_date, position)
 );
 
@@ -172,7 +172,7 @@ CREATE TABLE boardle_choices (
     game_date  DATE NOT NULL,
     user_id    INT NOT NULL REFERENCES users(id),
     word       VARCHAR(10) NOT NULL,
-    hint       VARCHAR(500) NULL,
+    hint       TEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (game_date, user_id)
 );
@@ -367,6 +367,13 @@ CREATE TABLE boardle_rt_results (
 > on the user row:
 > ```sql
 > ALTER TABLE users ADD COLUMN avatar MEDIUMTEXT NULL AFTER password_hash;
+> ```
+>
+> **hint length limit removal migration:** hints can now hold ASCII art of
+> any length, so the 500-char columns become TEXT:
+> ```sql
+> ALTER TABLE boardle_words   MODIFY hint TEXT NULL;
+> ALTER TABLE boardle_choices MODIFY hint TEXT NULL;
 > ```
 >
 > **Boardle unlimited real-time mode migration:** new feature, new tables —

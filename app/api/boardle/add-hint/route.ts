@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const date = await boardleResolveDate(body.date);
   const board = Number.isInteger(body.board) ? (body.board as number) : NaN;
-  const hint = String(body.hint ?? "").trim().slice(0, 500);
+  const hint = String(body.hint ?? "").trim();
 
   if (!Number.isInteger(board) || board < 0) {
     return new NextResponse("Invalid board.", { status: 400 });

@@ -150,7 +150,6 @@ export function ChooseWord({
         </label>
         <textarea
           id="fw-hint"
-          maxLength={500}
           value={hintText}
           onChange={(e) => setHintText(e.target.value)}
           placeholder="Give players a clue without spoiling the word..."

@@ -652,7 +652,6 @@ export function BoardleApp({ initialState }: { initialState: BoardleWireState })
             <p className="mb-3.5 text-sm text-muted-foreground">Give the next players a clue without spoiling the word.</p>
             <textarea
               autoFocus
-              maxLength={500}
               value={addHintText}
               onChange={(e) => setAddHintText(e.target.value)}
               placeholder="e.g. Think kitchen appliances..."

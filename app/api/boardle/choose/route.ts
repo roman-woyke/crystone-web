@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse(`Pick a valid ${tlen}-letter word.`, { status: 422 });
   }
 
-  const hintRaw = String(body.hint ?? "").trim().slice(0, 500);
+  const hintRaw = String(body.hint ?? "").trim();
   const hint = hintRaw === "" ? null : hintRaw;
 
   // Duplicates between players are allowed — rejecting a taken word would leak
