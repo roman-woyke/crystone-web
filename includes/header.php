@@ -22,14 +22,6 @@
 </head>
 <body>
 
-<div class="bg-orbs" aria-hidden="true">
-    <div class="orb orb-violet"></div>
-    <div class="orb orb-blue"></div>
-    <div class="orb orb-teal"></div>
-</div>
-
-<div id="gradient-blinds" aria-hidden="true"></div>
-
 <?php
     $loggedIn = isset($_SESSION["user_id"]);
     $currentPage = basename($_SERVER["SCRIPT_NAME"]);
