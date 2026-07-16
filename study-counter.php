@@ -3507,10 +3507,10 @@ body.focus-mode #focus-mini-charts { display: flex; }
             const h1 = Math.floor((b.endM - 0.0001) / 60); // last hour the block touches
             for (let h = h0; h <= h1; h++) activeSet.add(h);
         });
-        // While someone is live, keep the current hour shown so the now-line and
-        // the growing block have a home (even before the minute count fills it).
-        if (blocks.some(b => b.live))   activeSet.add(Math.floor(nowMin / 60));
-        if (activeSet.size === 0 && isToday) activeSet.add(Math.floor(nowMin / 60));
+        // The now-line always reflects the real current time, so today's current
+        // hour is always shown — even when the last activity was hours ago (the
+        // gap in between collapses like any other empty run, same as elsewhere).
+        if (isToday) activeSet.add(Math.floor(nowMin / 60));
 
         const activeHours = [...activeSet].sort((a, b) => a - b);
 
@@ -3609,8 +3609,9 @@ body.focus-mode #focus-mini-charts { display: flex; }
         const now = new Date();
         const nowMin = toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60);
         const nowHour = Math.floor(nowMin / 60);
-        // A live block grew into a not-yet-shown hour → re-layout to add it.
-        if (live.length && !(nowHour in tlLayout.hourTop)) { renderTimeline(); return; }
+        // The current hour (or a live block) grew into a not-yet-shown hour →
+        // re-layout to add it (and collapse the newly-stale one behind it).
+        if (!(nowHour in tlLayout.hourTop)) { renderTimeline(); return; }
 
         const yPx = (m) => {
             const h = Math.floor(m / 60);
