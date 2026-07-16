@@ -235,11 +235,11 @@ function studyStatusPayload(PDO $pdo, $userId): array
 // Build one study day's recap timeline, $daysBack study days before the current
 // one (0 = today's study day, 1 = the previous one).
 //
-// The study day starts at 07:00, so before 07:00 we're still on yesterday's day
+// The study day starts at 04:00, so before 04:00 we're still on yesterday's day
 // and post-midnight work (e.g. a 01:00 session) counts toward it. $base is that
-// day's midnight (today's, or yesterday's when it's before 07:00) shifted back
+// day's midnight (today's, or yesterday's when it's before 04:00) shifted back
 // $daysBack days — positions stay minutes-from-midnight so the client maps them
-// onto its 07:00 → 06:00 axis; $winStart/$winEnd bound the 24h study-day window
+// onto its 04:00 → 03:00 axis; $winStart/$winEnd bound the 24h study-day window
 // used for inclusion (segments are matched by their real timestamp so a session
 // that crossed midnight stays on the day it started).
 //   1) logged segments (the real intervals of finished sessions)
@@ -248,9 +248,9 @@ function studyStatusPayload(PDO $pdo, $userId): array
 //      on the current study day, since they're happening right now.
 function studyRecap(PDO $pdo, int $daysBack = 0): array
 {
-    $base     = "(IF(CURTIME() < '07:00:00', CURDATE() - INTERVAL 1 DAY, CURDATE()) - INTERVAL $daysBack DAY)";
-    $winStart = "($base + INTERVAL 7 HOUR)";   // 07:00 of the study day
-    $winEnd   = "($base + INTERVAL 31 HOUR)";  // 07:00 the next morning
+    $base     = "(IF(CURTIME() < '04:00:00', CURDATE() - INTERVAL 1 DAY, CURDATE()) - INTERVAL $daysBack DAY)";
+    $winStart = "($base + INTERVAL 4 HOUR)";   // 04:00 of the study day
+    $winEnd   = "($base + INTERVAL 28 HOUR)";  // 04:00 the next morning
 
     $liveUnion = $daysBack === 0 ? "
             UNION ALL

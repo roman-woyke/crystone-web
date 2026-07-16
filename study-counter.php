@@ -2496,12 +2496,12 @@ body.focus-mode #focus-mini-charts { display: flex; }
         return addDays(x, -dow);
     }
     // Start (midnight) of the study day a moment belongs to. A study day runs
-    // 07:00 → 07:00 the next morning, so before 07:00 we're still on the
+    // 04:00 → 04:00 the next morning, so before 04:00 we're still on the
     // previous day — matching the recap and the server's session bucketing, so
     // a night session counts toward the evening it started.
     function studyDayStart(d) {
         const x = startOfDay(d);
-        return d.getHours() < 7 ? addDays(x, -1) : x;
+        return d.getHours() < 4 ? addDays(x, -1) : x;
     }
 
     function fmtTime(seconds) {
@@ -2621,7 +2621,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
     // ── Chart render ──────────────────────────────────────────────────────
     function renderChart() {
-        // Anchor the week on the current study day (07:00 boundary) so a session
+        // Anchor the week on the current study day (04:00 boundary) so a session
         // logged after midnight stays grouped with the evening it started.
         const today = studyDayStart(new Date());
         const weekStart = addDays(mondayOf(today), weekOffset * 7);
@@ -3417,8 +3417,8 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
     // ── Day timeline ──────────────────────────────────────────────────────────
     // Recap blocks are one-per-study-interval, positioned in minutes from the
-    // study day's midnight (server-anchored). The study day runs 07:00 → 06:00
-    // the next morning, so post-midnight work lands in the 24:00–30:00 tail.
+    // study day's midnight (server-anchored). The study day runs 04:00 → 03:00
+    // the next morning, so post-midnight work lands in the 24:00–28:00 tail.
     // Breaks show as the gaps between a session's blocks.
     let lastRecap = [];
     // recapByDay[0] = today's study day, recapByDay[1] = yesterday's. recapOffset
@@ -3436,11 +3436,11 @@ body.focus-mode #focus-mini-charts { display: flex; }
         renderTimeline();
     }
 
-    // The study day runs 07:00 → 06:00 next morning. Minutes after midnight but
+    // The study day runs 04:00 → 03:00 next morning. Minutes after midnight but
     // before the start belong to the previous evening's night shift, so they map
     // to the tail of the window (e.g. 02:00 → 26:00).
-    const DAY_START_MIN = 7 * 60;              // 07:00 (top of the axis)
-    const DAY_END_MIN   = 30 * 60;             // 06:00 next morning (bottom of the axis)
+    const DAY_START_MIN = 4 * 60;              // 04:00 (top of the axis)
+    const DAY_END_MIN   = 27 * 60;             // 03:00 next morning (bottom of the axis)
     const toDayMin  = (m) => (m >= 0 && m < DAY_START_MIN ? m + 1440 : m);
     const clampDay  = (m) => Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, m));
     const minsToHHMM = (m) => {
@@ -3461,7 +3461,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
             ? toDayMin(now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60)
             : -1;
 
-        // Clamp every interval into the study day's window (07:00–06:00 next day);
+        // Clamp every interval into the study day's window (04:00–03:00 next day);
         // a live block runs up to now.
         const blocks = [];
         lastRecap.forEach(r => {

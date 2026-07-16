@@ -6,18 +6,18 @@
 // aggregated per user + module + day + at_library.
 //
 // Day attribution matches the recap timeline (includes/study-status.php): a
-// "study day" runs 07:00 → 07:00 the next morning, and a session counts toward
+// "study day" runs 04:00 → 04:00 the next morning, and a session counts toward
 // the day it *started* in — even if it ran past midnight. So an 8pm→2am night
 // session lands wholly on the evening it began, not split across the calendar
 // boundary and not bumped to the next day. The real start is `started_at`
 // (session_start); manual duration entries have none, so they keep `studied_on`.
 
 // The study day a timestamp belongs to: its own date, or the previous date when
-// it's before 07:00 (still the previous evening's study day).
+// it's before 04:00 (still the previous evening's study day).
 function studyDayOf(DateTime $dt): string
 {
     $d = clone $dt;
-    if ((int) $d->format("H") < 7) {
+    if ((int) $d->format("H") < 4) {
         $d->modify("-1 day");
     }
     return $d->format("Y-m-d");

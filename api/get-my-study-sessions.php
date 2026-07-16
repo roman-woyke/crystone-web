@@ -13,7 +13,7 @@ $userId = $_SESSION["user_id"];
 
 // My own logged sessions (with ids), newest first, for the "manage previous
 // sessions" window. `date` is the study-day the session is charted on (same
-// 07:00-boundary attribution as the chart/recap) so the client can group by
+// 04:00-boundary attribution as the chart/recap) so the client can group by
 // week exactly like the chart does.
 $stmt = $pdo->prepare("
     SELECT id, module_name, seconds, studied_on, started_at, at_library, created_at
