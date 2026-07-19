@@ -107,21 +107,70 @@
             <h3>Profile picture</h3>
             <button type="button" class="icon-btn" id="avatar-close" aria-label="Close">✕</button>
         </div>
-        <div class="avatar-preview" id="avatar-preview">
-            <?php if ($myAvatar): ?>
-                <img src="<?= htmlspecialchars($myAvatar) ?>" alt="">
-            <?php else: ?>
-                <span class="nav-avatar-fallback big"><?= htmlspecialchars($myInitial) ?></span>
-            <?php endif; ?>
+
+        <div class="avatar-tabs">
+            <button type="button" class="avatar-tab active" id="avatar-tab-photo" data-tab="photo">Photo</button>
+            <button type="button" class="avatar-tab" id="avatar-tab-hats" data-tab="hats">Hats</button>
         </div>
-        <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" hidden>
-        <p class="avatar-hint muted">PNG, JPG or WebP — it's cropped to a square and resized.</p>
-        <div class="modal-actions">
-            <button type="button" class="btn btn-danger" id="avatar-remove">Remove</button>
-            <button type="button" class="btn" id="avatar-pick">Choose image</button>
-            <button type="button" class="btn-primary" id="avatar-save" disabled>Save</button>
+
+        <div class="avatar-tab-panel" data-panel="photo">
+            <div class="avatar-preview" id="avatar-preview">
+                <?php if ($myAvatar): ?>
+                    <img src="<?= htmlspecialchars($myAvatar) ?>" alt="">
+                <?php else: ?>
+                    <span class="nav-avatar-fallback big"><?= htmlspecialchars($myInitial) ?></span>
+                <?php endif; ?>
+            </div>
+            <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" hidden>
+            <p class="avatar-hint muted">PNG, JPG or WebP — it's cropped to a square and resized.</p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-danger" id="avatar-remove">Remove</button>
+                <button type="button" class="btn" id="avatar-pick">Choose image</button>
+                <button type="button" class="btn-primary" id="avatar-save" disabled>Save</button>
+            </div>
+            <p class="avatar-feedback" id="avatar-feedback"></p>
         </div>
-        <p class="avatar-feedback" id="avatar-feedback"></p>
+
+        <div class="avatar-tab-panel" data-panel="hats" style="display:none;">
+            <div class="hat-preview-wrap">
+                <div class="hat-preview-avatar" id="hat-preview-avatar">
+                    <?php if ($myAvatar): ?>
+                        <img src="<?= htmlspecialchars($myAvatar) ?>" alt="">
+                    <?php else: ?>
+                        <span class="nav-avatar-fallback big"><?= htmlspecialchars($myInitial) ?></span>
+                    <?php endif; ?>
+                </div>
+                <img class="hat-preview-hat" id="hat-preview-img" style="display:none;" alt="">
+            </div>
+
+            <div class="hat-nudge-grid">
+                <button type="button" class="hat-nudge-up" id="hat-up" title="Move up" aria-label="Move up">&#8593;</button>
+                <button type="button" class="hat-nudge-left" id="hat-left" title="Move left" aria-label="Move left">&#8592;</button>
+                <button type="button" class="hat-nudge-flip" id="hat-flip" title="Flip" aria-label="Flip horizontally">&#8646;</button>
+                <button type="button" class="hat-nudge-right" id="hat-right" title="Move right" aria-label="Move right">&#8594;</button>
+            </div>
+            <div class="hat-nudge-grid" style="grid-template-rows:36px;">
+                <button type="button" style="grid-column:2;grid-row:1;" id="hat-down" title="Move down" aria-label="Move down">&#8595;</button>
+            </div>
+
+            <div class="hat-slider-row">
+                <span>Rotate</span>
+                <input type="range" id="hat-rotate" min="-45" max="45" step="1" value="0">
+            </div>
+            <div class="hat-slider-row">
+                <span>Size</span>
+                <input type="range" id="hat-scale" min="0.7" max="1.5" step="0.05" value="1">
+            </div>
+
+            <div class="hat-grid" id="hat-grid"></div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-danger" id="hat-unequip">Remove hat</button>
+                <button type="button" class="btn" id="hat-reset">Reset position</button>
+                <button type="button" class="btn-primary" id="hat-save">Save position</button>
+            </div>
+            <p class="hat-feedback" id="hat-feedback"></p>
+        </div>
     </div>
 </div>
 
@@ -158,6 +207,8 @@
     }
     function setNav(src) {
         navBtn.replaceChildren(src ? imgHtml(src) : fallbackHtml(false));
+        const hatPreviewAvatar = document.getElementById("hat-preview-avatar");
+        if (hatPreviewAvatar) hatPreviewAvatar.replaceChildren(src ? imgHtml(src) : fallbackHtml(true));
     }
 
     fileEl.addEventListener("change", () => {
@@ -211,6 +262,206 @@
             })
             .catch(err => { feedback.textContent = err.message; });
     });
+}());
+</script>
+
+<script>
+(function () {
+    const modal = document.getElementById("avatar-modal");
+    if (!modal) return;
+    const BASE        = "<?= BASE_PATH ?>";
+    const MY_USERNAME = <?= json_encode($_SESSION["username"] ?? "") ?>;
+
+    // Tells any page currently rendering a podium (study-counter.php) to
+    // update its own live copy of EQUIPPED_HATS and redraw, instead of
+    // waiting for its next background poll.
+    function broadcastHatChange(equipped, cosmetic) {
+        window.dispatchEvent(new CustomEvent("cosmetic-updated", {
+            detail: { username: MY_USERNAME, equipped, cosmetic },
+        }));
+    }
+
+    // ── Photo / Hats tab switching ──────────────────────────────────────
+    const tabs   = modal.querySelectorAll(".avatar-tab");
+    const panels = modal.querySelectorAll(".avatar-tab-panel");
+    tabs.forEach(tab => tab.addEventListener("click", () => {
+        tabs.forEach(t => t.classList.toggle("active", t === tab));
+        panels.forEach(p => p.style.display = (p.dataset.panel === tab.dataset.tab) ? "" : "none");
+        if (tab.dataset.tab === "hats") loadHats();
+    }));
+
+    // ── Hats tab ─────────────────────────────────────────────────────────
+    const previewImg = document.getElementById("hat-preview-img");
+    const grid       = document.getElementById("hat-grid");
+    const rotateEl   = document.getElementById("hat-rotate");
+    const scaleEl    = document.getElementById("hat-scale");
+    const feedback   = document.getElementById("hat-feedback");
+    const saveBtn    = document.getElementById("hat-save");
+    const unequipBtn = document.getElementById("hat-unequip");
+    const resetBtn   = document.getElementById("hat-reset");
+
+    let owned    = [];
+    let selected = null; // currently selected/equipped item_key being edited
+    let pos      = { offset_x: 0, offset_y: 0, rotation: 0, scale: 1, flip_x: false };
+    let loaded   = false;
+
+    function setFeedback(msg, isError) {
+        feedback.textContent = msg || "";
+        feedback.className = "hat-feedback" + (isError ? " error" : "");
+    }
+
+    function applyPreview() {
+        if (!selected) {
+            previewImg.style.display = "none";
+            return;
+        }
+        const item = owned.find(o => o.item_key === selected);
+        if (!item) return;
+        previewImg.src = BASE + "/assets/images/" + item.file;
+        previewImg.style.setProperty("--hx", pos.offset_x + "%");
+        previewImg.style.setProperty("--hy", pos.offset_y + "%");
+        previewImg.style.setProperty("--hr", pos.rotation + "deg");
+        previewImg.style.setProperty("--hs", pos.scale);
+        previewImg.style.setProperty("--hflip", pos.flip_x ? -1 : 1);
+        previewImg.style.display = "";
+    }
+
+    function renderGrid() {
+        grid.innerHTML = owned.map(item => `
+            <button type="button" class="hat-item${item.equipped ? " equipped" : ""}" data-key="${item.item_key}" title="${item.label}">
+                <img src="${BASE}/assets/images/${item.file}" alt="${item.label}">
+            </button>
+        `).join("");
+        grid.querySelectorAll(".hat-item").forEach(btn => {
+            btn.addEventListener("click", () => equip(btn.dataset.key));
+        });
+    }
+
+    function selectForEditing(itemKey) {
+        selected = itemKey;
+        const item = owned.find(o => o.item_key === itemKey);
+        if (item) {
+            pos = { offset_x: item.offset_x, offset_y: item.offset_y, rotation: item.rotation, scale: item.scale, flip_x: item.flip_x };
+        }
+        rotateEl.value = pos.rotation;
+        scaleEl.value  = pos.scale;
+        applyPreview();
+    }
+
+    function loadHats() {
+        if (loaded) return;
+        loaded = true;
+        setFeedback("");
+        fetch(BASE + "/api/get-cosmetics.php")
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Couldn't load hats."); }))
+            .then(res => {
+                owned = res.owned;
+                renderGrid();
+                const equipped = owned.find(o => o.equipped);
+                if (equipped) selectForEditing(equipped.item_key);
+                else { selected = null; applyPreview(); }
+            })
+            .catch(err => setFeedback(err.message, true));
+    }
+
+    function equip(itemKey) {
+        setFeedback("Equipping…");
+        const body = new FormData();
+        body.append("item_key", itemKey);
+        body.append("equip", "1");
+        fetch(BASE + "/api/patch-cosmetic.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Couldn't equip."); }))
+            .then(res => {
+                owned = owned.map(o => ({ ...o, equipped: o.item_key === itemKey }));
+                const updated = owned.find(o => o.item_key === itemKey);
+                Object.assign(updated, res.cosmetic);
+                renderGrid();
+                selectForEditing(itemKey);
+                setFeedback("Equipped.");
+                broadcastHatChange(true, res.cosmetic);
+            })
+            .catch(err => setFeedback(err.message, true));
+    }
+
+    function nudge(dx, dy) {
+        if (!selected) return;
+        pos.offset_x = Math.max(-40, Math.min(40, pos.offset_x + dx));
+        pos.offset_y = Math.max(-40, Math.min(40, pos.offset_y + dy));
+        applyPreview();
+    }
+
+    document.getElementById("hat-up").addEventListener("click", () => nudge(0, -5));
+    document.getElementById("hat-down").addEventListener("click", () => nudge(0, 5));
+    document.getElementById("hat-left").addEventListener("click", () => nudge(-5, 0));
+    document.getElementById("hat-right").addEventListener("click", () => nudge(5, 0));
+    document.getElementById("hat-flip").addEventListener("click", () => {
+        if (!selected) return;
+        pos.flip_x = !pos.flip_x;
+        applyPreview();
+    });
+    rotateEl.addEventListener("input", () => {
+        if (!selected) return;
+        pos.rotation = parseFloat(rotateEl.value);
+        applyPreview();
+    });
+    scaleEl.addEventListener("input", () => {
+        if (!selected) return;
+        pos.scale = parseFloat(scaleEl.value);
+        applyPreview();
+    });
+
+    resetBtn.addEventListener("click", () => {
+        if (!selected) return;
+        pos = { offset_x: 0, offset_y: 0, rotation: 0, scale: 1, flip_x: false };
+        rotateEl.value = 0;
+        scaleEl.value  = 1;
+        applyPreview();
+    });
+
+    saveBtn.addEventListener("click", () => {
+        if (!selected) { setFeedback("Pick a hat first.", true); return; }
+        setFeedback("Saving…");
+        const body = new FormData();
+        body.append("item_key", selected);
+        body.append("offset_x", pos.offset_x);
+        body.append("offset_y", pos.offset_y);
+        body.append("rotation", pos.rotation);
+        body.append("scale", pos.scale);
+        body.append("flip_x", pos.flip_x ? "1" : "0");
+        fetch(BASE + "/api/patch-cosmetic.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Couldn't save."); }))
+            .then(res => {
+                const item = owned.find(o => o.item_key === selected);
+                if (item) Object.assign(item, res.cosmetic);
+                setFeedback("Saved.");
+                broadcastHatChange(true, res.cosmetic);
+                setTimeout(() => { modal.style.display = "none"; }, 600);
+            })
+            .catch(err => setFeedback(err.message, true));
+    });
+
+    unequipBtn.addEventListener("click", () => {
+        if (!selected) return;
+        setFeedback("Removing…");
+        const body = new FormData();
+        body.append("item_key", selected);
+        body.append("equip", "0");
+        fetch(BASE + "/api/patch-cosmetic.php", { method: "POST", body })
+            .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || "Couldn't remove."); }))
+            .then(() => {
+                owned = owned.map(o => ({ ...o, equipped: false }));
+                renderGrid();
+                selected = null;
+                applyPreview();
+                setFeedback("Hat removed.");
+                broadcastHatChange(false, null);
+            })
+            .catch(err => setFeedback(err.message, true));
+    });
+
+    // Reset the "already loaded" flag whenever the modal is reopened fresh,
+    // so a photo change (new avatar) is reflected in the hats preview too.
+    document.getElementById("nav-avatar").addEventListener("click", () => { loaded = false; });
 }());
 </script>
 

@@ -166,6 +166,25 @@ CREATE TABLE project_time_entries (
     logged_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Cosmetics inventory (assets/images/*.png, see includes/cosmetics.php for the
+-- item_key registry). Each user owns one row per registered item; `equipped`
+-- marks at most one as currently worn, and the offset/rotation/scale/flip
+-- columns are the user's own placement of it on the study-counter podium
+-- avatar (set via the header's Hats tab / api/patch-cosmetic.php).
+CREATE TABLE user_cosmetics (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NOT NULL REFERENCES users(id),
+    item_key   VARCHAR(50) NOT NULL,
+    equipped   TINYINT(1) NOT NULL DEFAULT 0,
+    offset_x   DECIMAL(5,1) NOT NULL DEFAULT 0,
+    offset_y   DECIMAL(5,1) NOT NULL DEFAULT 0,
+    rotation   DECIMAL(5,1) NOT NULL DEFAULT 0,
+    scale      DECIMAL(4,2) NOT NULL DEFAULT 1.00,
+    flip_x     TINYINT(1) NOT NULL DEFAULT 0,
+    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_user_item (user_id, item_key)
+);
+
 -- Boardle (boardle.php): a daily multi-board, multiplayer Wordle. One puzzle a
 -- day; N boards (1–4) all of the same length L. The word lists live as bundled
 -- text files in includes/boardle/, NOT in the DB.
@@ -343,6 +362,27 @@ CREATE TABLE boardle_rt_results (
 > joker once/day). The balance is **derived** by replaying solved days +
 > `boardle_hints.via_freeze`, so the only persisted state is that column.
 
+> **Cosmetics inventory migration:** new feature, new table — run the
+> `user_cosmetics` `CREATE TABLE` above before deploying, then grant the
+> current asset set to every existing user (new assets added later are
+> granted lazily the next time each user opens the header's Hats tab, via
+> `ensureCosmeticsGranted()` in `includes/cosmetics.php`):
+> ```sql
+> INSERT IGNORE INTO user_cosmetics (user_id, item_key)
+> SELECT u.id, k.item_key
+> FROM users u
+> CROSS JOIN (
+>     SELECT 'wizard-hat' AS item_key UNION ALL
+>     SELECT 'graduate-hat' UNION ALL
+>     SELECT 'jester-hat' UNION ALL
+>     SELECT 'commander-hat' UNION ALL
+>     SELECT 'military-hat'
+> ) k;
+> ```
+> The wizard hat used to be a lifetime-100h milestone computed client-side;
+> it's now inventory-based like every other hat (equip it from the Hats tab),
+> so that threshold no longer applies.
+>
 > **Deploy note:** run the corresponding `CREATE TABLE` on the database
 > **before** pushing code that uses a new table, otherwise pages hitting it
 > will 500.

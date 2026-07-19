@@ -816,6 +816,126 @@ tbody tr:hover {
     color: var(--success);
 }
 
+/* Profile-picture modal tabs (Photo / Hats) */
+.avatar-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--glass-border);
+}
+.avatar-tab {
+    width: auto;
+    margin: 0;
+    padding: 8px 4px 10px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--text-3);
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+}
+.avatar-tab:hover { color: var(--text-1); }
+.avatar-tab.active { color: var(--violet); border-bottom-color: var(--violet); }
+
+/* Hats tab: mirrors the study-counter podium's .sc-avatar-wrap/.sc-hat
+   geometry (percentage-based, so the same --hx/--hy/--hr/--hs/--hflip
+   values look the same size-for-size on the podium as they do here). */
+.hat-preview-wrap {
+    position: relative;
+    width: 110px;
+    margin: 4px auto 20px;
+}
+.hat-preview-avatar {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--glass-border);
+    background: var(--glass-strong);
+}
+.hat-preview-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hat-preview-hat {
+    position: absolute;
+    width: 130%;
+    max-width: none;
+    left: 50%;
+    top: -90%;
+    transform: translateX(-50%) translate(var(--hx, 0%), var(--hy, 0%)) rotate(var(--hr, 0deg)) scale(var(--hs, 1)) scaleX(var(--hflip, 1));
+    pointer-events: none;
+    z-index: 1;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+}
+
+.hat-nudge-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 36px);
+    grid-template-rows: repeat(2, 36px);
+    gap: 4px;
+    justify-content: center;
+    margin: 0 auto 14px;
+}
+.hat-nudge-grid button {
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+}
+.hat-nudge-up     { grid-column: 2; grid-row: 1; }
+.hat-nudge-left   { grid-column: 1; grid-row: 2; }
+.hat-nudge-flip   { grid-column: 2; grid-row: 2; }
+.hat-nudge-right  { grid-column: 3; grid-row: 2; }
+
+.hat-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.82rem;
+    color: var(--text-2);
+}
+.hat-slider-row input[type="range"] { flex: 1; margin: 0; }
+
+.hat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 8px;
+    margin: 14px 0;
+}
+.hat-item {
+    width: 56px;
+    height: 56px;
+    padding: 6px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--glass-strong);
+    border: 2px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.hat-item img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.hat-item.equipped { border-color: var(--violet); box-shadow: 0 0 0 1px var(--violet); }
+
+.hat-feedback {
+    margin: 12px 0 0;
+    min-height: 1.1em;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--success);
+}
+.hat-feedback.error { color: var(--danger); }
+
 /* Profile-credentials modal */
 .profile-dialog { width: min(400px, calc(100vw - 32px)); }
 

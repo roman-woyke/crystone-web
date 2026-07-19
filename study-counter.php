@@ -40,6 +40,10 @@ foreach ($pdo->query("SELECT username, avatar FROM users ORDER BY username")->fe
     if (!empty($u["avatar"])) $userAvatars[$u["username"]] = $u["avatar"];
 }
 
+// username -> equipped cosmetic hat (from the inventory system), for the podium.
+require_once __DIR__ . "/includes/cosmetics.php";
+$equippedHats = getEquippedHats($pdo);
+
 // ── Countdown to the next exam I'm writing + exams-written (mirrors calendar.php logic) ──
 $_exams = $pdo->query("SELECT id, exam_date, exam_time FROM exams ORDER BY exam_date, exam_time")
     ->fetchAll(PDO::FETCH_ASSOC);
@@ -985,14 +989,15 @@ main.container {
 .sc-medal-3 { /* bronze — warm copper, kept clearly orange so it doesn't read as brown */ background: linear-gradient(145deg, #f7b878, #e07f37 45%, #b85f1e); color: #4a2400; }
 .sc-medal-4 { /* chocolate — dark brown */ background: linear-gradient(145deg, #8a5a36, #5e3a1e 45%, #3a2210); color: #f3e2d0; }
 
-/* ── Wizard hat: lifetime milestone at 100h total studied ─────────────────
-   A transparent PNG (assets/images/cartoon_wizard_hat.png, 586x740) worn on
-   top of the avatar. The avatar circle clips its children (overflow: hidden
-   + border-radius), so the hat is an absolutely-positioned sibling inside
-   this wrapper. Percentage sizing scales it with any avatar size (64px
-   podium, 48px rank-4, 108px detail modal). The offsets are tuned to the
-   artwork: its brim opening sits ~68% down the image, so this puts the brim
-   line across the top ~quarter of the circle. */
+/* ── Cosmetic hats: worn on top of the avatar, from each player's inventory ──
+   A transparent PNG (assets/images/*.png) worn on top of the avatar. The
+   avatar circle clips its children (overflow: hidden + border-radius), so
+   the hat is an absolutely-positioned sibling inside this wrapper.
+   Percentage sizing scales it with any avatar size (64px podium, 48px
+   rank-4, 108px detail modal). --hx/--hy/--hr/--hs/--hflip are per-user
+   placement set inline from user_cosmetics (see includes/cosmetics.php) and
+   are also what the header's Hats-tab preview drives live, so the two stay
+   in visual sync. */
 .sc-avatar-wrap {
     position: relative;
     width: fit-content;
@@ -1008,7 +1013,7 @@ main.container {
     max-width: none;
     left: 50%;
     top: -90%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) translate(var(--hx, 0%), var(--hy, 0%)) rotate(var(--hr, 0deg)) scale(var(--hs, 1)) scaleX(var(--hflip, 1));
     pointer-events: none;
     z-index: 1;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
@@ -2465,6 +2470,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
     const INITIAL_STATUS   = <?= json_encode($initialStatus) ?>;
     const INITIAL_SESSIONS = <?= json_encode($initialSessions) ?>;
     const USER_AVATARS     = <?= json_encode($userAvatars, JSON_UNESCAPED_SLASHES) ?>;
+    const EQUIPPED_HATS    = <?= json_encode($equippedHats, JSON_UNESCAPED_SLASHES) ?>;
     const ALL_USERS        = <?= json_encode($allUsernames) ?>;
 
     // Two distinct palettes: outlines for users, fills for modules.
@@ -2751,23 +2757,38 @@ body.focus-mode #focus-mini-charts { display: flex; }
 
     const podiumFullname = document.getElementById("podium-module-fullname");
 
-    // ── Wizard hat milestone ──────────────────────────────────────────────
-    // Awarded at 100 hours studied lifetime (always computed from the
-    // unfiltered session list), but only rendered on the unfiltered podium
-    // (Period = Overall and View = all) — weekly/daily, per-module and
-    // library podiums stay hat-free.
-    const WIZARD_HAT_SECS = 100 * 3600;
-
-    function wearsWizardHat(username) {
-        let total = 0;
-        for (const s of SESSIONS) if (s.username === username) total += s.seconds;
-        return total >= WIZARD_HAT_SECS;
+    // ── Cosmetic hats ────────────────────────────────────────────────────
+    // Whichever hat a user has equipped from their inventory (see
+    // includes/cosmetics.php / api/patch-cosmetic.php), only rendered on the
+    // unfiltered podium (Period = Overall and View = all) — weekly/daily,
+    // per-module and library podiums stay hat-free.
+    function hatImg(username) {
+        const hat = EQUIPPED_HATS[username];
+        if (!hat) return "";
+        const style = `--hx:${hat.offset_x}%;--hy:${hat.offset_y}%;--hr:${hat.rotation}deg;--hs:${hat.scale};--hflip:${hat.flip_x ? -1 : 1}`;
+        return `<img class="sc-hat" style="${style}" src="${BASE_PATH}/assets/images/${hat.file}" alt="">`;
     }
 
-    // The hat itself is a transparent PNG worn on top of the avatar circle.
-    function hatImg() {
-        return `<img class="sc-hat" src="${BASE_PATH}/assets/images/cartoon_wizard_hat.png" alt="">`;
-    }
+    // The header's Hats tab lives on every page (including this one) and
+    // fires this event on equip/unequip/save so the podium updates instantly
+    // instead of waiting for the next background poll.
+    window.addEventListener("cosmetic-updated", (e) => {
+        const { username, equipped, cosmetic } = e.detail;
+        if (equipped && cosmetic) {
+            EQUIPPED_HATS[username] = {
+                item_key: cosmetic.item_key,
+                file:     cosmetic.file,
+                offset_x: cosmetic.offset_x,
+                offset_y: cosmetic.offset_y,
+                rotation: cosmetic.rotation,
+                scale:    cosmetic.scale,
+                flip_x:   cosmetic.flip_x,
+            };
+        } else {
+            delete EQUIPPED_HATS[username];
+        }
+        buildOverallPodium();
+    });
 
     function buildOverallPodium() {
         const sessions = filteredSessions();
@@ -2802,7 +2823,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
             const avatarInner = av
                 ? `<img src="${av}" alt="">`
                 : `<span class="sc-avatar-fallback">${escapeHtml((username[0] || "?").toUpperCase())}</span>`;
-            const hat = podiumPeriod === "overall" && podiumView === "all" && wearsWizardHat(username) ? hatImg() : "";
+            const hat = podiumPeriod === "overall" && podiumView === "all" ? hatImg(username) : "";
             return `
                 <div class="podium-card glass-card rank-${rank}" style="${style}"
                      data-username="${escapeHtml(username)}" data-rank="${rank}" data-secs="${secs}"
@@ -2856,7 +2877,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
             `;
         }).join("");
 
-        const detailHat = podiumPeriod === "overall" && podiumView === "all" && wearsWizardHat(username) ? hatImg() : "";
+        const detailHat = podiumPeriod === "overall" && podiumView === "all" ? hatImg(username) : "";
         detailBody.innerHTML = `
             <div class="sc-avatar-wrap pd-avatar-wrap"><div class="pd-avatar" style="border-color:${color}">${avatarHtml}</div>${detailHat}</div>
             <div class="pd-username" style="color:${color}">${escapeHtml(username)}</div>
