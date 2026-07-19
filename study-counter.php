@@ -1671,6 +1671,18 @@ main.container {
 /* Cards become clickable in the overall podium */
 #overall-podium .podium-card {
     cursor: pointer;
+    /* Promote to its own compositor layer ahead of the first hover — without
+       this the browser's first transform on a freshly-painted element does a
+       synchronous layout/paint instead of an animated one, which reads as a
+       jump/glitch on the very first hover before it settles down. */
+    will-change: transform;
+    /* Per-user tinted resting shadow, set inline as --card-shadow (see
+       buildOverallPodium) — read through a var() here
+       instead of inlining box-shadow directly so the :hover rule below
+       (a class selector) can actually out-specificity it and take over;
+       an inline box-shadow declaration would always win over :hover,
+       making the hover glow a dead rule. */
+    box-shadow: var(--card-shadow, none);
     transition:
         transform var(--t-fast),
         box-shadow var(--t-fast),
@@ -1687,6 +1699,7 @@ main.container {
 .podium-detail-dialog {
     width: min(540px, calc(100vw - 32px));
     text-align: center;
+    will-change: transform, opacity;
     animation: podium-detail-in 300ms var(--ease-out);
 }
 
@@ -2818,7 +2831,7 @@ body.focus-mode #focus-mini-charts { display: flex; }
         podium.innerHTML = top.map(([username, secs], i) => {
             const rank = i + 1;
             const color = userColor[username] || "#8b5cf6";
-            const style = `border-color:${color}; background:linear-gradient(160deg, ${color}24, ${color}0a); box-shadow:0 10px 28px ${color}33;`;
+            const style = `border-color:${color}; background:linear-gradient(160deg, ${color}24, ${color}0a); --card-shadow:0 10px 28px ${color}33;`;
             const av = USER_AVATARS[username];
             const avatarInner = av
                 ? `<img src="${av}" alt="">`
